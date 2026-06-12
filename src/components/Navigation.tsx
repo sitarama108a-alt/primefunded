@@ -14,7 +14,11 @@ import {
   LogOut,
   ChevronRight,
   TrendingUp,
-  Award
+  Award,
+  Users,
+  Calendar,
+  Fingerprint,
+  Terminal
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -23,16 +27,21 @@ import { Button } from '@/components/ui/button';
 const navItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Challenges', href: '/challenges', icon: Trophy },
+  { name: 'Competitions', href: '/competitions', icon: Trophy },
+  { name: 'Ranking', href: '/ranking', icon: Users },
   { name: 'Accounts', href: '/accounts', icon: ShieldCheck },
+  { name: 'MT5 Credentials', href: '/mt5-account', icon: Terminal },
   { name: 'Payouts', href: '/payouts', icon: Wallet },
+  { name: 'Calendar', href: '/calendar', icon: Calendar },
   { name: 'Certificates', href: '/certificates', icon: Award },
   { name: 'History', href: '/history', icon: History },
 ];
 
 const secondaryItems = [
+  { name: 'KYC Verification', href: '/kyc', icon: Fingerprint },
   { name: 'Profile', href: '/profile', icon: UserCircle },
-  { name: 'Support', href: '/support', icon: HelpCircle },
   { name: 'Rules', href: '/rules', icon: Settings },
+  { name: 'Support', href: '/support', icon: HelpCircle },
 ];
 
 export function Navigation() {
@@ -45,7 +54,7 @@ export function Navigation() {
         <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
           <TrendingUp className="text-primary-foreground w-5 h-5" />
         </div>
-        <span className="font-headline font-bold text-xl tracking-tight">PrimeFunded</span>
+        <span className="font-headline font-bold text-xl tracking-tight text-primary">PrimeFunded</span>
       </div>
 
       <nav className="flex-1 space-y-1">
