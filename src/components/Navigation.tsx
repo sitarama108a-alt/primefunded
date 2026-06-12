@@ -19,7 +19,8 @@ import {
   Calendar,
   Fingerprint,
   Terminal,
-  Shield
+  Shield,
+  BookOpen
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -39,9 +40,9 @@ const navItems = [
 ];
 
 const secondaryItems = [
+  { name: 'Rules', href: '/rules', icon: BookOpen },
   { name: 'KYC Verification', href: '/kyc', icon: Fingerprint },
   { name: 'Profile', href: '/profile', icon: UserCircle },
-  { name: 'Rules', href: '/rules', icon: Settings },
   { name: 'Support', href: '/support', icon: HelpCircle },
 ];
 
