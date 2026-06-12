@@ -1,12 +1,30 @@
 "use client";
 
+import { useMemo } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Wallet, ArrowDownRight, History, Clock } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { useCollection } from '@/firebase';
+import { where } from 'firebase/firestore';
 
 export default function PayoutsPage() {
+  const { user } = useAuth();
+  
+  const payoutConstraints = useMemo(() => {
+    if (!user?.uid) return [];
+    return [where('userId', '==', user.uid)];
+  }, [user?.uid]);
+
+  const { data: payouts, loading } = useCollection<any>('payouts', payoutConstraints);
+
+  const stats = useMemo(() => {
+    const totalPaid = payouts?.filter(p => p.status === 'done').reduce((acc, p) => acc + parseFloat(p.amount || 0), 0) || 0;
+    const pending = payouts?.filter(p => p.status === 'pending' || p.status === 'approved').reduce((acc, p) => acc + parseFloat(p.amount || 0), 0) || 0;
+    return { totalPaid, pending };
+  }, [payouts]);
+
   return (
     <div className="flex min-h-screen bg-background">
       <Navigation />
@@ -23,8 +41,8 @@ export default function PayoutsPage() {
                 <p className="text-xs font-bold uppercase tracking-widest text-primary">Withdrawable Profit</p>
                 <Wallet className="text-primary w-5 h-5" />
               </div>
-              <h3 className="text-4xl font-headline font-bold mb-2">$2,450.50</h3>
-              <p className="text-xs text-muted-foreground">Next Split Available: 4 Days</p>
+              <h3 className="text-4xl font-headline font-bold mb-2">$0.00</h3>
+              <p className="text-xs text-muted-foreground italic">Eligibility checked daily.</p>
               <Button className="w-full mt-6 font-bold" disabled>Request Payout</Button>
             </CardContent>
           </Card>
@@ -35,8 +53,8 @@ export default function PayoutsPage() {
                 <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Total Paid Out</p>
                 <ArrowDownRight className="text-accent w-5 h-5" />
               </div>
-              <h3 className="text-4xl font-headline font-bold mb-2">$12,800.00</h3>
-              <p className="text-xs text-muted-foreground">Across 4 transactions</p>
+              <h3 className="text-4xl font-headline font-bold mb-2">${stats.totalPaid.toLocaleString()}</h3>
+              <p className="text-xs text-muted-foreground">Lifetime withdrawals</p>
             </CardContent>
           </Card>
 
@@ -46,8 +64,8 @@ export default function PayoutsPage() {
                 <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Pending Payouts</p>
                 <Clock className="text-primary w-5 h-5" />
               </div>
-              <h3 className="text-4xl font-headline font-bold mb-2">$0.00</h3>
-              <p className="text-xs text-muted-foreground">No active requests</p>
+              <h3 className="text-4xl font-headline font-bold mb-2">${stats.pending.toLocaleString()}</h3>
+              <p className="text-xs text-muted-foreground">Awaiting verification</p>
             </CardContent>
           </Card>
         </div>
@@ -70,10 +88,20 @@ export default function PayoutsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/50">
-                  <PayoutRow date="2024-03-01" method="USDT (ERC20)" amount="$4,200.00" status="Completed" />
-                  <PayoutRow date="2024-02-15" method="USDT (ERC20)" amount="$3,100.00" status="Completed" />
-                  <PayoutRow date="2024-01-30" method="Bank Wire" amount="$2,500.00" status="Completed" />
-                  <PayoutRow date="2024-01-15" method="USDT (ERC20)" amount="$3,000.00" status="Completed" />
+                  {payouts?.length > 0 ? payouts.map(p => (
+                    <tr key={p.id} className="hover:bg-secondary/20 transition-colors">
+                      <td className="py-4 px-2 font-medium">{new Date(p.date).toLocaleDateString()}</td>
+                      <td className="py-4 px-2 text-muted-foreground">{p.method}</td>
+                      <td className="py-4 px-2 font-bold text-accent">${p.amount}</td>
+                      <td className="py-4 px-2 text-right">
+                        <span className="px-2 py-1 rounded-full bg-accent/10 text-accent text-[10px] border border-accent/20 uppercase font-bold">{p.status}</span>
+                      </td>
+                    </tr>
+                  )) : (
+                    <tr>
+                      <td colSpan={4} className="py-10 text-center text-muted-foreground italic">No payout requests found.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -81,18 +109,5 @@ export default function PayoutsPage() {
         </Card>
       </main>
     </div>
-  );
-}
-
-function PayoutRow({ date, method, amount, status }: { date: string, method: string, amount: string, status: string }) {
-  return (
-    <tr className="hover:bg-secondary/20 transition-colors">
-      <td className="py-4 px-2 font-medium">{date}</td>
-      <td className="py-4 px-2 text-muted-foreground">{method}</td>
-      <td className="py-4 px-2 font-bold text-accent">{amount}</td>
-      <td className="py-4 px-2 text-right">
-        <Badge className="bg-accent/10 text-accent border-accent/20">{status}</Badge>
-      </td>
-    </tr>
   );
 }
