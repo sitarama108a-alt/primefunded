@@ -39,7 +39,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const userRef = doc(db, `users`, user.uid);
         const snapshot = await getDoc(userRef);
         if (snapshot.exists()) {
-          setUserData(snapshot.val());
+          setUserData(snapshot.data());
         }
       } else {
         setUserData(null);

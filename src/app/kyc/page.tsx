@@ -6,8 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ShieldCheck, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
+import { ShieldCheck, Upload, CheckCircle2, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 export default function KYCPage() {
   const [step, setStep] = useState(1);
