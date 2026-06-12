@@ -19,7 +19,7 @@ const PLAN_RULES = {
     ],
     funded: [
       { text: "Up to 80% profit split", check: true },
-      { text: "Daily payouts available (after 5 days)", check: true },
+      { text: "Minimum 5 trading days required before payout request", warning: true },
       { text: "1% max floating loss (Hard Breach)", warning: true },
       { text: "3% daily drawdown limit (Hard Breach)", warning: true },
       { text: "6% max drawdown limit (Hard Breach)", warning: true },
@@ -43,22 +43,27 @@ const PLAN_RULES = {
     ],
     funded: [
       { text: "Up to 80% profit split", check: true },
+      { text: "Minimum 5 trading days required before payout request", warning: true },
       { text: "1% max floating loss (Hard Breach)", warning: true },
-      { text: "5% daily drawdown (Hard Breach)", warning: true },
-      { text: "10% max drawdown (Hard Breach)", warning: true },
+      { text: "5% daily drawdown limit (Hard Breach)", warning: true },
+      { text: "10% max drawdown limit (Hard Breach)", warning: true },
       { text: "Single pair loss max 3% (Hard Breach)", warning: true },
       { text: "No martingale (Hard Breach)", check: false },
+      { text: "Payout must be within daily drawdown", warning: true },
     ]
   },
   'instant': {
     funded: [
-      { text: "Funded from day one", check: true },
+      { text: "Up to 80% profit split", check: true },
+      { text: "Daily payouts available", check: true },
+      { text: "First payout after 24 hours", check: true },
       { text: "1% max floating loss (Hard Breach)", warning: true },
       { text: "2% daily drawdown (Hard Breach)", warning: true },
       { text: "4% max drawdown (Hard Breach)", warning: true },
       { text: "3% max loss per trade", warning: true },
       { text: "No Friday overnight holding (Hard Breach)", check: false },
       { text: "Max withdraw 3% per 24hrs", warning: true },
+      { text: "No payout exceeding daily drawdown", warning: true },
     ]
   }
 };
@@ -96,7 +101,7 @@ export default function RulesPage() {
             <FundedRulesDetailed 
               daily="3%" 
               max="6%" 
-              payout="Minimum 5 trading days" 
+              payout="Minimum 5 trading days required before payout request" 
               extra={["No closing trades within 2 minutes", "1 trade per 3 minutes maximum"]}
             />
           </TabsContent>
@@ -110,7 +115,7 @@ export default function RulesPage() {
             <FundedRulesDetailed 
               daily="5%" 
               max="10%" 
-              payout="Minimum 5 trading days" 
+              payout="Minimum 5 trading days required before payout request" 
               extra={["Single pair loss max 3%", "No closing trades within 2 minutes", "1 trade per 3 minutes maximum"]}
             />
           </TabsContent>
@@ -209,8 +214,8 @@ function RuleCard({ title, items, variant }: { title: string, items: any[], vari
       <CardContent className="pt-6 space-y-4">
         {items.map((item, idx) => (
           <div key={idx} className="flex items-start gap-3">
-            <div className={`mt-1 p-0.5 rounded-full ${item.check ? 'bg-accent/20 text-accent' : item.warning ? 'bg-destructive/20 text-destructive' : 'bg-destructive/20 text-destructive'}`}>
-              {item.check ? <Check className="w-3.5 h-3.5" /> : item.warning ? <AlertTriangle className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
+            <div className={`mt-1 p-0.5 rounded-full ${item.check ? 'bg-accent/20 text-accent' : item.warning ? 'bg-amber-500/20 text-amber-500' : 'bg-destructive/20 text-destructive'}`}>
+              {item.check ? <Check className="w-3.5 h-3.5" /> : item.warning ? <AlertTriangle className="w-3.5 h-3.5" /> : <Skull className="w-3.5 h-3.5" />}
             </div>
             <span className={`text-sm font-medium ${item.check ? 'text-foreground/90' : 'text-muted-foreground/90'}`}>
               {item.text}
@@ -277,13 +282,13 @@ function FundedRulesDetailed({ daily, max, payout, extra }: { daily: string, max
              <div className="space-y-3">
                 <SummaryItem text="No profit target" checked />
                 <SummaryItem text="Up to 80% split" checked />
-                <SummaryItem text={payout} checked />
+                <SummaryItem text={payout} warning />
                 <SummaryItem text="Scale up to $2M" checked />
              </div>
              <div className="space-y-3">
-                <SummaryItem text={`${daily} daily limit`} warning />
-                <SummaryItem text={`${max} max limit`} warning />
-                <SummaryItem text="1% max floating loss" warning />
+                <SummaryItem text={`${daily} daily limit`} hard />
+                <SummaryItem text={`${max} max limit`} hard />
+                <SummaryItem text="1% max floating loss" hard />
                 <SummaryItem text="No martingale" hard />
              </div>
           </CardContent>

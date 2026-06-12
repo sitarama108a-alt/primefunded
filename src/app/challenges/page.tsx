@@ -49,11 +49,13 @@ const RULES = {
       { text: "Max 1 trade / 3 mins", type: 'check' },
     ],
     funded: [
-      { text: "1% max floating loss (Hard)", type: 'hard' },
-      { text: "3% daily drawdown (Hard)", type: 'hard' },
-      { text: "6% max drawdown (Hard)", type: 'hard' },
-      { text: "No martingale (Hard)", type: 'hard' },
-      { text: "Daily payouts (after 5 days)", type: 'check' },
+      { text: "Up to 80% profit split", type: 'check' },
+      { text: "Minimum 5 trading days required before payout request", type: 'warning' },
+      { text: "1% max floating loss (Hard Breach)", type: 'warning' },
+      { text: "3% daily drawdown limit (Hard Breach)", type: 'hard' },
+      { text: "6% max drawdown limit (Hard Breach)", type: 'hard' },
+      { text: "No martingale (Hard Breach)", type: 'hard' },
+      { text: "Payout must be within daily drawdown", type: 'warning' },
     ]
   },
   '2-step': {
@@ -71,21 +73,24 @@ const RULES = {
       { text: "Minimum 5 trading days", type: 'check' },
     ],
     funded: [
-      { text: "1% max floating loss (Hard)", type: 'hard' },
-      { text: "5% daily drawdown (Hard)", type: 'hard' },
-      { text: "10% max drawdown (Hard)", type: 'hard' },
-      { text: "No martingale (Hard)", type: 'hard' },
-      { text: "Min 5 days for payout", type: 'check' },
+      { text: "Up to 80% profit split", type: 'check' },
+      { text: "Minimum 5 trading days required before payout request", type: 'warning' },
+      { text: "1% max floating loss (Hard Breach)", type: 'warning' },
+      { text: "5% daily drawdown limit (Hard Breach)", type: 'hard' },
+      { text: "10% max drawdown limit (Hard Breach)", type: 'hard' },
+      { text: "No martingale (Hard Breach)", type: 'hard' },
+      { text: "Payout must be within daily drawdown", type: 'warning' },
     ]
   },
   'instant': {
     funded: [
-      { text: "Funded from day one", type: 'check' },
-      { text: "1% max floating loss (Hard)", type: 'hard' },
-      { text: "2% daily drawdown (Hard)", type: 'hard' },
-      { text: "4% max drawdown (Hard)", type: 'hard' },
-      { text: "No Friday overnight (Hard)", type: 'hard' },
-      { text: "Max withdraw 3% / 24h", type: 'warning' },
+      { text: "Up to 80% profit split", type: 'check' },
+      { text: "Daily payouts available", type: 'check' },
+      { text: "First payout after 24 hours", type: 'check' },
+      { text: "Max withdraw 3% per 24 hours", type: 'warning' },
+      { text: "2% daily drawdown (Hard Breach)", type: 'hard' },
+      { text: "4% max drawdown (Hard Breach)", type: 'hard' },
+      { text: "No martingale (Hard Breach)", type: 'hard' },
     ]
   }
 };
@@ -242,7 +247,7 @@ function ChallengeCard({ tier, planName, delay, discountApplied }: { tier: any, 
                 </>
               )}
               {planName === 'instant' && (
-                <RuleSection title="Funded from day 1" items={RULES['instant'].funded} />
+                <RuleSection title="Funded stage" items={RULES['instant'].funded} />
               )}
             </CollapsibleContent>
           </Collapsible>
