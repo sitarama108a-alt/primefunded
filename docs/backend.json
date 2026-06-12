@@ -6,6 +6,9 @@
       "description": "Details about the trader's profile.",
       "type": "object",
       "properties": {
+        "uid": {
+          "type": "string"
+        },
         "name": {
           "type": "string"
         },
@@ -46,6 +49,10 @@
         },
         "kycVerified": {
           "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
         }
       },
       "required": [

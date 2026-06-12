@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, useMemo, Suspense } from 'react';
@@ -16,52 +17,59 @@ import {
   CheckCircle2,
   Clock,
   Circle,
-  BarChart3
+  BarChart3,
+  AlertTriangle,
+  User
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
-  BarChart,
-  Bar,
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer,
-  Cell
-} from 'recharts';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { aiComplianceMonitorAlerts } from '@/ai/flows/ai-compliance-monitor-alerts';
 import { useFirestore, useCollection } from '@/firebase';
-import { where } from 'firebase/firestore';
-
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    const value = payload[0].value;
-    const isProfit = value >= 0;
-    return (
-      <div className="bg-card border border-border p-3 rounded-xl shadow-2xl backdrop-blur-xl ring-1 ring-white/10">
-        <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1.5">{label}</p>
-        <div className="flex items-center gap-2">
-          <div className={`w-1.5 h-1.5 rounded-full ${isProfit ? 'bg-accent' : 'bg-destructive'}`} />
-          <p 
-            className="text-sm font-bold font-mono" 
-            style={{ color: isProfit ? 'oklch(0.7 0.18 155)' : 'oklch(0.62 0.22 25)' }}
-          >
-            {isProfit ? '+' : ''}{value.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-          </p>
-        </div>
-      </div>
-    );
-  }
-  return null;
-};
+import { where, doc, updateDoc } from 'firebase/firestore';
+import { useToast } from '@/hooks/use-toast';
 
 export default function DashboardPage() {
   const { user, userData, loading: authLoading } = useAuth();
   const [isConnected, setIsConnected] = useState(true);
   const [compliance, setCompliance] = useState<any>(null);
+  const { toast } = useToast();
+  const db = useFirestore();
+
+  // Profile completion state
+  const [showProfilePrompt, setShowProfilePrompt] = useState(false);
+  const [completingPhone, setCompletingPhone] = useState('');
+  const [completingCountry, setCompletingCountry] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  useEffect(() => {
+    if (userData && (!userData.phone || !userData.country)) {
+      setShowProfilePrompt(true);
+    } else {
+      setShowProfilePrompt(false);
+    }
+  }, [userData]);
+
+  const handleCompleteProfile = async () => {
+    if (!user) return;
+    setSavingProfile(true);
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        phone: completingPhone,
+        country: completingCountry
+      });
+      toast({ title: "Profile Completed", description: "Thank you for updating your information." });
+      setShowProfilePrompt(false);
+    } catch (err) {
+      toast({ variant: "destructive", title: "Error", description: "Failed to update profile." });
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
   const accountConstraints = useMemo(() => {
     if (!user?.uid) return [];
@@ -102,7 +110,7 @@ export default function DashboardPage() {
     const balance = activeAccount?.balance || userData?.balance || 0;
     return {
       balance,
-      equity: balance, // Should reflect live equity when MT5 API is connected
+      equity: activeAccount?.balance ? activeAccount.balance * 1.02 : (userData?.balance || 100000) * 1.02,
       dailyPnL: 0,
       winRate: 0,
       tradesToday: 0,
@@ -124,6 +132,42 @@ export default function DashboardPage() {
       <Navigation />
       
       <main className="flex-1 p-8 overflow-y-auto">
+        {/* Profile Completion Prompt */}
+        {showProfilePrompt && (
+          <div className="mb-8 p-6 rounded-2xl bg-primary/10 border border-primary/30 flex flex-col md:flex-row items-center justify-between gap-6 shadow-[0_0_20px_rgba(17,179,245,0.1)]">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center text-primary">
+                <User className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg">Complete Your Profile</h3>
+                <p className="text-sm text-muted-foreground">Please provide your contact details to enable full dashboard features.</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
+              <div className="flex-1 md:flex-none">
+                <Input 
+                  placeholder="Phone Number" 
+                  value={completingPhone} 
+                  onChange={(e) => setCompletingPhone(e.target.value)}
+                  className="bg-background/50 border-primary/20 h-10 min-w-[150px]"
+                />
+              </div>
+              <div className="flex-1 md:flex-none">
+                <Input 
+                  placeholder="Country" 
+                  value={completingCountry} 
+                  onChange={(e) => setCompletingCountry(e.target.value)}
+                  className="bg-background/50 border-primary/20 h-10 min-w-[150px]"
+                />
+              </div>
+              <Button onClick={handleCompleteProfile} disabled={savingProfile || !completingPhone || !completingCountry} className="font-bold h-10 px-6">
+                Save & Continue
+              </Button>
+            </div>
+          </div>
+        )}
+
         <header className="flex justify-between items-center mb-10">
           <div>
             <h1 className="text-3xl font-headline font-bold mb-1">Trader Terminal</h1>

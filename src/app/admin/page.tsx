@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Lock, 
@@ -30,7 +32,9 @@ import {
   RefreshCw,
   Phone,
   Globe,
-  User
+  User,
+  Activity,
+  UserCheck
 } from 'lucide-react';
 import { useFirestore, useCollection } from '@/firebase';
 import { doc, updateDoc, deleteDoc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -45,7 +49,14 @@ export default function AdminPage() {
   const { toast } = useToast();
   const db = useFirestore();
 
-  // Fetch data with memoized constraints
+  // Selected user for account management
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [isManageAccountOpen, setIsManageAccountOpen] = useState(false);
+  const [provisionPlan, setProvisionPlan] = useState('1-Step Pro');
+  const [provisionSize, setProvisionSize] = useState('$100,000');
+  const [isProvisioning, setIsProvisioning] = useState(false);
+
+  // Fetch data
   const emptyConstraints = useMemo(() => [], []);
   const { data: orders } = useCollection<any>('orders', emptyConstraints);
   const { data: traders } = useCollection<any>('users', emptyConstraints);
@@ -59,6 +70,7 @@ export default function AdminPage() {
       t.name?.toLowerCase().includes(lower) || 
       t.email?.toLowerCase().includes(lower) ||
       t.phone?.includes(lower) ||
+      t.uid?.toLowerCase().includes(lower) ||
       t.country?.toLowerCase().includes(lower)
     );
   }, [traders, searchTerm]);
@@ -70,6 +82,47 @@ export default function AdminPage() {
       toast({ title: "Admin Access Granted", description: "Welcome back, Commander." });
     } else {
       toast({ variant: "destructive", title: "Access Denied", description: "Incorrect administrative password." });
+    }
+  };
+
+  const handleActivateAccount = async () => {
+    if (!selectedUser) return;
+    setIsProvisioning(true);
+    try {
+      const accountId = Math.random().toString(36).substring(7).toUpperCase();
+      const login = Math.floor(1000000 + Math.random() * 9000000).toString();
+      const password = Math.random().toString(36).substring(2, 12);
+      
+      const accountData = {
+        userId: selectedUser.uid,
+        email: selectedUser.email,
+        plan: provisionPlan,
+        size: provisionSize,
+        mt5Login: login,
+        mt5Password: password,
+        mt5Server: "PrimeFunded-Demo",
+        balance: parseFloat(provisionSize.replace('$', '').replace(',', '').replace('k', '000')),
+        status: "active",
+        startDate: new Date().toISOString(),
+        createdAt: serverTimestamp(),
+      };
+
+      await setDoc(doc(db, 'accounts', accountId), accountData);
+      
+      // Update user document too for quick metrics
+      const userRef = doc(db, 'users', selectedUser.uid);
+      await updateDoc(userRef, {
+        plan: provisionPlan,
+        accountSize: provisionSize,
+        balance: accountData.balance
+      });
+
+      toast({ title: "Account Activated", description: `Funded account created for ${selectedUser.email}` });
+      setIsManageAccountOpen(false);
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Activation Failed", description: err.message });
+    } finally {
+      setIsProvisioning(false);
     }
   };
 
@@ -131,20 +184,20 @@ export default function AdminPage() {
 
         <Tabs defaultValue="overview" className="space-y-8">
           <TabsList className="bg-secondary/50 border border-border p-1 h-12 w-full justify-start overflow-x-auto overflow-y-hidden rounded-xl">
-            <TabsTrigger value="overview" className="flex gap-2 transition-all duration-200 font-bold"><Users className="w-4 h-4" /> Overview</TabsTrigger>
+            <TabsTrigger value="overview" className="flex gap-2 transition-all duration-200 font-bold"><Activity className="w-4 h-4" /> Overview</TabsTrigger>
             <TabsTrigger value="orders" className="flex gap-2 transition-all duration-200 font-bold">
               <ShoppingCart className="w-4 h-4" /> Orders
               {orders.filter(o => o.status === 'pending').length > 0 && (
-                <span className="bg-destructive text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center ml-1">
+                <span className="bg-destructive text-white text-[10px] min-w-4 h-4 px-1 rounded-full flex items-center justify-center ml-1">
                   {orders.filter(o => o.status === 'pending').length}
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="traders" className="flex gap-2 transition-all duration-200 font-bold"><Users className="w-4 h-4" /> Traders</TabsTrigger>
+            <TabsTrigger value="users" className="flex gap-2 transition-all duration-200 font-bold"><Users className="w-4 h-4" /> Users</TabsTrigger>
             <TabsTrigger value="payouts" className="flex gap-2 transition-all duration-200 font-bold">
               <Wallet className="w-4 h-4" /> Payouts
               {payouts?.filter(p => p.status === 'pending').length > 0 && (
-                <span className="bg-destructive text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center ml-1">
+                <span className="bg-destructive text-white text-[10px] min-w-4 h-4 px-1 rounded-full flex items-center justify-center ml-1">
                   {payouts.filter(p => p.status === 'pending').length}
                 </span>
               )}
@@ -157,7 +210,7 @@ export default function AdminPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 <StatCard title="Total Traders" value={traders.length.toString()} icon={<Users />} color="blue" />
                 <StatCard title="Total Orders" value={orders.length.toString()} icon={<ShoppingCart />} color="amber" />
-                <StatCard title="Total Revenue" value={`$${orders.reduce((acc, o) => acc + (parseFloat(o.price?.replace('$', '') || '0')), 0).toLocaleString()}`} icon={<DollarSign />} color="green" />
+                <StatCard title="Total Revenue" value={`$${orders.reduce((acc, o) => acc + (parseFloat(o.price?.replace('$', '').replace(',', '') || '0')), 0).toLocaleString()}`} icon={<DollarSign />} color="green" />
                 <StatCard title="Payouts Sent" value={`$${payouts?.filter(p => p.status === 'done').reduce((acc, p) => acc + (parseFloat(p.amount || '0')), 0).toLocaleString() || '0'}`} icon={<Wallet />} color="purple" />
               </div>
 
@@ -255,13 +308,13 @@ export default function AdminPage() {
               </Card>
             </TabsContent>
 
-            <TabsContent value="traders">
+            <TabsContent value="users">
               <div className="flex gap-4 mb-6">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
                   <Input 
                     className="pl-10 h-12 rounded-xl" 
-                    placeholder="Search by name, email, phone or country..." 
+                    placeholder="Search by name, email, phone or UID..." 
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
@@ -277,8 +330,8 @@ export default function AdminPage() {
                         <tr className="border-b border-border bg-secondary/30 text-muted-foreground uppercase text-[10px] font-bold tracking-widest">
                           <th className="py-4 px-4">Name/Contact</th>
                           <th className="py-4 px-4">Location</th>
-                          <th className="py-4 px-4">Status</th>
-                          <th className="py-4 px-4">Tier</th>
+                          <th className="py-4 px-4">Signup Info</th>
+                          <th className="py-4 px-4">Active Plan</th>
                           <th className="py-4 px-4 text-right">Actions</th>
                         </tr>
                       </thead>
@@ -304,13 +357,30 @@ export default function AdminPage() {
                               </div>
                             </td>
                             <td className="py-4 px-4">
-                              <Badge variant={trader.status === 'active' ? 'default' : 'secondary'} className="uppercase text-[9px] font-black">{trader.status || 'inactive'}</Badge>
+                              <div className="flex flex-col gap-1">
+                                <span className="text-[10px] font-mono text-muted-foreground">UID: {trader.uid?.substring(0, 8)}...</span>
+                                <span className="text-[9px] text-muted-foreground uppercase">{new Date(trader.joinDate || trader.createdAt?.seconds * 1000).toLocaleDateString()}</span>
+                              </div>
                             </td>
                             <td className="py-4 px-4">
-                              <Badge className="bg-primary/20 text-primary border-primary/20 uppercase text-[9px] font-black">{trader.tier || 'Bronze'}</Badge>
+                              {trader.plan ? (
+                                <Badge className="bg-primary/20 text-primary border-primary/20 uppercase text-[9px] font-black">{trader.plan} - {trader.accountSize}</Badge>
+                              ) : (
+                                <span className="text-xs text-muted-foreground italic">No active account</span>
+                              )}
                             </td>
                             <td className="py-4 px-4 text-right">
-                              <Button variant="outline" size="sm" className="h-8 text-[10px] uppercase font-bold tracking-widest rounded-lg border-border/50 hover:bg-secondary">Manage Account</Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 text-[10px] uppercase font-bold tracking-widest rounded-lg border-border/50 hover:bg-secondary"
+                                onClick={() => {
+                                  setSelectedUser(trader);
+                                  setIsManageAccountOpen(true);
+                                }}
+                              >
+                                Manage Account
+                              </Button>
                             </td>
                           </tr>
                         ))}
@@ -443,6 +513,74 @@ export default function AdminPage() {
             </TabsContent>
           </Suspense>
         </Tabs>
+
+        {/* Manage Account Dialog */}
+        <Dialog open={isManageAccountOpen} onOpenChange={setIsManageAccountOpen}>
+          <DialogContent className="sm:max-w-md bg-card border-primary/20">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <UserCheck className="text-primary w-5 h-5" /> Activate Funded Account
+              </DialogTitle>
+              <DialogDescription>
+                Assign a trading account to {selectedUser?.name}. This will generate MT5 credentials instantly.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-6 py-4">
+              <div className="space-y-2">
+                <Label>Select Plan</Label>
+                <Select value={provisionPlan} onValueChange={setProvisionPlan}>
+                  <SelectTrigger className="rounded-xl h-11 bg-secondary/50 border-primary/10">
+                    <SelectValue placeholder="Choose a plan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1-Step Pro">1-Step Pro</SelectItem>
+                    <SelectItem value="2-Step Classic">2-Step Classic</SelectItem>
+                    <SelectItem value="Instant Funding">Instant Funding</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Account Size</Label>
+                <Select value={provisionSize} onValueChange={setProvisionSize}>
+                  <SelectTrigger className="rounded-xl h-11 bg-secondary/50 border-primary/10">
+                    <SelectValue placeholder="Choose account size" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="$5,000">$5,000</SelectItem>
+                    <SelectItem value="$10,000">$10,000</SelectItem>
+                    <SelectItem value="$25,000">$25,000</SelectItem>
+                    <SelectItem value="$50,000">$50,000</SelectItem>
+                    <SelectItem value="$100,000">$100,000</SelectItem>
+                    <SelectItem value="$200,000">$200,000</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 flex items-start gap-3">
+                <AlertTriangle className="text-primary w-5 h-5 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Activating this account will overwrite any existing trial or pending metrics for this user. New MT5 credentials will be sent and displayed on their dashboard.
+                </p>
+              </div>
+            </div>
+            <DialogFooter className="sm:justify-start gap-2">
+              <Button 
+                onClick={handleActivateAccount} 
+                className="font-bold cyan-box-glow h-11 flex-1"
+                disabled={isProvisioning}
+              >
+                {isProvisioning ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : null}
+                Activate Funded Account
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => setIsManageAccountOpen(false)}
+                className="h-11"
+              >
+                Cancel
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );
@@ -465,13 +603,22 @@ export default function AdminPage() {
         mt5Login: login,
         mt5Password: password,
         mt5Server: "PrimeFunded-Demo",
-        balance: parseFloat(order.size.replace('$', '').replace('k', '000')),
+        balance: parseFloat(order.size.replace('$', '').replace(',', '').replace('k', '000')),
         status: "active",
         startDate: new Date().toISOString(),
         createdAt: serverTimestamp(),
       };
 
-      setDoc(doc(db, 'accounts', accountId), accountData);
+      await setDoc(doc(db, 'accounts', accountId), accountData);
+      
+      // Also update user profile with latest account info
+      const userRef = doc(db, 'users', order.userId);
+      await updateDoc(userRef, {
+        plan: order.plan,
+        accountSize: order.size,
+        balance: accountData.balance
+      });
+
       toast({ title: "Order Verified", description: `Account created for ${order.email}` });
     } catch (err: any) {
       toast({ variant: "destructive", title: "Verification Failed", description: "Failed to provision account." });

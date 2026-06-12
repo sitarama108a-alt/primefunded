@@ -5,7 +5,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,6 +33,7 @@ export default function SignupPage() {
       const user = userCredential.user;
       
       const userData = {
+        uid: user.uid,
         name,
         email,
         phone,
@@ -42,7 +43,8 @@ export default function SignupPage() {
         balance: 0,
         equity: 0,
         status: 'active',
-        kycVerified: false
+        kycVerified: false,
+        createdAt: serverTimestamp()
       };
 
       const userRef = doc(db, `users`, user.uid);
@@ -126,6 +128,7 @@ export default function SignupPage() {
                   placeholder="+1 555..." 
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
+                  required
                   className="h-11 bg-secondary/50"
                 />
               </div>
@@ -136,6 +139,7 @@ export default function SignupPage() {
                   placeholder="United Kingdom" 
                   value={country}
                   onChange={(e) => setCountry(e.target.value)}
+                  required
                   className="h-11 bg-secondary/50"
                 />
               </div>
