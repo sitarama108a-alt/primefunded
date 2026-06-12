@@ -100,7 +100,7 @@ export default function DashboardPage() {
 
   const metrics = {
     balance: activeAccount?.balance || userData?.balance || 100000,
-    equity: activeAccount?.balance ? activeAccount.balance * 1.02 : metrics?.balance || 102450.50,
+    equity: activeAccount?.balance ? activeAccount.balance * 1.02 : (userData?.balance || 100000) * 1.02,
     dailyPnL: 2450.50,
     winRate: 64,
     tradesToday: 12,
