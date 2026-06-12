@@ -31,12 +31,12 @@ export default function Home() {
           </motion.div>
           
           <div className="hidden md:flex items-center gap-8">
-            <Link href="#challenges" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Challenges</Link>
-            <Link href="#rules" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Rules</Link>
-            <Link href="#about" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">About Us</Link>
+            <Link href="/challenges" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Challenges</Link>
+            <Link href="/rules" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Rules</Link>
+            <Link href="/about" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">About Us</Link>
             <Link href="/login" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Login</Link>
             <Button className="font-bold cyan-box-glow" asChild>
-              <Link href="/signup">Get Funded</Link>
+              <Link href="/challenges">Get Funded</Link>
             </Button>
           </div>
         </div>
@@ -160,10 +160,10 @@ export default function Home() {
           </div>
           
           <div className="flex flex-wrap justify-center gap-10 text-sm font-medium">
-            <Link href="#" className="text-muted-foreground hover:text-primary transition-colors">Terms of Service</Link>
-            <Link href="#" className="text-muted-foreground hover:text-primary transition-colors">Privacy Policy</Link>
-            <Link href="#" className="text-muted-foreground hover:text-primary transition-colors">Risk Disclosure</Link>
-            <Link href="#" className="text-muted-foreground hover:text-primary transition-colors">Contact Support</Link>
+            <Link href="/about" className="text-muted-foreground hover:text-primary transition-colors">About Us</Link>
+            <Link href="/rules" className="text-muted-foreground hover:text-primary transition-colors">Risk Disclosure</Link>
+            <Link href="/support" className="text-muted-foreground hover:text-primary transition-colors">Contact Support</Link>
+            <Link href="/login" className="text-muted-foreground hover:text-primary transition-colors">Client Area</Link>
           </div>
           
           <div className="flex flex-col items-center md:items-end gap-2">
