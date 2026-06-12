@@ -15,9 +15,9 @@
         "tier": {
           "type": "string",
           "enum": [
-            "Standard",
-            "Pro",
-            "Elite"
+            "Bronze",
+            "Silver",
+            "Gold"
           ]
         },
         "joinDate": {
@@ -123,15 +123,41 @@
         "startDate": {
           "type": "string",
           "format": "date-time"
+        }
+      }
+    },
+    "PayoutRequest": {
+      "title": "Payout Request",
+      "description": "A request for a profit withdrawal.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string"
         },
-        "daysTraded": {
-          "type": "number"
+        "email": {
+          "type": "string"
         },
-        "winRate": {
-          "type": "number"
+        "amount": {
+          "type": "string"
         },
-        "profit": {
-          "type": "number"
+        "method": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "approved",
+            "done",
+            "rejected"
+          ]
+        },
+        "date": {
+          "type": "string",
+          "format": "date-time"
         }
       }
     }
@@ -159,6 +185,12 @@
         "$ref": "#/backend/entities/TradingAccount"
       },
       "description": "Stores provisioned MT5 accounts."
+    },
+    "/payouts/{payoutId}": {
+      "schema": {
+        "$ref": "#/backend/entities/PayoutRequest"
+      },
+      "description": "Stores profit withdrawal requests."
     }
   }
 }

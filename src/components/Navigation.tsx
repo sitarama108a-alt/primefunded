@@ -18,7 +18,8 @@ import {
   Users,
   Calendar,
   Fingerprint,
-  Terminal
+  Terminal,
+  Shield
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -46,10 +47,10 @@ const secondaryItems = [
 
 export function Navigation() {
   const pathname = usePathname();
-  const { logout, userData } = useAuth();
+  const { logout, userData, user } = useAuth();
 
   return (
-    <div className="w-64 bg-card border-r border-border h-screen sticky top-0 flex flex-col p-6 overflow-y-auto">
+    <div className="w-64 bg-card border-r border-border h-screen sticky top-0 flex flex-col p-6 overflow-y-auto shrink-0">
       <div className="flex items-center gap-2 mb-10 px-2">
         <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
           <TrendingUp className="text-primary-foreground w-5 h-5" />
@@ -93,6 +94,22 @@ export function Navigation() {
           </Link>
         ))}
         
+        {/* Conditional Admin Link */}
+        {user && (
+          <Link
+            href="/admin"
+            className={cn(
+              "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
+              pathname === "/admin" 
+                ? "bg-destructive/10 text-destructive border-r-2 border-destructive rounded-r-none" 
+                : "text-muted-foreground hover:text-destructive hover:bg-destructive/5"
+            )}
+          >
+            <Shield className="w-5 h-5" />
+            Admin Panel
+          </Link>
+        )}
+        
         <button
           onClick={logout}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors mt-4"
@@ -109,7 +126,7 @@ export function Navigation() {
           </div>
           <div className="overflow-hidden">
             <p className="text-sm font-semibold truncate">{userData?.name || 'Trader'}</p>
-            <p className="text-xs text-muted-foreground truncate">{userData?.tier || 'Free Tier'}</p>
+            <p className="text-xs text-muted-foreground truncate">{userData?.tier || 'Bronze Tier'}</p>
           </div>
         </div>
         <Button variant="outline" size="sm" className="w-full text-xs" asChild>
