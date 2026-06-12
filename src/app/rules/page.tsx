@@ -80,6 +80,7 @@ const PLAN_RULES = {
       { text: "5% profit target", check: true },
       { text: "4% daily drawdown", check: true },
       { text: "8% max drawdown", check: true },
+      { text: "Minimum 5 trading days", check: true },
       { text: "Trading Leverage: 1:100", check: true },
       { text: "Instruments: Fx, Commodities, Indices, Stock, Crypto", check: true },
     ],
