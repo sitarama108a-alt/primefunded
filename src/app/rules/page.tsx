@@ -4,6 +4,7 @@ import { Navigation } from '@/components/Navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Check, X, Shield, AlertTriangle, Target, Info, Skull, AlertCircle } from 'lucide-react';
+import Link from 'next/link';
 
 const PLAN_RULES = {
   '1-step': {
@@ -69,11 +70,21 @@ const PLAN_RULES = {
 export default function RulesPage() {
   return (
     <div className="flex min-h-screen bg-background">
-      <Navigation />
+      <div className="hidden lg:block">
+        <Navigation />
+      </div>
       <main className="flex-1 p-8 overflow-y-auto">
-        <header className="mb-10">
-          <h1 className="text-4xl font-headline font-bold mb-2">Trading Rules</h1>
-          <p className="text-muted-foreground">Comprehensive guide to maintain your funding eligibility.</p>
+        <header className="mb-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h1 className="text-4xl font-headline font-bold mb-2">Trading Rules</h1>
+            <p className="text-muted-foreground">Comprehensive guide to maintain your funding eligibility.</p>
+          </div>
+          <Link href="/" className="lg:hidden flex items-center gap-2 bg-secondary/50 p-2 rounded-xl">
+            <div className="bg-primary/20 p-1 rounded-lg">
+              <AlertCircle className="text-primary w-5 h-5" />
+            </div>
+            <span className="font-bold text-sm">Public Area</span>
+          </Link>
         </header>
 
         {/* Sticky Warning Banner */}
@@ -85,7 +96,7 @@ export default function RulesPage() {
         </div>
 
         <Tabs defaultValue="1-step" className="space-y-12">
-          <TabsList className="bg-secondary/50 border border-border p-1 h-14 w-full max-w-2xl justify-start">
+          <TabsList className="bg-secondary/50 border border-border p-1 h-14 w-full max-w-2xl justify-start overflow-x-auto">
             <TabsTrigger value="1-step" className="h-full px-8 font-bold">1-Step Pro</TabsTrigger>
             <TabsTrigger value="2-step" className="h-full px-8 font-bold">2-Step Classic</TabsTrigger>
             <TabsTrigger value="instant" className="h-full px-8 font-bold">Instant Funding</TabsTrigger>
@@ -132,7 +143,7 @@ export default function RulesPage() {
           </TabsContent>
         </Tabs>
 
-        <section className="mt-20 space-y-12 pb-20">
+        <section className="mt-20 space-y-12">
           <div className="flex items-center gap-3">
             <Skull className="text-destructive w-8 h-8" />
             <h2 className="text-3xl font-headline font-bold">Breach Types Explained</h2>
@@ -193,6 +204,30 @@ export default function RulesPage() {
                 ))}
               </CardContent>
             </Card>
+          </div>
+        </section>
+
+        {/* Risk Disclosure Section */}
+        <section className="mt-32 pb-20 pt-20 border-t border-border">
+          <div className="max-w-4xl">
+            <div className="flex items-center gap-3 mb-8">
+              <Shield className="text-primary w-8 h-8" />
+              <h2 className="text-3xl font-headline font-bold uppercase tracking-tight">Risk Disclosure Statement</h2>
+            </div>
+            <div className="space-y-6 text-muted-foreground text-sm leading-relaxed bg-secondary/20 p-10 rounded-[2rem] border border-border">
+              <p>
+                Trading foreign exchange and CFDs carries a high level of risk and may not be suitable for all investors. Past performance is not indicative of future results. The high degree of leverage can work against you as well as for you.
+              </p>
+              <p>
+                PrimeFunded provides simulated funded accounts for educational purposes and skill evaluation. Performance rewards are discretionary and not guaranteed. Participation in our evaluation programs does not constitute an investment in any financial instrument.
+              </p>
+              <p>
+                You should carefully consider your investment objectives, level of experience, and risk appetite before participating. Only risk capital should be used. There is a possibility that you could sustain a loss of some or all of your initial evaluation fees.
+              </p>
+              <p className="font-bold text-foreground">
+                By using our services, you acknowledge that you have read and understood this risk disclosure and agree to our Terms of Service.
+              </p>
+            </div>
           </div>
         </section>
       </main>

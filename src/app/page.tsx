@@ -64,18 +64,29 @@ export default function Home() {
             transition={{ duration: 0.4, delay: 0.05 }}
             className="text-6xl md:text-8xl font-headline font-bold mb-8 leading-[1.1] tracking-tight"
           >
-            Institutional Funding <br />
-            <span className="bg-gradient-to-r from-primary via-blue-400 to-primary bg-clip-text text-transparent cyan-glow">Elite Traders.</span>
+            Trade Like a Pro! <br />
+            <span className="bg-gradient-to-r from-primary via-blue-400 to-primary bg-clip-text text-transparent cyan-glow">With Up to $200,000 Funding</span>
           </motion.h1>
           
           <motion.p 
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.1 }}
-            className="text-xl text-muted-foreground max-w-2xl mx-auto mb-12 leading-relaxed"
+            className="text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed"
           >
-            Trade our capital, keep up to 90% of the profits. Industry-leading technology, instant execution, and professional compliance monitoring.
+            No consistency rules. News trading allowed. Daily payouts on Instant accounts. Keep up to 80% of your profits.
           </motion.p>
+
+          <motion.div 
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.12 }}
+            className="flex flex-wrap justify-center gap-3 mb-12"
+          >
+            <HighlightBadge text="No Consistency Rules" />
+            <HighlightBadge text="News Trading Allowed" />
+            <HighlightBadge text="Daily Payouts (Instant)" />
+          </motion.div>
           
           <motion.div 
             initial={{ opacity: 0, y: 15 }}
@@ -123,24 +134,30 @@ export default function Home() {
             </p>
           </motion.div>
           
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
             <FeatureCard 
-              icon={<Shield className="text-primary w-8 h-8" />}
-              title="Secure Compliance"
-              description="AI-powered monitor ensures you stay within rules and flags risks before breaches happen."
+              icon={<CheckCircle2 className="text-primary w-8 h-8" />}
+              title="No Consistency Rules"
+              description="Trade any lot size, any day. Complete trading freedom for every individual style."
               delay={0.05}
             />
             <FeatureCard 
-              icon={<Zap className="text-primary w-8 h-8" />}
-              title="Instant Funding"
-              description="No evaluation phase needed for our Instant models. Trade live capital from day one."
+              icon={<Globe className="text-primary w-8 h-8" />}
+              title="News Trading Allowed"
+              description="Trade during NFP, FOMC, CPI and all major news events freely with no restrictions."
               delay={0.1}
             />
             <FeatureCard 
-              icon={<BarChart3 className="text-primary w-8 h-8" />}
-              title="Advanced Analytics"
-              description="Real-time dashboard with deep trade analysis and performance tracking."
+              icon={<Zap className="text-primary w-8 h-8" />}
+              title="Daily Payouts"
+              description="Instant Funding accounts receive daily payouts. Fast, reliable, and consistent withdrawals."
               delay={0.15}
+            />
+            <FeatureCard 
+              icon={<BarChart3 className="text-primary w-8 h-8" />}
+              title="Up to 80% Split"
+              description="Keep up to 80% of all profits you generate. We reward high-performance trading."
+              delay={0.2}
             />
           </div>
         </div>
@@ -172,6 +189,15 @@ export default function Home() {
           </div>
         </div>
       </footer>
+    </div>
+  );
+}
+
+function HighlightBadge({ text }: { text: string }) {
+  return (
+    <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/5 border border-primary/20 text-xs font-bold text-primary">
+      <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+      {text}
     </div>
   );
 }
