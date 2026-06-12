@@ -12,6 +12,8 @@ const PLAN_RULES = {
       { text: "10% profit target", check: true },
       { text: "3% daily drawdown limit", check: true },
       { text: "6% maximum drawdown", check: true },
+      { text: "Trading Leverage: 1:100", check: true },
+      { text: "Instruments: Fx, Commodities, Indices, Stock, Crypto", check: true },
       { text: "Minimum 5 trading days required", check: true },
       { text: "Maximum 1 execution every 3 minutes", check: true },
       { text: "Hold trades for at least 2 minutes", check: true },
@@ -20,6 +22,8 @@ const PLAN_RULES = {
     ],
     funded: [
       { text: "80% profit split", check: true },
+      { text: "Trading Leverage: 1:30", check: true },
+      { text: "Instruments: Fx, Commodities, Indices, Stock, Crypto", check: true },
       { text: "Minimum 5 trading days required before payout request", warning: true },
       { text: "1% max floating loss (Hard Breach)", warning: true },
       { text: "3% daily drawdown limit (Hard Breach)", warning: true },
@@ -32,6 +36,8 @@ const PLAN_RULES = {
       { text: "8% profit target", check: true },
       { text: "5% daily drawdown", check: true },
       { text: "10% max drawdown", check: true },
+      { text: "Trading Leverage: 1:100", check: true },
+      { text: "Instruments: Fx, Commodities, Indices, Stock, Crypto", check: true },
       { text: "Minimum 5 trading days", check: true },
       { text: "Single pair loss max 3%", warning: true },
     ],
@@ -39,10 +45,14 @@ const PLAN_RULES = {
       { text: "5% profit target", check: true },
       { text: "5% daily drawdown", check: true },
       { text: "10% max drawdown", check: true },
+      { text: "Trading Leverage: 1:100", check: true },
+      { text: "Instruments: Fx, Commodities, Indices, Stock, Crypto", check: true },
       { text: "Minimum 5 trading days", check: true },
     ],
     funded: [
       { text: "80% profit split", check: true },
+      { text: "Trading Leverage: 1:30", check: true },
+      { text: "Instruments: Fx, Commodities, Indices, Stock, Crypto", check: true },
       { text: "Minimum 5 trading days required before payout request", warning: true },
       { text: "1% max floating loss (Hard Breach)", warning: true },
       { text: "5% daily drawdown limit (Hard Breach)", warning: true },
@@ -54,6 +64,8 @@ const PLAN_RULES = {
   'instant': {
     funded: [
       { text: "80% profit split", check: true },
+      { text: "Trading Leverage: 1:30", check: true },
+      { text: "Instruments: Fx, Commodities, Indices, Stock, Crypto", check: true },
       { text: "Daily payouts available", check: true },
       { text: "First payout after 24 hours", check: true },
       { text: "1% max floating loss (Hard Breach)", warning: true },
@@ -87,7 +99,6 @@ export default function RulesPage() {
           </Link>
         </header>
 
-        {/* Sticky Warning Banner */}
         <div className="sticky top-0 z-20 mb-8 p-4 bg-destructive/15 border-l-4 border-destructive backdrop-blur-md rounded-r-lg shadow-lg flex items-center gap-3">
           <AlertCircle className="text-destructive w-5 h-5 shrink-0" />
           <p className="text-sm font-bold text-destructive">
@@ -207,7 +218,6 @@ export default function RulesPage() {
           </div>
         </section>
 
-        {/* Risk Disclosure Section */}
         <section className="mt-32 pb-20 pt-20 border-t border-border">
           <div className="max-w-4xl">
             <div className="flex items-center gap-3 mb-8">
