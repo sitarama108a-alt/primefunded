@@ -54,8 +54,8 @@ const PLAN_RULES = {
     funded: [
       { text: "Funded from day one", check: true },
       { text: "1% max floating loss (Hard Breach)", warning: true },
-      { text: "4% daily drawdown (Hard Breach)", warning: true },
-      { text: "8% max drawdown (Hard Breach)", warning: true },
+      { text: "2% daily drawdown (Hard Breach)", warning: true },
+      { text: "4% max drawdown (Hard Breach)", warning: true },
       { text: "3% max loss per trade", warning: true },
       { text: "No Friday overnight holding (Hard Breach)", check: false },
       { text: "Max withdraw 3% per 24hrs", warning: true },
@@ -120,8 +120,8 @@ export default function RulesPage() {
               <RuleCard title="Live Account Rules" items={PLAN_RULES['instant'].funded} variant="destructive" />
             </div>
             <FundedRulesDetailed 
-              daily="4%" 
-              max="8%" 
+              daily="2%" 
+              max="4%" 
               payout="First payout after 24 hours" 
               extra={["3% max loss per single trade", "Max withdraw 3% of account per 24hrs", "No overnight holding on Fridays"]}
             />

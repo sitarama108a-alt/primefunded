@@ -70,8 +70,8 @@ Here are the rules for each challenge plan:
     *   If Single Pair Loss > 3%: FAILED
 
 3.  **Instant Funding Plan Rules:**
-    *   If Daily Loss > 4%: FAILED
-    *   If Total Loss > 8%: FAILED
+    *   If Daily Loss > 2%: FAILED
+    *   If Total Loss > 4%: FAILED
 
 Based on the provided trading metrics and the specific rules for the "{{{plan}}}" plan, determine the status (compliant, at-risk, breached, passed), provide a detailed message, list any warnings, and offer recommendations. Focus on actionable advice and clear explanations. If there are open trades, mention the potential impact. Prioritize reporting breaches, then 'at-risk' situations, then 'passed' status, and finally 'compliant'.`,
 });

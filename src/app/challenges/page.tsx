@@ -80,8 +80,8 @@ const RULES = {
     funded: [
       { text: "Funded from day one", type: 'check' },
       { text: "1% max floating loss (Hard)", type: 'hard' },
-      { text: "4% daily drawdown (Hard)", type: 'hard' },
-      { text: "8% max drawdown (Hard)", type: 'hard' },
+      { text: "2% daily drawdown (Hard)", type: 'hard' },
+      { text: "4% max drawdown (Hard)", type: 'hard' },
       { text: "No Friday overnight (Hard)", type: 'hard' },
       { text: "Max withdraw 3% / 24h", type: 'warning' },
     ]

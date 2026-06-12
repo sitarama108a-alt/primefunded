@@ -59,7 +59,7 @@ export default function MT5AccountPage() {
     } else if (p.includes('2-step')) {
       return { profit: '8% (Phase 1)', daily: '5%', max: '10%', days: 'None' };
     } else {
-      return { profit: 'N/A (Instant)', daily: '4%', max: '8%', days: 'None' };
+      return { profit: 'N/A (Instant)', daily: '2%', max: '4%', days: 'None' };
     }
   };
 
