@@ -49,7 +49,7 @@ const RULES = {
       { text: "Max 1 trade / 3 mins", type: 'check' },
     ],
     funded: [
-      { text: "Up to 80% profit split", type: 'check' },
+      { text: "80% profit split", type: 'check' },
       { text: "Minimum 5 trading days required before payout request", type: 'warning' },
       { text: "1% max floating loss (Hard Breach)", type: 'warning' },
       { text: "3% daily drawdown limit (Hard Breach)", type: 'hard' },
@@ -72,7 +72,7 @@ const RULES = {
       { text: "Minimum 5 trading days", type: 'check' },
     ],
     funded: [
-      { text: "Up to 80% profit split", type: 'check' },
+      { text: "80% profit split", type: 'check' },
       { text: "Minimum 5 trading days required before payout request", type: 'warning' },
       { text: "1% max floating loss (Hard Breach)", type: 'warning' },
       { text: "5% daily drawdown limit (Hard Breach)", type: 'hard' },
@@ -82,7 +82,7 @@ const RULES = {
   },
   'instant': {
     funded: [
-      { text: "Up to 80% profit split", type: 'check' },
+      { text: "80% profit split", type: 'check' },
       { text: "Daily payouts available", type: 'check' },
       { text: "First payout after 24 hours", type: 'check' },
       { text: "Max withdraw 3% per 24 hours", type: 'warning' },

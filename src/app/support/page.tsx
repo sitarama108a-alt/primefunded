@@ -27,7 +27,7 @@ const FAQS = [
   },
   {
     q: "What is the profit split?",
-    a: "Traders keep up to 80% of their profits. Our tiers are: Bronze (70%), Silver (75%), and Gold (80%)."
+    a: "All PrimeFunded traders receive 80% profit split from day one. No tiers required."
   },
   {
     q: "How do I request a payout?",

@@ -74,7 +74,7 @@ export default function Home() {
             transition={{ duration: 0.4, delay: 0.1 }}
             className="text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed"
           >
-            No consistency rules. News trading allowed. Daily payouts on Instant accounts. Keep up to 80% of your profits.
+            No consistency rules. News trading allowed. Daily payouts on Instant accounts. Keep 80% of your profits.
           </motion.p>
 
           <motion.div 
@@ -155,8 +155,8 @@ export default function Home() {
             />
             <FeatureCard 
               icon={<BarChart3 className="text-primary w-8 h-8" />}
-              title="Up to 80% Split"
-              description="Keep up to 80% of all profits you generate. We reward high-performance trading."
+              title="80% Profit Split"
+              description="Every trader keeps 80% of all profits generated. No tiers, no waiting, from day one."
               delay={0.2}
             />
           </div>

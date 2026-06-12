@@ -125,8 +125,8 @@ export default function AboutPage() {
               />
               <ChoiceCard 
                 icon={<Award />} 
-                title="Up to 80% Profit Split" 
-                description="Keep up to 80% of everything you earn. We reward performance with high-tier splits." 
+                title="80% Profit Split" 
+                description="Keep 80% of everything you earn. All traders, all plans." 
               />
               <ChoiceCard 
                 icon={<TrendingUp />} 

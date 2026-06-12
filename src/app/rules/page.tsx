@@ -19,7 +19,7 @@ const PLAN_RULES = {
       { text: "No martingale allowed (Soft Breach)", check: false },
     ],
     funded: [
-      { text: "Up to 80% profit split", check: true },
+      { text: "80% profit split", check: true },
       { text: "Minimum 5 trading days required before payout request", warning: true },
       { text: "1% max floating loss (Hard Breach)", warning: true },
       { text: "3% daily drawdown limit (Hard Breach)", warning: true },
@@ -42,7 +42,7 @@ const PLAN_RULES = {
       { text: "Minimum 5 trading days", check: true },
     ],
     funded: [
-      { text: "Up to 80% profit split", check: true },
+      { text: "80% profit split", check: true },
       { text: "Minimum 5 trading days required before payout request", warning: true },
       { text: "1% max floating loss (Hard Breach)", warning: true },
       { text: "5% daily drawdown limit (Hard Breach)", warning: true },
@@ -53,7 +53,7 @@ const PLAN_RULES = {
   },
   'instant': {
     funded: [
-      { text: "Up to 80% profit split", check: true },
+      { text: "80% profit split", check: true },
       { text: "Daily payouts available", check: true },
       { text: "First payout after 24 hours", check: true },
       { text: "1% max floating loss (Hard Breach)", warning: true },
@@ -317,7 +317,7 @@ function FundedRulesDetailed({ daily, max, payout, extra, isInstant }: { daily: 
           <CardContent className="grid grid-cols-2 gap-4">
              <div className="space-y-3">
                 <SummaryItem text="No profit target" checked />
-                <SummaryItem text="Up to 80% split" checked />
+                <SummaryItem text="80% profit split" checked />
                 <SummaryItem text={payout} warning />
                 <SummaryItem text="Scale up to $2M" checked />
              </div>
