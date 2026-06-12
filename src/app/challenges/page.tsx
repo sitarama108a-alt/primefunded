@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
-import { Check, X, ChevronDown, ChevronUp, TicketPercent } from 'lucide-react';
+import { Check, X, ChevronDown, ChevronUp, TicketPercent, Skull, AlertTriangle, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -42,60 +42,48 @@ const planData = {
 const RULES = {
   '1-step': {
     evaluation: [
-      { text: "10% profit target", check: true },
-      { text: "3% daily drawdown limit", check: true },
-      { text: "6% max drawdown", check: true },
-      { text: "Minimum 3 trading days", check: true },
-      { text: "Max 1 trade every 3 mins", check: true },
-      { text: "Hold trades min 2 mins", check: true },
-      { text: "No time limit", check: true },
-      { text: "All forex pairs allowed", check: true },
-      { text: "No martingale strategy", check: false },
-      { text: "No signal copying", check: false },
+      { text: "10% profit target", type: 'check' },
+      { text: "3% daily drawdown", type: 'check' },
+      { text: "6% max drawdown", type: 'check' },
+      { text: "Minimum 3 trading days", type: 'check' },
+      { text: "Max 1 trade / 3 mins", type: 'check' },
     ],
     funded: [
-      { text: "Up to 80% profit split", check: true },
-      { text: "Daily payouts", check: true },
-      { text: "Scale up to $2,000,000", check: true },
-      { text: "3% daily drawdown", check: true },
-      { text: "6% max drawdown", check: true },
+      { text: "1% max floating loss (Hard)", type: 'hard' },
+      { text: "3% daily drawdown (Hard)", type: 'hard' },
+      { text: "6% max drawdown (Hard)", type: 'hard' },
+      { text: "No martingale (Hard)", type: 'hard' },
+      { text: "Daily payouts", type: 'check' },
     ]
   },
   '2-step': {
     phase1: [
-      { text: "8% profit target", check: true },
-      { text: "5% daily drawdown", check: true },
-      { text: "10% max drawdown", check: true },
-      { text: "Minimum 4 trading days", check: true },
-      { text: "Max 3% single pair loss", check: true },
-      { text: "Unlimited trading days", check: true },
-      { text: "No martingale", check: false },
+      { text: "8% profit target", type: 'check' },
+      { text: "5% daily drawdown", type: 'check' },
+      { text: "10% max drawdown", type: 'check' },
+      { text: "Single pair loss max 3%", type: 'warning' },
     ],
     phase2: [
-      { text: "5% profit target", check: true },
-      { text: "5% daily drawdown", check: true },
-      { text: "10% max drawdown", check: true },
-      { text: "Minimum 4 trading days", check: true },
-      { text: "Unlimited trading days", check: true },
+      { text: "5% profit target", type: 'check' },
+      { text: "5% daily drawdown", type: 'check' },
+      { text: "10% max drawdown", type: 'check' },
     ],
     funded: [
-      { text: "Up to 80% profit split", check: true },
-      { text: "Daily payouts", check: true },
-      { text: "Min 5 days per payout", check: true },
-      { text: "5% daily drawdown", check: true },
+      { text: "1% max floating loss (Hard)", type: 'hard' },
+      { text: "5% daily drawdown (Hard)", type: 'hard' },
+      { text: "10% max drawdown (Hard)", type: 'hard' },
+      { text: "No martingale (Hard)", type: 'hard' },
+      { text: "Up to 80% split", type: 'check' },
     ]
   },
   'instant': {
     funded: [
-      { text: "No evaluation needed", check: true },
-      { text: "No profit target", check: true },
-      { text: "3% max loss per trade", check: true },
-      { text: "4% daily drawdown", check: true },
-      { text: "8% max drawdown", check: true },
-      { text: "Trade immediately", check: true },
-      { text: "Daily payouts after 48h", check: true },
-      { text: "No martingale", check: false },
-      { text: "No Friday overnight", check: false },
+      { text: "Funded from day one", type: 'check' },
+      { text: "1% max floating loss (Hard)", type: 'hard' },
+      { text: "4% daily drawdown (Hard)", type: 'hard' },
+      { text: "8% max drawdown (Hard)", type: 'hard' },
+      { text: "No Friday overnight (Hard)", type: 'hard' },
+      { text: "Max withdraw 3% / 24h", type: 'warning' },
     ]
   }
 };
@@ -122,7 +110,6 @@ export default function ChallengesPage() {
           <motion.h1 
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2 }}
             className="text-4xl font-headline font-bold mb-2"
           >
             Select Your Challenge
@@ -130,12 +117,19 @@ export default function ChallengesPage() {
           <motion.p 
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05, duration: 0.2 }}
             className="text-muted-foreground"
           >
-            Pick the model that fits your trading style and start earning.
+            Institutional funding starting from $5,000 up to $200,000.
           </motion.p>
         </header>
+
+        {/* Sticky Warning Banner */}
+        <div className="mb-8 p-4 bg-destructive/15 border-l-4 border-destructive rounded-r-lg flex items-center gap-3">
+          <AlertCircle className="text-destructive w-5 h-5 shrink-0" />
+          <p className="text-xs font-bold text-destructive">
+            ⚠️ Hard breaches result in immediate account termination with no appeal.
+          </p>
+        </div>
 
         <div className="mb-12">
           <Tabs defaultValue="1-step" className="w-full" onValueChange={(val) => {
@@ -144,9 +138,9 @@ export default function ChallengesPage() {
           }}>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
               <TabsList className="grid w-full max-w-md grid-cols-3 h-14 bg-secondary p-1 rounded-xl">
-                <TabsTrigger value="1-step" className="data-[state=active]:bg-background font-bold rounded-lg transition-all duration-200">1-Step Pro</TabsTrigger>
-                <TabsTrigger value="2-step" className="data-[state=active]:bg-background font-bold rounded-lg transition-all duration-200">2-Step Classic</TabsTrigger>
-                <TabsTrigger value="instant" className="data-[state=active]:bg-background font-bold rounded-lg transition-all duration-200">Instant Funding</TabsTrigger>
+                <TabsTrigger value="1-step" className="data-[state=active]:bg-background font-bold rounded-lg">1-Step Pro</TabsTrigger>
+                <TabsTrigger value="2-step" className="data-[state=active]:bg-background font-bold rounded-lg">2-Step Classic</TabsTrigger>
+                <TabsTrigger value="instant" className="data-[state=active]:bg-background font-bold rounded-lg">Instant Funding</TabsTrigger>
               </TabsList>
 
               {selectedPlan === 'instant' && (
@@ -158,7 +152,7 @@ export default function ChallengesPage() {
                     value={couponCode}
                     onChange={(e) => setCouponCode(e.target.value)}
                   />
-                  <Button size="sm" className="font-bold transition-all duration-200" onClick={handleApplyCoupon}>Apply</Button>
+                  <Button size="sm" className="font-bold" onClick={handleApplyCoupon}>Apply</Button>
                 </div>
               )}
             </div>
@@ -170,7 +164,6 @@ export default function ChallengesPage() {
                   initial={{ opacity: 0, x: 10 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -10 }}
-                  transition={{ duration: 0.15 }}
                   className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
                 >
                   {planData[selectedPlan as keyof typeof planData].map((tier, idx) => (
@@ -194,20 +187,13 @@ export default function ChallengesPage() {
 
 function ChallengeCard({ tier, planName, delay, discountApplied }: { tier: any, planName: string, delay: number, discountApplied: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
-  
-  const getDisplayName = (id: string) => {
-    if (id === '1-step') return '1-Step Pro';
-    if (id === '2-step') return '2-Step Classic';
-    return 'Instant Funding';
-  };
-
   const finalPrice = discountApplied ? Math.floor(tier.price * 0.8) : tier.price;
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay, duration: 0.2 }}
+      transition={{ delay }}
     >
       <Card className={`relative overflow-hidden border-border/50 hover:border-primary/50 transition-all duration-300 flex flex-col h-full bg-card/50 backdrop-blur-sm group ${tier.popular ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`}>
         {tier.popular && (
@@ -215,63 +201,53 @@ function ChallengeCard({ tier, planName, delay, discountApplied }: { tier: any, 
             <div className="bg-primary text-primary-foreground text-[10px] font-bold px-3 py-1 rounded-bl-lg uppercase tracking-wider">Most Popular</div>
           </div>
         )}
-        
-        {discountApplied && (
-          <div className="absolute top-0 left-0 z-10">
-            <div className="bg-accent text-accent-foreground text-[10px] font-bold px-3 py-1 rounded-br-lg uppercase tracking-wider">20% OFF Applied!</div>
-          </div>
-        )}
 
         <CardHeader className="text-center pt-10">
-          <CardTitle className="text-3xl font-headline font-bold text-white group-hover:text-primary transition-colors duration-300">{tier.size}</CardTitle>
-          <p className="text-muted-foreground text-[10px] uppercase tracking-[0.2em] font-black">{getDisplayName(planName)}</p>
+          <CardTitle className="text-3xl font-headline font-bold text-white group-hover:text-primary">{tier.size}</CardTitle>
+          <p className="text-muted-foreground text-[10px] uppercase tracking-[0.2em] font-black">
+            {planName === '1-step' ? '1-Step Pro' : planName === '2-step' ? '2-Step Classic' : 'Instant Funding'}
+          </p>
         </CardHeader>
 
         <CardContent className="flex-1 flex flex-col">
           <div className="text-center mb-8">
             <div className="flex items-center justify-center gap-2">
-              {discountApplied && (
-                <span className="text-xl text-muted-foreground line-through decoration-destructive">${tier.price}</span>
-              )}
+              {discountApplied && <span className="text-xl text-muted-foreground line-through">${tier.price}</span>}
               <span className={`text-4xl font-headline font-bold ${discountApplied ? 'text-accent' : 'text-white'}`}>
                 ${finalPrice}
               </span>
             </div>
-            <p className="text-muted-foreground text-[10px] uppercase font-bold tracking-widest mt-1">one-time fee</p>
           </div>
           
-          <div className="space-y-4 mb-4">
-            <Collapsible open={isOpen} onOpenChange={setIsOpen} className="w-full">
-              <CollapsibleTrigger asChild>
-                <Button variant="ghost" className="w-full flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-primary/80 hover:text-primary hover:bg-primary/5 h-10 px-4 border border-primary/20 rounded-lg transition-all duration-200">
-                  View Full Rules
-                  {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="pt-4 space-y-4">
-                {planName === '1-step' && (
-                  <>
-                    <RuleList title="Evaluation Phase" items={RULES['1-step'].evaluation} />
-                    <RuleList title="Funded Phase" items={RULES['1-step'].funded} />
-                  </>
-                )}
-                {planName === '2-step' && (
-                  <>
-                    <RuleList title="Phase 1: Evaluation" items={RULES['2-step'].phase1} />
-                    <RuleList title="Phase 2: Verification" items={RULES['2-step'].phase2} />
-                    <RuleList title="Funded Phase" items={RULES['2-step'].funded} />
-                  </>
-                )}
-                {planName === 'instant' && (
-                  <RuleList title="Funded From Day 1" items={RULES['instant'].funded} />
-                )}
-              </CollapsibleContent>
-            </Collapsible>
-          </div>
+          <Collapsible open={isOpen} onOpenChange={setIsOpen} className="w-full">
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" className="w-full flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-primary h-10 px-4 border border-primary/20 rounded-lg">
+                View Stage Rules
+                {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-4 space-y-4">
+              {planName === '1-step' && (
+                <>
+                  <RuleSection title="Evaluation" items={RULES['1-step'].evaluation} />
+                  <RuleSection title="Funded stage" items={RULES['1-step'].funded} />
+                </>
+              )}
+              {planName === '2-step' && (
+                <>
+                  <RuleSection title="Phase 1 & 2" items={RULES['2-step'].phase1} />
+                  <RuleSection title="Funded stage" items={RULES['2-step'].funded} />
+                </>
+              )}
+              {planName === 'instant' && (
+                <RuleSection title="Funded from day 1" items={RULES['instant'].funded} />
+              )}
+            </CollapsibleContent>
+          </Collapsible>
         </CardContent>
 
-        <CardFooter className="pt-0 pb-8 px-6">
-          <Button className="w-full h-12 font-bold rounded-xl cyan-box-glow hover:scale-[1.02] transition-all duration-200" asChild>
+        <CardFooter className="pt-4 pb-8 px-6">
+          <Button className="w-full h-12 font-bold rounded-xl cyan-box-glow" asChild>
             <Link href={`/payment?plan=${planName}&size=${tier.size}&price=$${finalPrice}`}>
               Start Challenge
             </Link>
@@ -282,28 +258,24 @@ function ChallengeCard({ tier, planName, delay, discountApplied }: { tier: any, 
   );
 }
 
-function RuleList({ title, items }: { title: string, items: any[] }) {
+function RuleSection({ title, items }: { title: string, items: any[] }) {
   return (
-    <div className="space-y-2.5">
-      <h4 className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/80 pl-1">{title}</h4>
-      <div className="grid gap-2">
+    <div className="space-y-2">
+      <h4 className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">{title}</h4>
+      <div className="grid gap-1.5">
         {items.map((item, i) => (
-          <RuleItem key={i} text={item.text} check={item.check} />
+          <div key={i} className="flex items-center gap-2 text-[10px] font-medium">
+            {item.type === 'check' ? (
+              <Check className="text-accent w-3 h-3 flex-shrink-0" />
+            ) : item.type === 'warning' ? (
+              <AlertTriangle className="text-amber-500 w-3 h-3 flex-shrink-0" />
+            ) : (
+              <Skull className="text-destructive w-3 h-3 flex-shrink-0" />
+            )}
+            <span className={item.type === 'hard' ? 'text-destructive' : 'text-foreground/80'}>{item.text}</span>
+          </div>
         ))}
       </div>
-    </div>
-  );
-}
-
-function RuleItem({ text, check }: { text: string, check?: boolean }) {
-  return (
-    <div className="flex items-start gap-2 text-[11px]">
-      {check ? (
-        <Check className="text-accent w-3 h-3 mt-0.5 flex-shrink-0" />
-      ) : (
-        <X className="text-destructive w-3 h-3 mt-0.5 flex-shrink-0" />
-      )}
-      <span className={check ? 'text-foreground/80 font-medium' : 'text-muted-foreground/70'}>{text}</span>
     </div>
   );
 }
