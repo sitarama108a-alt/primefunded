@@ -53,6 +53,32 @@ const performanceData = [
   { day: '14/03', pnl: 890 },
 ];
 
+/**
+ * Custom Tooltip component for the Performance Chart
+ * Displays PnL with dynamic colors: Green for profit, Red for loss.
+ */
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    const value = payload[0].value;
+    const isProfit = value >= 0;
+    return (
+      <div className="bg-card border border-border p-3 rounded-xl shadow-2xl backdrop-blur-xl ring-1 ring-white/10">
+        <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1.5">{label}</p>
+        <div className="flex items-center gap-2">
+          <div className={`w-1.5 h-1.5 rounded-full ${isProfit ? 'bg-accent' : 'bg-destructive'}`} />
+          <p 
+            className="text-sm font-bold font-mono" 
+            style={{ color: isProfit ? 'oklch(0.7 0.18 155)' : 'oklch(0.62 0.22 25)' }}
+          >
+            {isProfit ? '+' : ''}{value.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+          </p>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
 export default function DashboardPage() {
   const { user, userData, loading: authLoading } = useAuth();
   const [isConnected, setIsConnected] = useState(true);
@@ -86,13 +112,26 @@ export default function DashboardPage() {
           });
           if (isMounted) setCompliance(result);
         } catch (err) {
-          // Centrally handled
+          // Centrally handled via FirebaseErrorListener
         }
       };
       fetchCompliance();
       return () => { isMounted = false; };
     }
   }, [activeAccount?.id, activeAccount?.plan]);
+
+  const metrics = useMemo(() => {
+    const balance = activeAccount?.balance || userData?.balance || 100000;
+    return {
+      balance,
+      equity: activeAccount?.balance ? activeAccount.balance * 1.02 : (userData?.balance || 100000) * 1.02,
+      dailyPnL: 2450.50,
+      winRate: 64,
+      tradesToday: 12,
+      profitTarget: 10,
+      currentProfitPercent: 2.45
+    };
+  }, [activeAccount, userData]);
 
   if (authLoading || accountsLoading) {
     return (
@@ -101,16 +140,6 @@ export default function DashboardPage() {
       </div>
     );
   }
-
-  const metrics = {
-    balance: activeAccount?.balance || userData?.balance || 100000,
-    equity: activeAccount?.balance ? activeAccount.balance * 1.02 : (userData?.balance || 100000) * 1.02,
-    dailyPnL: 2450.50,
-    winRate: 64,
-    tradesToday: 12,
-    profitTarget: 10,
-    currentProfitPercent: 2.45
-  };
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -164,32 +193,47 @@ export default function DashboardPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
           {/* Main Performance Chart */}
-          <Card className="lg:col-span-2 border-border/50 shadow-xl shadow-primary/5">
+          <Card className="lg:col-span-2 border-border/50 shadow-xl shadow-primary/5 bg-card/40 backdrop-blur-sm">
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-xl font-headline">14-Day Performance</CardTitle>
                 <CardDescription>Daily profit and loss distribution</CardDescription>
               </div>
               <div className="flex gap-2">
-                <Badge variant="outline">HISTORY</Badge>
-                <Badge className="bg-accent text-accent-foreground font-bold">REAL-TIME</Badge>
+                <Badge variant="outline" className="text-[10px] font-bold tracking-widest uppercase">History</Badge>
+                <Badge className="bg-accent text-accent-foreground font-bold text-[10px] tracking-widest uppercase">Real-Time</Badge>
               </div>
             </CardHeader>
             <CardContent>
               <div className="h-[320px] w-full mt-4">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={performanceData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                    <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
-                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.5} />
+                    <XAxis 
+                      dataKey="day" 
+                      stroke="hsl(var(--muted-foreground))" 
+                      fontSize={10} 
+                      tickLine={false} 
+                      axisLine={false} 
+                      tick={{ dy: 10 }}
+                    />
+                    <YAxis 
+                      stroke="hsl(var(--muted-foreground))" 
+                      fontSize={10} 
+                      tickLine={false} 
+                      axisLine={false} 
+                      tickFormatter={(value) => `$${value}`} 
+                    />
                     <Tooltip 
-                      cursor={{fill: 'hsl(var(--secondary))', opacity: 0.2}}
-                      contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
-                      itemStyle={{ fontWeight: 'bold' }}
+                      content={<CustomTooltip />}
+                      cursor={{ fill: 'hsl(var(--secondary))', opacity: 0.1 }}
                     />
                     <Bar dataKey="pnl" radius={[4, 4, 0, 0]}>
                       {performanceData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.pnl >= 0 ? 'oklch(0.7 0.18 155)' : 'oklch(0.62 0.22 25)'} />
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={entry.pnl >= 0 ? 'oklch(0.7 0.18 155)' : 'oklch(0.62 0.22 25)'} 
+                        />
                       ))}
                     </Bar>
                   </BarChart>
@@ -216,7 +260,7 @@ export default function DashboardPage() {
                 <div className="pt-4 border-t border-primary/10">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Status</span>
-                    <Badge className="bg-accent text-accent-foreground font-bold px-2 py-0.5">IN PROGRESS</Badge>
+                    <Badge className="bg-accent text-accent-foreground font-bold px-2 py-0.5 text-[9px]">IN PROGRESS</Badge>
                   </div>
                   <div className="space-y-1">
                     <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider">
@@ -236,7 +280,7 @@ export default function DashboardPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Suspense fallback={<div className="h-24 flex items-center justify-center"><RefreshCw className="w-6 h-6 animate-spin" /></div>}>
+                <Suspense fallback={<div className="h-24 flex items-center justify-center"><RefreshCw className="w-6 h-6 animate-spin text-primary" /></div>}>
                   {compliance ? (
                     <div className={`p-4 rounded-xl border ${compliance.status === 'at-risk' ? 'bg-destructive/10 border-destructive/20' : 'bg-primary/10 border-primary/20'}`}>
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-2 text-primary flex items-center gap-1.5">
@@ -264,7 +308,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Recent Trades Table */}
-        <Card className="border-border/50">
+        <Card className="border-border/50 bg-card/40 backdrop-blur-sm overflow-hidden">
           <CardHeader>
             <CardTitle className="text-xl font-headline">Recent Executions</CardTitle>
           </CardHeader>
@@ -307,8 +351,8 @@ function MetricCard({ title, value, icon, trend, footer }: { title: string, valu
           </div>
         </div>
         <div className="flex items-end gap-2 mb-4">
-          <span className="text-3xl font-bold font-headline tabular-nums">{value}</span>
-          {trend && (
+          <span className="text-3xl font-bold font-headline tabular-nums leading-none">{value}</span>
+          {trend !== undefined && (
             <span className={`text-[10px] font-black mb-1.5 flex items-center px-1.5 py-0.5 rounded-full ${trend >= 0 ? 'bg-accent/10 text-accent' : 'bg-destructive/10 text-destructive'}`}>
               {trend >= 0 ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
               {Math.abs(trend)}%
@@ -336,7 +380,7 @@ function TradeRow({ symbol, direction, lot, pnl, time }: { symbol: string, direc
     <tr className="hover:bg-secondary/10 transition-colors group">
       <td className="py-4 px-6 font-bold font-mono text-white">{symbol}</td>
       <td className="py-4 px-4">
-        <Badge variant="outline" className={direction === 'Buy' ? 'text-accent border-accent/20' : 'text-blue-400 border-blue-400/20'}>
+        <Badge variant="outline" className={direction === 'Buy' ? 'text-accent border-accent/20 bg-accent/5' : 'text-blue-400 border-blue-400/20 bg-blue-400/5'}>
           {direction}
         </Badge>
       </td>
