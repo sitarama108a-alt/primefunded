@@ -11,7 +11,7 @@ const PLAN_RULES = {
       { text: "10% profit target", check: true },
       { text: "3% daily drawdown limit", check: true },
       { text: "6% maximum drawdown", check: true },
-      { text: "Minimum 3 trading days required", check: true },
+      { text: "Minimum 5 trading days required", check: true },
       { text: "Maximum 1 execution every 3 minutes", check: true },
       { text: "Hold trades for at least 2 minutes", check: true },
       { text: "No time limit", check: true },
@@ -19,7 +19,7 @@ const PLAN_RULES = {
     ],
     funded: [
       { text: "Up to 80% profit split", check: true },
-      { text: "Daily payouts available", check: true },
+      { text: "Daily payouts available (after 5 days)", check: true },
       { text: "1% max floating loss (Hard Breach)", warning: true },
       { text: "3% daily drawdown limit (Hard Breach)", warning: true },
       { text: "6% max drawdown limit (Hard Breach)", warning: true },
@@ -32,14 +32,14 @@ const PLAN_RULES = {
       { text: "8% profit target", check: true },
       { text: "5% daily drawdown", check: true },
       { text: "10% max drawdown", check: true },
-      { text: "Minimum 4 trading days", check: true },
-      { text: "Max 3% single pair loss", warning: true },
+      { text: "Minimum 5 trading days", check: true },
+      { text: "Single pair loss max 3%", warning: true },
     ],
     phase2: [
       { text: "5% profit target", check: true },
       { text: "5% daily drawdown", check: true },
       { text: "10% max drawdown", check: true },
-      { text: "Minimum 4 trading days", check: true },
+      { text: "Minimum 5 trading days", check: true },
     ],
     funded: [
       { text: "Up to 80% profit split", check: true },
@@ -96,7 +96,7 @@ export default function RulesPage() {
             <FundedRulesDetailed 
               daily="3%" 
               max="6%" 
-              payout="Minimum 3 trading days" 
+              payout="Minimum 5 trading days" 
               extra={["No closing trades within 2 minutes", "1 trade per 3 minutes maximum"]}
             />
           </TabsContent>
@@ -258,7 +258,7 @@ function FundedRulesDetailed({ daily, max, payout, extra }: { daily: string, max
                   <Skull className="w-4 h-4" /> HARD BREACH: Payout exceeds daily drawdown limit
                 </div>
                 <div className="flex items-center gap-3 p-3 bg-destructive/10 rounded-lg text-xs font-bold text-destructive">
-                  <Skull className="w-4 h-4" /> HARD BREACH: First payout requested before 24 hours
+                  <Skull className="w-4 h-4" /> HARD BREACH: First payout requested before minimum 24 hours
                 </div>
               </div>
             </div>

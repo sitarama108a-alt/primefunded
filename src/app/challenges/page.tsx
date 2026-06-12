@@ -45,7 +45,7 @@ const RULES = {
       { text: "10% profit target", type: 'check' },
       { text: "3% daily drawdown", type: 'check' },
       { text: "6% max drawdown", type: 'check' },
-      { text: "Minimum 3 trading days", type: 'check' },
+      { text: "Minimum 5 trading days", type: 'check' },
       { text: "Max 1 trade / 3 mins", type: 'check' },
     ],
     funded: [
@@ -53,7 +53,7 @@ const RULES = {
       { text: "3% daily drawdown (Hard)", type: 'hard' },
       { text: "6% max drawdown (Hard)", type: 'hard' },
       { text: "No martingale (Hard)", type: 'hard' },
-      { text: "Daily payouts", type: 'check' },
+      { text: "Daily payouts (after 5 days)", type: 'check' },
     ]
   },
   '2-step': {
@@ -61,19 +61,21 @@ const RULES = {
       { text: "8% profit target", type: 'check' },
       { text: "5% daily drawdown", type: 'check' },
       { text: "10% max drawdown", type: 'check' },
+      { text: "Minimum 5 trading days", type: 'check' },
       { text: "Single pair loss max 3%", type: 'warning' },
     ],
     phase2: [
       { text: "5% profit target", type: 'check' },
       { text: "5% daily drawdown", type: 'check' },
       { text: "10% max drawdown", type: 'check' },
+      { text: "Minimum 5 trading days", type: 'check' },
     ],
     funded: [
       { text: "1% max floating loss (Hard)", type: 'hard' },
       { text: "5% daily drawdown (Hard)", type: 'hard' },
       { text: "10% max drawdown (Hard)", type: 'hard' },
       { text: "No martingale (Hard)", type: 'hard' },
-      { text: "Up to 80% split", type: 'check' },
+      { text: "Min 5 days for payout", type: 'check' },
     ]
   },
   'instant': {

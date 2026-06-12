@@ -61,17 +61,19 @@ Here are the rules for each challenge plan:
     *   If Daily Loss > 3%: FAILED
     *   If Total Loss > 6%: FAILED
     *   If Profit >= 10%: PASSED
-    *   Minimum 3 trading days for payout.
+    *   Minimum 5 trading days for payout.
 
 2.  **2-Step Classic Plan Rules:**
     *   **Phase 1:** If Profit >= 8%: Advance to Phase 2
     *   **Phase 2:** If Profit >= 5%: PASSED
     *   If Daily Loss > 5%: FAILED
     *   If Single Pair Loss > 3%: FAILED
+    *   Minimum 5 trading days per phase.
 
 3.  **Instant Funding Plan Rules:**
     *   If Daily Loss > 2%: FAILED
     *   If Total Loss > 4%: FAILED
+    *   First payout after 24 hours.
 
 Based on the provided trading metrics and the specific rules for the "{{{plan}}}" plan, determine the status (compliant, at-risk, breached, passed), provide a detailed message, list any warnings, and offer recommendations. Focus on actionable advice and clear explanations. If there are open trades, mention the potential impact. Prioritize reporting breaches, then 'at-risk' situations, then 'passed' status, and finally 'compliant'.`,
 });

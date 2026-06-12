@@ -31,7 +31,7 @@ export default function MT5AccountPage() {
   const { user, loading: authLoading } = useAuth();
   const db = useFirestore();
   const { toast } = useToast();
-  const [showPassword, setShowPassword] = useState(false);
+  const [showPassword] = useState(false);
 
   // Memoize the query for the user's active accounts
   const accountsQuery = useMemo(() => {
@@ -55,9 +55,9 @@ export default function MT5AccountPage() {
   const getPlanRules = (plan: string) => {
     const p = plan.toLowerCase();
     if (p.includes('1-step')) {
-      return { profit: '10%', daily: '3%', max: '6%', days: '3' };
+      return { profit: '10%', daily: '3%', max: '6%', days: '5' };
     } else if (p.includes('2-step')) {
-      return { profit: '8% (Phase 1)', daily: '5%', max: '10%', days: 'None' };
+      return { profit: '8% (Phase 1)', daily: '5%', max: '10%', days: '5' };
     } else {
       return { profit: 'N/A (Instant)', daily: '2%', max: '4%', days: 'None' };
     }
@@ -145,11 +145,8 @@ export default function MT5AccountPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-lg font-bold flex-1">
-                          {showPassword ? activeAccount.mt5Password : '••••••••••••'}
+                          {activeAccount.mt5Password}
                         </span>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" onClick={() => setShowPassword(!showPassword)}>
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" onClick={() => copyToClipboard("Password", activeAccount.mt5Password)}>
                           <Copy className="w-4 h-4" />
                         </Button>
