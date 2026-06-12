@@ -1,23 +1,40 @@
+"use client";
+
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { TrendingUp, Shield, Zap, Globe, ArrowRight, BarChart3, CheckCircle2 } from 'lucide-react';
+import { motion } from 'framer-motion';
+
+const fadeInUp = {
+  initial: { opacity: 0, y: 20 },
+  whileInView: { opacity: 1, y: 0 },
+  viewport: { once: true },
+  transition: { duration: 0.6 }
+};
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-background selection:bg-primary selection:text-primary-foreground">
+    <div className="min-h-screen bg-background selection:bg-primary selection:text-primary-foreground overflow-x-hidden">
       {/* Navbar */}
-      <nav className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-md border-b border-border">
+      <nav className="fixed top-0 w-full z-50 bg-background/60 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="text-primary w-8 h-8" />
-            <span className="font-headline font-bold text-2xl tracking-tight">PrimeFunded</span>
-          </div>
+          <motion.div 
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="flex items-center gap-2"
+          >
+            <div className="bg-primary/20 p-1.5 rounded-lg border border-primary/20">
+              <TrendingUp className="text-primary w-6 h-6" />
+            </div>
+            <span className="font-headline font-bold text-2xl tracking-tight text-white">PrimeFunded</span>
+          </motion.div>
+          
           <div className="hidden md:flex items-center gap-8">
-            <Link href="#challenges" className="text-sm font-medium hover:text-primary transition-colors">Challenges</Link>
-            <Link href="#rules" className="text-sm font-medium hover:text-primary transition-colors">Rules</Link>
-            <Link href="#about" className="text-sm font-medium hover:text-primary transition-colors">About Us</Link>
-            <Link href="/login" className="text-sm font-medium hover:text-primary transition-colors">Login</Link>
-            <Button asChild>
+            <Link href="#challenges" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Challenges</Link>
+            <Link href="#rules" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Rules</Link>
+            <Link href="#about" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">About Us</Link>
+            <Link href="/login" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Login</Link>
+            <Button className="font-bold cyan-box-glow" asChild>
               <Link href="/signup">Get Funded</Link>
             </Button>
           </div>
@@ -25,102 +42,166 @@ export default function Home() {
       </nav>
 
       {/* Hero Section */}
-      <section className="relative pt-40 pb-20 overflow-hidden bg-grid-white">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-primary/20 blur-[120px] rounded-full -z-10" />
+      <section className="relative pt-48 pb-32 overflow-hidden bg-grid-white">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1200px] h-[700px] bg-primary/10 blur-[140px] rounded-full -z-10" />
+        <div className="absolute bottom-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
+        
         <div className="max-w-7xl mx-auto px-4 text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary border border-border text-xs font-semibold mb-6">
-            <span className="w-2 h-2 rounded-full bg-accent live-indicator" />
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5 }}
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold mb-8 uppercase tracking-wider shadow-[0_0_15px_rgba(17,179,245,0.2)]"
+          >
+            <span className="w-2 h-2 rounded-full bg-primary live-indicator" />
             Now Funding Up To $200,000
-          </div>
-          <h1 className="text-5xl md:text-7xl font-headline font-bold mb-6 leading-tight">
-            Institutional Funding for <br />
-            <span className="text-primary italic">Elite Traders.</span>
-          </h1>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed">
+          </motion.div>
+          
+          <motion.h1 
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.1 }}
+            className="text-6xl md:text-8xl font-headline font-bold mb-8 leading-[1.1] tracking-tight"
+          >
+            Institutional Funding <br />
+            <span className="bg-gradient-to-r from-primary via-blue-400 to-primary bg-clip-text text-transparent cyan-glow">Elite Traders.</span>
+          </motion.h1>
+          
+          <motion.p 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+            className="text-xl text-muted-foreground max-w-2xl mx-auto mb-12 leading-relaxed"
+          >
             Trade our capital, keep up to 90% of the profits. Industry-leading technology, instant execution, and professional compliance monitoring.
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Button size="lg" className="h-14 px-8 text-lg rounded-xl font-bold" asChild>
-              <Link href="/challenges">Start Challenge <ArrowRight className="ml-2 w-5 h-5" /></Link>
+          </motion.p>
+          
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.3 }}
+            className="flex flex-col sm:flex-row items-center justify-center gap-6"
+          >
+            <Button size="lg" className="h-16 px-10 text-lg rounded-2xl font-bold transition-all hover:scale-105 hover:shadow-[0_0_40px_rgba(17,179,245,0.4)] bg-primary text-primary-foreground group" asChild>
+              <Link href="/challenges">
+                Start Challenge 
+                <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </Link>
             </Button>
-            <Button variant="outline" size="lg" className="h-14 px-8 text-lg rounded-xl font-bold bg-transparent" asChild>
+            <Button variant="outline" size="lg" className="h-16 px-10 text-lg rounded-2xl font-bold border-white/10 bg-white/5 backdrop-blur-sm hover:bg-white/10" asChild>
               <Link href="/rules">View Trading Rules</Link>
             </Button>
-          </div>
+          </motion.div>
           
-          <div className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto">
-            <div className="p-4">
-              <p className="text-3xl font-headline font-bold mb-1">$50M+</p>
-              <p className="text-sm text-muted-foreground">Payouts Disbursed</p>
-            </div>
-            <div className="p-4">
-              <p className="text-3xl font-headline font-bold mb-1">0.1s</p>
-              <p className="text-sm text-muted-foreground">Execution Speed</p>
-            </div>
-            <div className="p-4">
-              <p className="text-3xl font-headline font-bold mb-1">80%+</p>
-              <p className="text-sm text-muted-foreground">Profit Share</p>
-            </div>
-            <div className="p-4">
-              <p className="text-3xl font-headline font-bold mb-1">24/7</p>
-              <p className="text-sm text-muted-foreground">Trader Support</p>
-            </div>
-          </div>
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 1.5, delay: 0.5 }}
+            className="mt-24 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-5xl mx-auto"
+          >
+            <StatCard label="Funded Traders" value="12,480+" sub="Global Community" />
+            <StatCard label="Paid Out" value="$48.2M" sub="Profit Share" />
+            <StatCard label="Execution" value="0.1s" sub="Low Latency" />
+            <StatCard label="Support" value="24/7" sub="Live Assistance" />
+          </motion.div>
         </div>
       </section>
 
       {/* Features */}
-      <section className="py-24 bg-card/50">
+      <section className="py-32 relative bg-background">
+        <div className="absolute top-0 left-0 w-full h-[300px] bg-gradient-to-b from-secondary/20 to-transparent -z-10" />
+        
         <div className="max-w-7xl mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-headline font-bold mb-4">Why PrimeFunded?</h2>
-            <p className="text-muted-foreground max-w-xl mx-auto">Our infrastructure is built by traders, for traders. We provide the tools you need to succeed.</p>
-          </div>
+          <motion.div 
+            {...fadeInUp}
+            className="text-center mb-20"
+          >
+            <h2 className="text-4xl md:text-5xl font-headline font-bold mb-6">Built for Performance.</h2>
+            <p className="text-muted-foreground max-w-xl mx-auto text-lg leading-relaxed">
+              Our infrastructure is engineered by institutional traders to give you the competitive edge you need.
+            </p>
+          </motion.div>
+          
           <div className="grid md:grid-cols-3 gap-8">
             <FeatureCard 
               icon={<Shield className="text-primary w-8 h-8" />}
               title="Secure Compliance"
               description="AI-powered monitor ensures you stay within rules and flags risks before breaches happen."
+              delay={0.1}
             />
             <FeatureCard 
-              icon={<Zap className="text-accent w-8 h-8" />}
+              icon={<Zap className="text-primary w-8 h-8" />}
               title="Instant Funding"
               description="No evaluation phase needed for our Instant models. Trade live capital from day one."
+              delay={0.2}
             />
             <FeatureCard 
               icon={<BarChart3 className="text-primary w-8 h-8" />}
               title="Advanced Analytics"
-              description="Real-time dashboard with MetaApi integration for deep performance insights."
+              description="Real-time dashboard with deep trade analysis and performance tracking."
+              delay={0.3}
             />
           </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="py-12 border-t border-border">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-8">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="text-primary w-6 h-6" />
-            <span className="font-headline font-bold text-xl tracking-tight">PrimeFunded</span>
+      <footer className="py-20 border-t border-white/5 bg-secondary/20 relative">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-12">
+          <div className="flex flex-col items-center md:items-start gap-4">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="text-primary w-7 h-7" />
+              <span className="font-headline font-bold text-2xl tracking-tight text-white">PrimeFunded</span>
+            </div>
+            <p className="text-sm text-muted-foreground max-w-xs text-center md:text-left">
+              The world's most transparent institutional funding firm for traders.
+            </p>
           </div>
-          <div className="flex gap-8 text-sm text-muted-foreground">
-            <Link href="#" className="hover:text-foreground">Terms</Link>
-            <Link href="#" className="hover:text-foreground">Privacy</Link>
-            <Link href="#" className="hover:text-foreground">Risk Disclosure</Link>
+          
+          <div className="flex flex-wrap justify-center gap-10 text-sm font-medium">
+            <Link href="#" className="text-muted-foreground hover:text-primary transition-colors">Terms of Service</Link>
+            <Link href="#" className="text-muted-foreground hover:text-primary transition-colors">Privacy Policy</Link>
+            <Link href="#" className="text-muted-foreground hover:text-primary transition-colors">Risk Disclosure</Link>
+            <Link href="#" className="text-muted-foreground hover:text-primary transition-colors">Contact Support</Link>
           </div>
-          <p className="text-xs text-muted-foreground">© 2024 PrimeFunded. All rights reserved.</p>
+          
+          <div className="flex flex-col items-center md:items-end gap-2">
+            <p className="text-xs text-muted-foreground">© 2024 PrimeFunded Global. All rights reserved.</p>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Built for Elite Traders</p>
+          </div>
         </div>
       </footer>
     </div>
   );
 }
 
-function FeatureCard({ icon, title, description }: { icon: React.ReactNode, title: string, description: string }) {
+function StatCard({ label, value, sub }: { label: string, value: string, sub: string }) {
   return (
-    <div className="p-8 rounded-2xl bg-background border border-border hover:border-primary/50 transition-colors">
-      <div className="mb-6">{icon}</div>
-      <h3 className="text-xl font-headline font-bold mb-3">{title}</h3>
-      <p className="text-muted-foreground leading-relaxed">{description}</p>
+    <div className="p-6 rounded-3xl bg-white/5 backdrop-blur-md border border-white/10 hover:border-primary/50 transition-all duration-500 group flex flex-col items-center text-center hover:bg-white/10">
+      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-[0.2em] mb-2">{label}</p>
+      <p className="text-3xl font-headline font-bold text-white group-hover:text-primary transition-colors cyan-glow mb-1">{value}</p>
+      <p className="text-xs text-muted-foreground/60">{sub}</p>
     </div>
+  );
+}
+
+function FeatureCard({ icon, title, description, delay }: { icon: React.ReactNode, title: string, description: string, delay: number }) {
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.6, delay }}
+      className="p-10 rounded-[2.5rem] bg-secondary/30 border border-white/5 hover:border-primary/30 transition-all duration-500 hover:bg-secondary/40 relative overflow-hidden group"
+    >
+      <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 blur-3xl rounded-full -mr-16 -mt-16 group-hover:bg-primary/10 transition-colors" />
+      <div className="mb-8 p-4 bg-primary/10 rounded-2xl w-fit border border-primary/10 group-hover:scale-110 transition-transform duration-500">
+        {icon}
+      </div>
+      <h3 className="text-2xl font-headline font-bold mb-4 text-white">{title}</h3>
+      <p className="text-muted-foreground leading-relaxed">
+        {description}
+      </p>
+    </motion.div>
   );
 }
