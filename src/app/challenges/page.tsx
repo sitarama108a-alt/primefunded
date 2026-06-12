@@ -55,7 +55,6 @@ const RULES = {
       { text: "3% daily drawdown limit (Hard Breach)", type: 'hard' },
       { text: "6% max drawdown limit (Hard Breach)", type: 'hard' },
       { text: "No martingale (Hard Breach)", type: 'hard' },
-      { text: "Payout must be within daily drawdown", type: 'warning' },
     ]
   },
   '2-step': {
@@ -79,7 +78,6 @@ const RULES = {
       { text: "5% daily drawdown limit (Hard Breach)", type: 'hard' },
       { text: "10% max drawdown limit (Hard Breach)", type: 'hard' },
       { text: "No martingale (Hard Breach)", type: 'hard' },
-      { text: "Payout must be within daily drawdown", type: 'warning' },
     ]
   },
   'instant': {
@@ -91,6 +89,7 @@ const RULES = {
       { text: "2% daily drawdown (Hard Breach)", type: 'hard' },
       { text: "4% max drawdown (Hard Breach)", type: 'hard' },
       { text: "No martingale (Hard Breach)", type: 'hard' },
+      { text: "No payout exceeding daily drawdown", type: 'warning' },
     ]
   }
 };

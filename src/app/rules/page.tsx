@@ -24,7 +24,6 @@ const PLAN_RULES = {
       { text: "3% daily drawdown limit (Hard Breach)", warning: true },
       { text: "6% max drawdown limit (Hard Breach)", warning: true },
       { text: "No martingale (Hard Breach)", check: false },
-      { text: "Payout must be within daily drawdown", warning: true },
     ]
   },
   '2-step': {
@@ -49,7 +48,6 @@ const PLAN_RULES = {
       { text: "10% max drawdown limit (Hard Breach)", warning: true },
       { text: "Single pair loss max 3% (Hard Breach)", warning: true },
       { text: "No martingale (Hard Breach)", check: false },
-      { text: "Payout must be within daily drawdown", warning: true },
     ]
   },
   'instant': {
@@ -60,7 +58,7 @@ const PLAN_RULES = {
       { text: "1% max floating loss (Hard Breach)", warning: true },
       { text: "2% daily drawdown (Hard Breach)", warning: true },
       { text: "4% max drawdown (Hard Breach)", warning: true },
-      { text: "3% max loss per trade", warning: true },
+      { text: "3% max loss per single trade", warning: true },
       { text: "No Friday overnight holding (Hard Breach)", check: false },
       { text: "Max withdraw 3% per 24hrs", warning: true },
       { text: "No payout exceeding daily drawdown", warning: true },
@@ -129,6 +127,7 @@ export default function RulesPage() {
               max="4%" 
               payout="First payout after 24 hours" 
               extra={["3% max loss per single trade", "Max withdraw 3% of account per 24hrs", "No overnight holding on Fridays"]}
+              isInstant={true}
             />
           </TabsContent>
         </Tabs>
@@ -156,7 +155,7 @@ export default function RulesPage() {
                   "Daily drawdown exceeded",
                   "Max drawdown exceeded",
                   "Martingale strategy in funded stage",
-                  "Payout exceeds daily drawdown limit",
+                  "Payout exceeds daily drawdown limit (if applicable)",
                   "Trade closed in under 2 minutes",
                   "More than 1 trade per 3 minutes",
                   "Single pair loss > 3% (if applicable)",
@@ -227,7 +226,7 @@ function RuleCard({ title, items, variant }: { title: string, items: any[], vari
   );
 }
 
-function FundedRulesDetailed({ daily, max, payout, extra }: { daily: string, max: string, payout: string, extra: string[] }) {
+function FundedRulesDetailed({ daily, max, payout, extra, isInstant }: { daily: string, max: string, payout: string, extra: string[], isInstant?: boolean }) {
   return (
     <div className="space-y-8">
       <Card className="border-destructive/20 bg-destructive/5 border-l-4">
@@ -253,17 +252,19 @@ function FundedRulesDetailed({ daily, max, payout, extra }: { daily: string, max
             
             <div className="space-y-4">
               <h3 className="text-2xl font-headline font-bold text-amber-500 flex items-center gap-2">
-                <AlertTriangle className="w-6 h-6" /> PAYOUT & EQUITY CUSHION
+                <AlertTriangle className="w-6 h-6" /> PAYOUT & EQUITY CUSHION RULES
               </h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                All payout requests must remain within the daily drawdown limit. An equity cushion must always be maintained.
+                {isInstant ? "All payout requests must remain within the daily drawdown limit. " : ""}An equity cushion must always be maintained.
               </p>
               <div className="grid gap-3">
+                {isInstant && (
+                  <div className="flex items-center gap-3 p-3 bg-destructive/10 rounded-lg text-xs font-bold text-destructive">
+                    <Skull className="w-4 h-4" /> HARD BREACH: Payout exceeds daily drawdown limit
+                  </div>
+                )}
                 <div className="flex items-center gap-3 p-3 bg-destructive/10 rounded-lg text-xs font-bold text-destructive">
-                  <Skull className="w-4 h-4" /> HARD BREACH: Payout exceeds daily drawdown limit
-                </div>
-                <div className="flex items-center gap-3 p-3 bg-destructive/10 rounded-lg text-xs font-bold text-destructive">
-                  <Skull className="w-4 h-4" /> HARD BREACH: First payout requested before minimum 24 hours
+                  <Skull className="w-4 h-4" /> HARD BREACH: First payout requested before minimum {isInstant ? "24 hours" : "5 trading days"}
                 </div>
               </div>
             </div>
