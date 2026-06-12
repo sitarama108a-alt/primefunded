@@ -120,16 +120,17 @@ export default function ChallengesPage() {
       <main className="flex-1 p-8">
         <header className="mb-12">
           <motion.h1 
-            initial={{ opacity: 0, y: -20 }}
+            initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
             className="text-4xl font-headline font-bold mb-2"
           >
             Select Your Challenge
           </motion.h1>
           <motion.p 
-            initial={{ opacity: 0, y: -20 }}
+            initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
+            transition={{ delay: 0.05, duration: 0.2 }}
             className="text-muted-foreground"
           >
             Pick the model that fits your trading style and start earning.
@@ -143,9 +144,9 @@ export default function ChallengesPage() {
           }}>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
               <TabsList className="grid w-full max-w-md grid-cols-3 h-14 bg-secondary p-1 rounded-xl">
-                <TabsTrigger value="1-step" className="data-[state=active]:bg-background font-bold rounded-lg transition-all">1-Step Pro</TabsTrigger>
-                <TabsTrigger value="2-step" className="data-[state=active]:bg-background font-bold rounded-lg transition-all">2-Step Classic</TabsTrigger>
-                <TabsTrigger value="instant" className="data-[state=active]:bg-background font-bold rounded-lg transition-all">Instant Funding</TabsTrigger>
+                <TabsTrigger value="1-step" className="data-[state=active]:bg-background font-bold rounded-lg transition-all duration-200">1-Step Pro</TabsTrigger>
+                <TabsTrigger value="2-step" className="data-[state=active]:bg-background font-bold rounded-lg transition-all duration-200">2-Step Classic</TabsTrigger>
+                <TabsTrigger value="instant" className="data-[state=active]:bg-background font-bold rounded-lg transition-all duration-200">Instant Funding</TabsTrigger>
               </TabsList>
 
               {selectedPlan === 'instant' && (
@@ -157,7 +158,7 @@ export default function ChallengesPage() {
                     value={couponCode}
                     onChange={(e) => setCouponCode(e.target.value)}
                   />
-                  <Button size="sm" className="font-bold" onClick={handleApplyCoupon}>Apply</Button>
+                  <Button size="sm" className="font-bold transition-all duration-200" onClick={handleApplyCoupon}>Apply</Button>
                 </div>
               )}
             </div>
@@ -166,10 +167,10 @@ export default function ChallengesPage() {
               <AnimatePresence mode="wait">
                 <motion.div 
                   key={selectedPlan + (discountApplied ? '-discount' : '')}
-                  initial={{ opacity: 0, x: 20 }}
+                  initial={{ opacity: 0, x: 10 }}
                   animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.3 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  transition={{ duration: 0.15 }}
                   className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
                 >
                   {planData[selectedPlan as keyof typeof planData].map((tier, idx) => (
@@ -177,7 +178,7 @@ export default function ChallengesPage() {
                       key={tier.size} 
                       tier={tier} 
                       planName={selectedPlan} 
-                      delay={idx * 0.05} 
+                      delay={idx * 0.03} 
                       discountApplied={discountApplied && selectedPlan === 'instant'}
                     />
                   ))}
@@ -204,11 +205,11 @@ function ChallengeCard({ tier, planName, delay, discountApplied }: { tier: any, 
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay }}
+      transition={{ delay, duration: 0.2 }}
     >
-      <Card className={`relative overflow-hidden border-border/50 hover:border-primary/50 transition-all flex flex-col h-full bg-card/50 backdrop-blur-sm group ${tier.popular ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`}>
+      <Card className={`relative overflow-hidden border-border/50 hover:border-primary/50 transition-all duration-300 flex flex-col h-full bg-card/50 backdrop-blur-sm group ${tier.popular ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`}>
         {tier.popular && (
           <div className="absolute top-0 right-0 z-10">
             <div className="bg-primary text-primary-foreground text-[10px] font-bold px-3 py-1 rounded-bl-lg uppercase tracking-wider">Most Popular</div>
@@ -222,7 +223,7 @@ function ChallengeCard({ tier, planName, delay, discountApplied }: { tier: any, 
         )}
 
         <CardHeader className="text-center pt-10">
-          <CardTitle className="text-3xl font-headline font-bold text-white group-hover:text-primary transition-colors">{tier.size}</CardTitle>
+          <CardTitle className="text-3xl font-headline font-bold text-white group-hover:text-primary transition-colors duration-300">{tier.size}</CardTitle>
           <p className="text-muted-foreground text-[10px] uppercase tracking-[0.2em] font-black">{getDisplayName(planName)}</p>
         </CardHeader>
 
@@ -242,7 +243,7 @@ function ChallengeCard({ tier, planName, delay, discountApplied }: { tier: any, 
           <div className="space-y-4 mb-4">
             <Collapsible open={isOpen} onOpenChange={setIsOpen} className="w-full">
               <CollapsibleTrigger asChild>
-                <Button variant="ghost" className="w-full flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-primary/80 hover:text-primary hover:bg-primary/5 h-10 px-4 border border-primary/20 rounded-lg">
+                <Button variant="ghost" className="w-full flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-primary/80 hover:text-primary hover:bg-primary/5 h-10 px-4 border border-primary/20 rounded-lg transition-all duration-200">
                   View Full Rules
                   {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                 </Button>
@@ -270,7 +271,7 @@ function ChallengeCard({ tier, planName, delay, discountApplied }: { tier: any, 
         </CardContent>
 
         <CardFooter className="pt-0 pb-8 px-6">
-          <Button className="w-full h-12 font-bold rounded-xl cyan-box-glow hover:scale-[1.02] transition-all" asChild>
+          <Button className="w-full h-12 font-bold rounded-xl cyan-box-glow hover:scale-[1.02] transition-all duration-200" asChild>
             <Link href={`/payment?plan=${planName}&size=${tier.size}&price=$${finalPrice}`}>
               Start Challenge
             </Link>

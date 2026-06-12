@@ -6,10 +6,10 @@ import { TrendingUp, Shield, Zap, Globe, ArrowRight, BarChart3, CheckCircle2 } f
 import { motion } from 'framer-motion';
 
 const fadeInUp = {
-  initial: { opacity: 0, y: 20 },
+  initial: { opacity: 0, y: 15 },
   whileInView: { opacity: 1, y: 0 },
   viewport: { once: true },
-  transition: { duration: 0.6 }
+  transition: { duration: 0.3 }
 };
 
 export default function Home() {
@@ -19,8 +19,9 @@ export default function Home() {
       <nav className="fixed top-0 w-full z-50 bg-background/60 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between">
           <motion.div 
-            initial={{ opacity: 0, x: -20 }}
+            initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.2 }}
             className="flex items-center gap-2"
           >
             <div className="bg-primary/20 p-1.5 rounded-lg border border-primary/20">
@@ -48,9 +49,9 @@ export default function Home() {
         
         <div className="max-w-7xl mx-auto px-4 text-center">
           <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
+            initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5 }}
+            transition={{ duration: 0.2 }}
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold mb-8 uppercase tracking-wider shadow-[0_0_15px_rgba(17,179,245,0.2)]"
           >
             <span className="w-2 h-2 rounded-full bg-primary live-indicator" />
@@ -58,9 +59,9 @@ export default function Home() {
           </motion.div>
           
           <motion.h1 
-            initial={{ opacity: 0, y: 30 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.1 }}
+            transition={{ duration: 0.4, delay: 0.05 }}
             className="text-6xl md:text-8xl font-headline font-bold mb-8 leading-[1.1] tracking-tight"
           >
             Institutional Funding <br />
@@ -68,18 +69,18 @@ export default function Home() {
           </motion.h1>
           
           <motion.p 
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
             className="text-xl text-muted-foreground max-w-2xl mx-auto mb-12 leading-relaxed"
           >
             Trade our capital, keep up to 90% of the profits. Industry-leading technology, instant execution, and professional compliance monitoring.
           </motion.p>
           
           <motion.div 
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.3 }}
+            transition={{ duration: 0.4, delay: 0.15 }}
             className="flex flex-col sm:flex-row items-center justify-center gap-6"
           >
             <Button size="lg" className="h-16 px-10 text-lg rounded-2xl font-bold transition-all hover:scale-105 hover:shadow-[0_0_40px_rgba(17,179,245,0.4)] bg-primary text-primary-foreground group" asChild>
@@ -96,7 +97,7 @@ export default function Home() {
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 1.5, delay: 0.5 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
             className="mt-24 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-5xl mx-auto"
           >
             <StatCard label="Funded Traders" value="12,480+" sub="Global Community" />
@@ -127,19 +128,19 @@ export default function Home() {
               icon={<Shield className="text-primary w-8 h-8" />}
               title="Secure Compliance"
               description="AI-powered monitor ensures you stay within rules and flags risks before breaches happen."
-              delay={0.1}
+              delay={0.05}
             />
             <FeatureCard 
               icon={<Zap className="text-primary w-8 h-8" />}
               title="Instant Funding"
               description="No evaluation phase needed for our Instant models. Trade live capital from day one."
-              delay={0.2}
+              delay={0.1}
             />
             <FeatureCard 
               icon={<BarChart3 className="text-primary w-8 h-8" />}
               title="Advanced Analytics"
               description="Real-time dashboard with deep trade analysis and performance tracking."
-              delay={0.3}
+              delay={0.15}
             />
           </div>
         </div>
@@ -177,7 +178,7 @@ export default function Home() {
 
 function StatCard({ label, value, sub }: { label: string, value: string, sub: string }) {
   return (
-    <div className="p-6 rounded-3xl bg-white/5 backdrop-blur-md border border-white/10 hover:border-primary/50 transition-all duration-500 group flex flex-col items-center text-center hover:bg-white/10">
+    <div className="p-6 rounded-3xl bg-white/5 backdrop-blur-md border border-white/10 hover:border-primary/50 transition-all duration-300 group flex flex-col items-center text-center hover:bg-white/10">
       <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-[0.2em] mb-2">{label}</p>
       <p className="text-3xl font-headline font-bold text-white group-hover:text-primary transition-colors cyan-glow mb-1">{value}</p>
       <p className="text-xs text-muted-foreground/60">{sub}</p>
@@ -188,14 +189,14 @@ function StatCard({ label, value, sub }: { label: string, value: string, sub: st
 function FeatureCard({ icon, title, description, delay }: { icon: React.ReactNode, title: string, description: string, delay: number }) {
   return (
     <motion.div 
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 15 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
-      transition={{ duration: 0.6, delay }}
-      className="p-10 rounded-[2.5rem] bg-secondary/30 border border-white/5 hover:border-primary/30 transition-all duration-500 hover:bg-secondary/40 relative overflow-hidden group"
+      transition={{ duration: 0.4, delay }}
+      className="p-10 rounded-[2.5rem] bg-secondary/30 border border-white/5 hover:border-primary/30 transition-all duration-300 hover:bg-secondary/40 relative overflow-hidden group"
     >
       <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 blur-3xl rounded-full -mr-16 -mt-16 group-hover:bg-primary/10 transition-colors" />
-      <div className="mb-8 p-4 bg-primary/10 rounded-2xl w-fit border border-primary/10 group-hover:scale-110 transition-transform duration-500">
+      <div className="mb-8 p-4 bg-primary/10 rounded-2xl w-fit border border-primary/10 group-hover:scale-110 transition-transform duration-300">
         {icon}
       </div>
       <h3 className="text-2xl font-headline font-bold mb-4 text-white">{title}</h3>

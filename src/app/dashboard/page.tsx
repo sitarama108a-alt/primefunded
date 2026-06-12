@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, Suspense } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { useAuth } from '@/context/AuthContext';
 import { 
@@ -8,7 +8,6 @@ import {
   TrendingDown, 
   Wallet, 
   Activity, 
-  AlertTriangle,
   ArrowUpRight,
   ArrowDownRight,
   RefreshCw,
@@ -34,7 +33,7 @@ import {
 } from 'recharts';
 import { aiComplianceMonitorAlerts } from '@/ai/flows/ai-compliance-monitor-alerts';
 import { useFirestore, useCollection } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
+import { where } from 'firebase/firestore';
 
 // Mock 14-day performance data
 const performanceData = [
@@ -56,21 +55,25 @@ const performanceData = [
 
 export default function DashboardPage() {
   const { user, userData, loading: authLoading } = useAuth();
-  const db = useFirestore();
   const [isConnected, setIsConnected] = useState(true);
   const [compliance, setCompliance] = useState<any>(null);
 
-  // Fetch active account data
-  const accountsQuery = useMemo(() => {
-    if (!user) return null;
-    return query(collection(db, 'accounts'), where('userId', '==', user.uid), where('status', '==', 'active'));
-  }, [db, user]);
+  // Memoize query constraints to prevent unnecessary re-renders
+  const accountConstraints = useMemo(() => {
+    if (!user?.uid) return [];
+    return [where('userId', '==', user.uid), where('status', '==', 'active')];
+  }, [user?.uid]);
 
-  const { data: accounts, loading: accountsLoading } = useCollection<any>('accounts', accountsQuery ? [where('userId', '==', user?.uid || ''), where('status', '==', 'active')] : []);
+  const { data: accounts, loading: accountsLoading } = useCollection<any>(
+    user ? 'accounts' : null, 
+    accountConstraints
+  );
+
   const activeAccount = accounts?.[0];
 
   useEffect(() => {
     if (activeAccount) {
+      let isMounted = true;
       const fetchCompliance = async () => {
         try {
           const result = await aiComplianceMonitorAlerts({
@@ -81,14 +84,15 @@ export default function DashboardPage() {
             tradingDays: 5,
             hasOpenTrades: true
           });
-          setCompliance(result);
+          if (isMounted) setCompliance(result);
         } catch (err) {
-          console.error(err);
+          // Centrally handled
         }
       };
       fetchCompliance();
+      return () => { isMounted = false; };
     }
-  }, [activeAccount]);
+  }, [activeAccount?.id, activeAccount?.plan]);
 
   if (authLoading || accountsLoading) {
     return (
@@ -232,26 +236,28 @@ export default function DashboardPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {compliance ? (
-                  <div className={`p-4 rounded-xl border ${compliance.status === 'at-risk' ? 'bg-destructive/10 border-destructive/20' : 'bg-primary/10 border-primary/20'}`}>
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-2 text-primary flex items-center gap-1.5">
-                      <Clock className="w-3 h-3" /> System Insight
-                    </p>
-                    <p className="text-sm font-medium leading-relaxed mb-3">{compliance.message}</p>
-                    <div className="space-y-2">
-                      {compliance.warnings?.map((w: string, i: number) => (
-                        <div key={i} className="flex gap-2 items-start text-xs text-muted-foreground">
-                          <Circle className="w-1.5 h-1.5 mt-1.5 fill-destructive text-destructive flex-shrink-0" />
-                          <span>{w}</span>
-                        </div>
-                      ))}
+                <Suspense fallback={<div className="h-24 flex items-center justify-center"><RefreshCw className="w-6 h-6 animate-spin" /></div>}>
+                  {compliance ? (
+                    <div className={`p-4 rounded-xl border ${compliance.status === 'at-risk' ? 'bg-destructive/10 border-destructive/20' : 'bg-primary/10 border-primary/20'}`}>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-2 text-primary flex items-center gap-1.5">
+                        <Clock className="w-3 h-3" /> System Insight
+                      </p>
+                      <p className="text-sm font-medium leading-relaxed mb-3">{compliance.message}</p>
+                      <div className="space-y-2">
+                        {compliance.warnings?.map((w: string, i: number) => (
+                          <div key={i} className="flex gap-2 items-start text-xs text-muted-foreground">
+                            <Circle className="w-1.5 h-1.5 mt-1.5 fill-destructive text-destructive flex-shrink-0" />
+                            <span>{w}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="h-24 flex items-center justify-center">
-                    <RefreshCw className="w-6 h-6 text-muted-foreground animate-spin" />
-                  </div>
-                )}
+                  ) : (
+                    <div className="h-24 flex items-center justify-center">
+                      <RefreshCw className="w-6 h-6 text-muted-foreground animate-spin" />
+                    </div>
+                  )}
+                </Suspense>
               </CardContent>
             </Card>
           </div>
@@ -292,7 +298,7 @@ export default function DashboardPage() {
 
 function MetricCard({ title, value, icon, trend, footer }: { title: string, value: string, icon: React.ReactNode, trend?: number, footer?: string }) {
   return (
-    <Card className="border-border/50 bg-card/40 hover:border-primary/30 transition-all group">
+    <Card className="border-border/50 bg-card/40 hover:border-primary/30 transition-all duration-300 group">
       <CardContent className="p-6">
         <div className="flex items-center justify-between mb-4">
           <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground group-hover:text-primary transition-colors">{title}</span>

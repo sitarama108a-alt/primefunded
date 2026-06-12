@@ -85,7 +85,7 @@ const aiComplianceMonitorAlertsFlow = ai.defineFlow(
   async (input) => {
     const { output } = await complianceMonitorPrompt(input);
     if (!output) {
-      throw new Error('Failed to get compliance monitor alerts from the model.');
+      throw new Error('Failed to get compliance monitor alerts.');
     }
     return output;
   }
