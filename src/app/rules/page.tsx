@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 import { Navigation } from '@/components/Navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -39,7 +39,6 @@ const PLAN_RULES = {
       { text: "Trading Leverage: 1:100", check: true },
       { text: "Instruments: Fx, Commodities, Indices, Stock, Crypto", check: true },
       { text: "Minimum 5 trading days", check: true },
-      { text: "Single pair loss max 3%", warning: true },
     ],
     phase2: [
       { text: "5% profit target", check: true },
@@ -57,7 +56,42 @@ const PLAN_RULES = {
       { text: "1% max floating loss (Hard Breach)", warning: true },
       { text: "5% daily drawdown limit (Hard Breach)", warning: true },
       { text: "10% max drawdown limit (Hard Breach)", warning: true },
-      { text: "Single pair loss max 3% (Hard Breach)", warning: true },
+      { text: "No martingale (Hard Breach)", check: false },
+    ]
+  },
+  '3-step': {
+    phase1: [
+      { text: "10% profit target", check: true },
+      { text: "4% daily drawdown", check: true },
+      { text: "8% max drawdown", check: true },
+      { text: "Minimum 7 trading days", check: true },
+      { text: "Trading Leverage: 1:100", check: true },
+      { text: "Instruments: Fx, Commodities, Indices, Stock, Crypto", check: true },
+    ],
+    phase2: [
+      { text: "8% profit target", check: true },
+      { text: "4% daily drawdown", check: true },
+      { text: "8% max drawdown", check: true },
+      { text: "Minimum 6 trading days", check: true },
+      { text: "Trading Leverage: 1:100", check: true },
+      { text: "Instruments: Fx, Commodities, Indices, Stock, Crypto", check: true },
+    ],
+    phase3: [
+      { text: "5% profit target", check: true },
+      { text: "4% daily drawdown", check: true },
+      { text: "8% max drawdown", check: true },
+      { text: "Trading Leverage: 1:100", check: true },
+      { text: "Instruments: Fx, Commodities, Indices, Stock, Crypto", check: true },
+    ],
+    funded: [
+      { text: "80% profit split (Bi-Weekly)", check: true },
+      { text: "100% profit split (Monthly)", check: true },
+      { text: "Trading Leverage: 1:30", check: true },
+      { text: "Instruments: Fx, Commodities, Indices, Stock, Crypto", check: true },
+      { text: "Minimum 5 trading days required before payout request", warning: true },
+      { text: "1% max floating loss (Hard Breach)", warning: true },
+      { text: "4% daily drawdown limit (Hard Breach)", warning: true },
+      { text: "8% max drawdown limit (Hard Breach)", warning: true },
       { text: "No martingale (Hard Breach)", check: false },
     ]
   },
@@ -107,9 +141,10 @@ export default function RulesPage() {
         </div>
 
         <Tabs defaultValue="1-step" className="space-y-12">
-          <TabsList className="bg-secondary/50 border border-border p-1 h-14 w-full max-w-2xl justify-start overflow-x-auto">
+          <TabsList className="bg-secondary/50 border border-border p-1 h-14 w-full max-w-4xl justify-start overflow-x-auto">
             <TabsTrigger value="1-step" className="h-full px-8 font-bold">1-Step Pro</TabsTrigger>
             <TabsTrigger value="2-step" className="h-full px-8 font-bold">2-Step Classic</TabsTrigger>
+            <TabsTrigger value="3-step" className="h-full px-8 font-bold">3-Step Classic</TabsTrigger>
             <TabsTrigger value="instant" className="h-full px-8 font-bold">Instant Funding</TabsTrigger>
           </TabsList>
 
@@ -136,7 +171,22 @@ export default function RulesPage() {
               daily="5%" 
               max="10%" 
               payout="Minimum 5 trading days required before payout request" 
-              extra={["Single pair loss max 3%", "No closing trades within 2 minutes", "1 trade per 3 minutes maximum"]}
+              extra={["No closing trades within 2 minutes", "1 trade per 3 minutes maximum"]}
+            />
+          </TabsContent>
+
+          <TabsContent value="3-step" className="space-y-12">
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+              <RuleCard title="Phase 1" items={PLAN_RULES['3-step'].phase1} variant="primary" />
+              <RuleCard title="Phase 2" items={PLAN_RULES['3-step'].phase2} variant="primary" />
+              <RuleCard title="Phase 3" items={PLAN_RULES['3-step'].phase3} variant="primary" />
+              <RuleCard title="Funded Stage" items={PLAN_RULES['3-step'].funded} variant="destructive" />
+            </div>
+            <FundedRulesDetailed 
+              daily="4%" 
+              max="8%" 
+              payout="Minimum 5 trading days required before payout request" 
+              extra={["Bi-Weekly & Monthly payouts available", "No closing trades within 2 minutes", "1 trade per 3 minutes maximum"]}
             />
           </TabsContent>
 

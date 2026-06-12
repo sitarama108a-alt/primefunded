@@ -29,6 +29,15 @@ const planData = {
     { size: '$100,000', price: 429, popular: true },
     { size: '$200,000', price: 849 },
   ],
+  '3-step': [
+    { size: '$5,000', price: 39 },
+    { size: '$10,000', price: 59 },
+    { size: '$25,000', price: 129 },
+    { size: '$50,000', price: 219 },
+    { size: '$100,000', price: 399, popular: true },
+    { size: '$200,000', price: 799 },
+    { size: '$300,000', price: 1099 },
+  ],
   'instant': [
     { size: '$5,000', price: 125 },
     { size: '$10,000', price: 250 },
@@ -69,7 +78,6 @@ const RULES = {
       { text: "Trading Leverage 1:100", type: 'check' },
       { text: "Fx, Commodities, Indices, Stock, Crypto", type: 'check' },
       { text: "Minimum 5 trading days", type: 'check' },
-      { text: "Single pair loss max 3%", type: 'warning' },
     ],
     phase2: [
       { text: "5% profit target", type: 'check' },
@@ -87,6 +95,41 @@ const RULES = {
       { text: "1% max floating loss (Hard Breach)", type: 'warning' },
       { text: "5% daily drawdown limit (Hard Breach)", type: 'hard' },
       { text: "10% max drawdown limit (Hard Breach)", type: 'hard' },
+      { text: "No martingale (Hard Breach)", type: 'hard' },
+    ]
+  },
+  '3-step': {
+    phase1: [
+      { text: "10% profit target", type: 'check' },
+      { text: "4% daily drawdown", type: 'check' },
+      { text: "8% max drawdown", type: 'check' },
+      { text: "Minimum 7 trading days", type: 'check' },
+      { text: "Trading Leverage: 1:100", type: 'check' },
+      { text: "Fx, Commodities, Indices, Stock, Crypto", type: 'check' },
+    ],
+    phase2: [
+      { text: "8% profit target", type: 'check' },
+      { text: "4% daily drawdown", type: 'check' },
+      { text: "8% max drawdown", type: 'check' },
+      { text: "Minimum 6 trading days", type: 'check' },
+      { text: "Trading Leverage: 1:100", type: 'check' },
+      { text: "Fx, Commodities, Indices, Stock, Crypto", type: 'check' },
+    ],
+    phase3: [
+      { text: "5% profit target", type: 'check' },
+      { text: "4% daily drawdown", type: 'check' },
+      { text: "8% max drawdown", type: 'check' },
+      { text: "Trading Leverage: 1:100", type: 'check' },
+      { text: "Fx, Commodities, Indices, Stock, Crypto", type: 'check' },
+    ],
+    funded: [
+      { text: "80% profit split (Bi-Weekly)", type: 'check' },
+      { text: "100% profit split (Monthly)", type: 'check' },
+      { text: "Trading Leverage: 1:30", type: 'check' },
+      { text: "Fx, Commodities, Indices, Stock, Crypto", type: 'check' },
+      { text: "Minimum 5 trading days required before payout request", type: 'warning' },
+      { text: "4% daily drawdown limit (Hard Breach)", type: 'hard' },
+      { text: "8% max drawdown limit (Hard Breach)", type: 'hard' },
       { text: "No martingale (Hard Breach)", type: 'hard' },
     ]
   },
@@ -137,7 +180,7 @@ export default function ChallengesPage() {
             animate={{ opacity: 1, y: 0 }}
             className="text-muted-foreground"
           >
-            Institutional funding starting from $5,000 up to $200,000.
+            Institutional funding starting from $5,000 up to $300,000.
           </motion.p>
         </header>
 
@@ -155,9 +198,10 @@ export default function ChallengesPage() {
             if (val !== 'instant') setDiscountApplied(false);
           }}>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
-              <TabsList className="grid w-full max-w-md grid-cols-3 h-14 bg-secondary p-1 rounded-xl">
+              <TabsList className="grid w-full max-w-2xl grid-cols-4 h-14 bg-secondary p-1 rounded-xl">
                 <TabsTrigger value="1-step" className="data-[state=active]:bg-background font-bold rounded-lg">1-Step Pro</TabsTrigger>
                 <TabsTrigger value="2-step" className="data-[state=active]:bg-background font-bold rounded-lg">2-Step Classic</TabsTrigger>
+                <TabsTrigger value="3-step" className="data-[state=active]:bg-background font-bold rounded-lg">3-Step Classic</TabsTrigger>
                 <TabsTrigger value="instant" className="data-[state=active]:bg-background font-bold rounded-lg">Instant Funding</TabsTrigger>
               </TabsList>
 
@@ -184,7 +228,7 @@ export default function ChallengesPage() {
                   exit={{ opacity: 0, x: -10 }}
                   className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
                 >
-                  {planData[selectedPlan as keyof typeof planData].map((tier, idx) => (
+                  {planData[selectedPlan as keyof typeof planData]?.map((tier, idx) => (
                     <ChallengeCard 
                       key={tier.size} 
                       tier={tier} 
@@ -223,7 +267,7 @@ function ChallengeCard({ tier, planName, delay, discountApplied }: { tier: any, 
         <CardHeader className="text-center pt-10">
           <CardTitle className="text-3xl font-headline font-bold text-white group-hover:text-primary">{tier.size}</CardTitle>
           <p className="text-muted-foreground text-[10px] uppercase tracking-[0.2em] font-black">
-            {planName === '1-step' ? '1-Step Pro' : planName === '2-step' ? '2-Step Classic' : 'Instant Funding'}
+            {planName === '1-step' ? '1-Step Pro' : planName === '2-step' ? '2-Step Classic' : planName === '3-step' ? '3-Step Classic' : 'Instant Funding'}
           </p>
         </CardHeader>
 
@@ -255,6 +299,14 @@ function ChallengeCard({ tier, planName, delay, discountApplied }: { tier: any, 
                 <>
                   <RuleSection title="Phase 1 & 2" items={RULES['2-step'].phase1} />
                   <RuleSection title="Funded stage" items={RULES['2-step'].funded} />
+                </>
+              )}
+              {planName === '3-step' && (
+                <>
+                  <RuleSection title="Phase 1 (Evaluation)" items={RULES['3-step'].phase1} />
+                  <RuleSection title="Phase 2 (Evaluation)" items={RULES['3-step'].phase2} />
+                  <RuleSection title="Phase 3 (Evaluation)" items={RULES['3-step'].phase3} />
+                  <RuleSection title="Funded stage" items={RULES['3-step'].funded} />
                 </>
               )}
               {planName === 'instant' && (

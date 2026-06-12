@@ -63,6 +63,7 @@ function PaymentContent() {
   const getDisplayName = (id: string) => {
     if (id === '1-step') return '1-Step Pro';
     if (id === '2-step') return '2-Step Classic';
+    if (id === '3-step') return '3-Step Classic';
     return 'Instant Funding';
   };
 

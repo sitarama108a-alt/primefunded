@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, Suspense } from 'react';
@@ -536,6 +535,7 @@ export default function AdminPage() {
                   <SelectContent>
                     <SelectItem value="1-Step Pro">1-Step Pro</SelectItem>
                     <SelectItem value="2-Step Classic">2-Step Classic</SelectItem>
+                    <SelectItem value="3-Step Classic">3-Step Classic</SelectItem>
                     <SelectItem value="Instant Funding">Instant Funding</SelectItem>
                   </SelectContent>
                 </Select>
@@ -553,6 +553,7 @@ export default function AdminPage() {
                     <SelectItem value="$50,000">$50,000</SelectItem>
                     <SelectItem value="$100,000">$100,000</SelectItem>
                     <SelectItem value="$200,000">$200,000</SelectItem>
+                    <SelectItem value="$300,000">$300,000</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
