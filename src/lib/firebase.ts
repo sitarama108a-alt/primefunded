@@ -2,7 +2,11 @@
 
 import { initializeFirebase } from '@/firebase';
 
-const { auth, firestore: db } = initializeFirebase();
+/**
+ * Initializes and exports Firebase services for use in client components.
+ * This uses the idempotent initialization logic from the main firebase module.
+ */
+const { auth, firestore: db, firebaseApp: app } = initializeFirebase();
 
-export { auth, db };
-export default auth.app;
+export { auth, db, app };
+export default app;
