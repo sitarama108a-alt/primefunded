@@ -1,0 +1,164 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Details about the trader's profile.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string",
+          "format": "email"
+        },
+        "tier": {
+          "type": "string",
+          "enum": [
+            "Standard",
+            "Pro",
+            "Elite"
+          ]
+        },
+        "joinDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "balance": {
+          "type": "number"
+        },
+        "equity": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "suspended"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "email"
+      ]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "A challenge purchase order.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "plan": {
+          "type": "string"
+        },
+        "size": {
+          "type": "string"
+        },
+        "price": {
+          "type": "string"
+        },
+        "network": {
+          "type": "string"
+        },
+        "txHash": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "verified",
+            "rejected"
+          ]
+        },
+        "date": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "TradingAccount": {
+      "title": "Trading Account",
+      "description": "Details of an MT5 trading account.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "plan": {
+          "type": "string"
+        },
+        "size": {
+          "type": "string"
+        },
+        "mt5Login": {
+          "type": "string"
+        },
+        "mt5Password": {
+          "type": "string"
+        },
+        "mt5Server": {
+          "type": "string"
+        },
+        "balance": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "breached",
+            "passed"
+          ]
+        },
+        "startDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "daysTraded": {
+          "type": "number"
+        },
+        "winRate": {
+          "type": "number"
+        },
+        "profit": {
+          "type": "number"
+        }
+      }
+    }
+  },
+  "auth": {
+    "providers": [
+      "password"
+    ]
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/backend/entities/UserProfile"
+      },
+      "description": "Stores trader profiles."
+    },
+    "/orders/{orderId}": {
+      "schema": {
+        "$ref": "#/backend/entities/Order"
+      },
+      "description": "Stores challenge purchase orders."
+    },
+    "/accounts/{accountId}": {
+      "schema": {
+        "$ref": "#/backend/entities/TradingAccount"
+      },
+      "description": "Stores provisioned MT5 accounts."
+    }
+  }
+}
