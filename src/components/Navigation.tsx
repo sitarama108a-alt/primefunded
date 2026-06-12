@@ -19,7 +19,8 @@ import {
   Fingerprint,
   Terminal,
   Shield,
-  BookOpen
+  BookOpen,
+  Gift
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -28,7 +29,7 @@ import { Button } from '@/components/ui/button';
 const navItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Challenges', href: '/challenges', icon: Trophy },
-  { name: 'Competitions', href: '/competitions', icon: Trophy },
+  { name: 'Giveaway', href: '/giveaway', icon: Gift },
   { name: 'Accounts', href: '/accounts', icon: ShieldCheck },
   { name: 'MT5 Credentials', href: '/mt5-account', icon: Terminal },
   { name: 'Payouts', href: '/payouts', icon: Wallet },
