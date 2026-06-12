@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from 'react';
@@ -17,6 +18,8 @@ import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/e
 export default function SignupPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [country, setCountry] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -32,11 +35,14 @@ export default function SignupPage() {
       const userData = {
         name,
         email,
-        tier: 'Standard',
+        phone,
+        country,
+        tier: 'Bronze',
         joinDate: new Date().toISOString(),
         balance: 0,
         equity: 0,
-        status: 'active'
+        status: 'active',
+        kycVerified: false
       };
 
       const userRef = doc(db, `users`, user.uid);
@@ -69,7 +75,7 @@ export default function SignupPage() {
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-12">
             <TrendingUp className="text-primary w-10 h-10" />
-            <span className="font-headline font-bold text-3xl tracking-tight">PrimeFunded</span>
+            <span className="font-headline font-bold text-3xl tracking-tight text-white">PrimeFunded</span>
           </div>
           <h1 className="text-5xl font-headline font-bold mb-8 leading-tight">Start Your <br />Funding Journey.</h1>
           <div className="space-y-6">
@@ -88,7 +94,7 @@ export default function SignupPage() {
             <p className="text-muted-foreground mt-2">Join the world's most transparent funding firm</p>
           </div>
           
-          <form onSubmit={handleSignup} className="space-y-5">
+          <form onSubmit={handleSignup} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="name">Full Name</Label>
               <Input 
@@ -97,7 +103,7 @@ export default function SignupPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                className="h-12 bg-secondary/50"
+                className="h-11 bg-secondary/50"
               />
             </div>
             <div className="space-y-2">
@@ -109,8 +115,30 @@ export default function SignupPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="h-12 bg-secondary/50"
+                className="h-11 bg-secondary/50"
               />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="phone">Phone</Label>
+                <Input 
+                  id="phone" 
+                  placeholder="+1 555..." 
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="h-11 bg-secondary/50"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="country">Country</Label>
+                <Input 
+                  id="country" 
+                  placeholder="United Kingdom" 
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                  className="h-11 bg-secondary/50"
+                />
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
@@ -121,12 +149,12 @@ export default function SignupPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="h-12 bg-secondary/50"
+                className="h-11 bg-secondary/50"
               />
             </div>
             <div className="flex items-center space-x-2 pt-2">
               <input type="checkbox" id="terms" className="rounded border-border bg-secondary" required />
-              <label htmlFor="terms" className="text-xs text-muted-foreground">
+              <label htmlFor="terms" className="text-[10px] text-muted-foreground">
                 I agree to the <Link href="#" className="text-primary underline">Terms of Service</Link> and <Link href="#" className="text-primary underline">Risk Disclosure</Link>.
               </label>
             </div>

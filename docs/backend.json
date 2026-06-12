@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "UserProfile": {
@@ -11,6 +12,12 @@
         "email": {
           "type": "string",
           "format": "email"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "country": {
+          "type": "string"
         },
         "tier": {
           "type": "string",
@@ -36,6 +43,9 @@
             "active",
             "suspended"
           ]
+        },
+        "kycVerified": {
+          "type": "boolean"
         }
       },
       "required": [

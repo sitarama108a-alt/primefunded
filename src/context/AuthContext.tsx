@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
@@ -6,7 +7,7 @@ import {
   User, 
   signOut 
 } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
 
@@ -33,22 +34,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       setUser(user);
-      if (user) {
-        const userRef = doc(db, `users`, user.uid);
-        const snapshot = await getDoc(userRef);
+      
+      if (!user) {
+        setUserData(null);
+        setLoading(false);
+      }
+    });
+
+    return () => unsubscribeAuth();
+  }, []);
+
+  useEffect(() => {
+    let unsubscribeDoc: (() => void) | undefined;
+
+    if (user) {
+      const userRef = doc(db, 'users', user.uid);
+      unsubscribeDoc = onSnapshot(userRef, (snapshot) => {
         if (snapshot.exists()) {
           setUserData(snapshot.data());
         }
-      } else {
-        setUserData(null);
-      }
-      setLoading(false);
-    });
+        setLoading(false);
+      }, (err) => {
+        console.error("Error fetching user data:", err);
+        setLoading(false);
+      });
+    }
 
-    return () => unsubscribe();
-  }, []);
+    return () => {
+      if (unsubscribeDoc) unsubscribeDoc();
+    };
+  }, [user]);
 
   const logout = async () => {
     await signOut(auth);
