@@ -34,7 +34,8 @@ import {
   Globe,
   User,
   Activity,
-  UserCheck
+  UserCheck,
+  AlertTriangle
 } from 'lucide-react';
 import { useFirestore, useCollection } from '@/firebase';
 import { doc, updateDoc, deleteDoc, setDoc, serverTimestamp } from 'firebase/firestore';
