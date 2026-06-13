@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -10,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { User, Mail, Shield, CheckCircle2, Phone, Globe, Save } from 'lucide-react';
+import { User, Mail, Shield, CheckCircle2, Phone, Globe, Save, Copy } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -61,6 +60,13 @@ export default function ProfilePage() {
     }
   };
 
+  const copyTraderId = () => {
+    if (userData?.traderId) {
+      navigator.clipboard.writeText(userData.traderId);
+      toast({ title: "Copied!", description: "Trader UID copied to clipboard." });
+    }
+  };
+
   return (
     <div className="flex min-h-screen bg-background">
       <Navigation />
@@ -77,19 +83,29 @@ export default function ProfilePage() {
                 <AvatarImage src={`https://picsum.photos/seed/${user?.uid}/200`} />
                 <AvatarFallback className="text-4xl bg-secondary">{userData?.name?.[0] || 'T'}</AvatarFallback>
               </Avatar>
-              <h2 className="text-2xl font-headline font-bold">{userData?.name || 'Trader'}</h2>
+              <h2 className="text-2xl font-headline font-bold mb-1">{userData?.name || 'Trader'}</h2>
               <p className="text-sm text-muted-foreground mb-4">{userData?.email}</p>
-              <div className="flex gap-2 mb-8">
-                <Badge className="bg-primary/20 text-primary border-primary/30 uppercase text-[10px] font-bold tracking-widest px-3 py-1">
+              
+              <div 
+                className="flex items-center gap-2 px-3 py-1 bg-secondary border border-primary/20 rounded-lg cursor-pointer hover:border-primary/50 transition-colors mb-6 group" 
+                onClick={copyTraderId}
+              >
+                <span className="text-[10px] font-black uppercase tracking-widest text-primary">UID:</span>
+                <span className="font-mono text-sm font-bold text-white">{userData?.traderId || '--------'}</span>
+                <Copy className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors" />
+              </div>
+
+              <div className="flex flex-col gap-2 w-full mb-8">
+                <Badge className="bg-primary/20 text-primary border-primary/30 uppercase text-[10px] font-bold tracking-widest px-3 py-1 justify-center">
                   {userData?.tier || 'Bronze'} Tier
                 </Badge>
                 {userData?.kycVerified ? (
-                  <Badge className="bg-accent/20 text-accent border-accent/30 uppercase text-[10px] flex gap-1 font-bold tracking-widest px-3 py-1">
-                    <CheckCircle2 className="w-3 h-3" /> Verified
+                  <Badge className="bg-accent/20 text-accent border-accent/30 uppercase text-[10px] flex gap-1 font-bold tracking-widest px-3 py-1 justify-center">
+                    <CheckCircle2 className="w-3 h-3" /> KYC Verified
                   </Badge>
                 ) : (
-                  <Badge variant="outline" className="text-muted-foreground uppercase text-[10px] font-bold tracking-widest px-3 py-1 border-border/50">
-                    Not Verified
+                  <Badge variant="outline" className="text-muted-foreground uppercase text-[10px] font-bold tracking-widest px-3 py-1 border-border/50 justify-center">
+                    KYC Not Verified
                   </Badge>
                 )}
               </div>

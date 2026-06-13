@@ -28,7 +28,7 @@ import { useToast } from '@/hooks/use-toast';
 import { motion } from 'framer-motion';
 
 export default function MT5AccountPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, userData, loading: authLoading } = useAuth();
   const db = useFirestore();
   const { toast } = useToast();
   const [showPassword] = useState(false);
@@ -43,13 +43,28 @@ export default function MT5AccountPage() {
     );
   }, [db, user]);
 
-  const { data: accounts, loading: accountsLoading } = useCollection<any>('accounts', accountsQuery ? [where('userId', '==', user?.uid || ''), where('status', '==', 'active')] : []);
+  const accountConstraints = useMemo(() => {
+    if (!user?.uid) return [];
+    return [where('userId', '==', user.uid), where('status', '==', 'active')];
+  }, [user?.uid]);
+
+  const { data: accounts, loading: accountsLoading } = useCollection<any>(
+    user ? 'accounts' : null, 
+    accountConstraints
+  );
 
   const activeAccount = accounts?.[0];
 
   const copyToClipboard = (label: string, text: string) => {
     navigator.clipboard.writeText(text);
     toast({ title: "Copied", description: `${label} copied to clipboard.` });
+  };
+
+  const copyTraderId = () => {
+    if (userData?.traderId) {
+      navigator.clipboard.writeText(userData.traderId);
+      toast({ title: "Copied!", description: "Trader UID copied to clipboard." });
+    }
   };
 
   const getPlanRules = (plan: string) => {
@@ -95,7 +110,6 @@ export default function MT5AccountPage() {
     <div className="flex min-h-screen bg-background">
       <Navigation />
       <main className="flex-1 p-8 overflow-y-auto">
-        {/* Success Banner */}
         <motion.div 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -112,12 +126,20 @@ export default function MT5AccountPage() {
 
         <header className="mb-10">
           <h1 className="text-3xl font-headline font-bold mb-1">MT5 Credentials</h1>
-          <p className="text-muted-foreground">Access details for your MetaTrader 5 trading terminal.</p>
+          <p className="text-muted-foreground mb-4">Access details for your MetaTrader 5 trading terminal.</p>
+          
+          <div 
+            className="flex items-center gap-2 px-3 py-1 bg-secondary border border-primary/20 rounded-lg cursor-pointer hover:border-primary/50 transition-colors w-fit group" 
+            onClick={copyTraderId}
+          >
+            <span className="text-[10px] font-black uppercase tracking-widest text-primary">Your Account UID:</span>
+            <span className="font-mono text-sm font-bold text-white">{userData?.traderId || '--------'}</span>
+            <Copy className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors" />
+          </div>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
-            {/* My Account Card */}
             <Card className="border-primary/20 bg-primary/5">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
@@ -129,7 +151,6 @@ export default function MT5AccountPage() {
                 <Badge className="bg-accent text-accent-foreground font-bold px-3 py-1">ACTIVE</Badge>
               </CardHeader>
               <CardContent className="pt-6">
-                {/* Credentials Box */}
                 <div className="grid md:grid-cols-2 gap-6 p-6 rounded-2xl bg-secondary/50 border border-white/10 mb-8">
                   <div className="space-y-4">
                     <CredentialField 
@@ -168,7 +189,6 @@ export default function MT5AccountPage() {
                   </div>
                 </div>
 
-                {/* Download MT5 Section */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-bold flex items-center gap-2">
                     <Download className="w-5 h-5 text-primary" /> Download MetaTrader 5
@@ -183,7 +203,6 @@ export default function MT5AccountPage() {
               </CardContent>
             </Card>
 
-            {/* Setup Instructions */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-xl">Setup Instructions</CardTitle>
@@ -210,7 +229,6 @@ export default function MT5AccountPage() {
             </Card>
           </div>
 
-          {/* Rules Reminder Sidebar */}
           <div className="space-y-6">
             <Card className="border-amber-500/30 bg-amber-500/5">
               <CardHeader>

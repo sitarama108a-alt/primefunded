@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useMemo, Suspense } from 'react';
@@ -107,7 +106,6 @@ export default function DashboardPage() {
   }, [activeAccount?.id, activeAccount?.plan]);
 
   const metrics = useMemo(() => {
-    // If no active account, everything is zero
     if (!activeAccount) {
       return {
         balance: 0,
@@ -123,7 +121,7 @@ export default function DashboardPage() {
     const balance = activeAccount?.balance || 0;
     return {
       balance,
-      equity: balance * 1.02, // Simulated equity
+      equity: balance * 1.02, 
       dailyPnL: 0,
       winRate: 0,
       tradesToday: 0,
@@ -137,7 +135,7 @@ export default function DashboardPage() {
       navigator.clipboard.writeText(userData.traderId);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-      toast({ title: "Copied!", description: "Trader ID copied to clipboard." });
+      toast({ title: "Copied!", description: "Trader UID copied to clipboard." });
     }
   };
 
@@ -154,7 +152,6 @@ export default function DashboardPage() {
       <Navigation />
       
       <main className="flex-1 p-8 overflow-y-auto">
-        {/* Profile Completion Prompt */}
         {showProfilePrompt && (
           <div className="mb-8 p-6 rounded-2xl bg-primary/10 border border-primary/30 flex flex-col md:flex-row items-center justify-between gap-6 shadow-[0_0_20px_rgba(17,179,245,0.1)]">
             <div className="flex items-center gap-4">
@@ -196,9 +193,11 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-2">
               <p className="text-muted-foreground">Welcome back, {userData?.name || 'Trader'}.</p>
               
-              {/* Numeric UID Badge */}
               <div className="flex items-center gap-2 mt-1">
-                <div className="flex items-center gap-2 px-3 py-1 bg-secondary border border-primary/20 rounded-lg group hover:border-primary/50 transition-colors cursor-pointer" onClick={copyTraderId}>
+                <div 
+                  className="flex items-center gap-2 px-3 py-1 bg-secondary border border-primary/20 rounded-lg group hover:border-primary/50 transition-colors cursor-pointer" 
+                  onClick={copyTraderId}
+                >
                   <span className="text-[10px] font-black uppercase tracking-widest text-primary">UID:</span>
                   <span className="font-mono text-sm font-bold text-white">{userData?.traderId || '--------'}</span>
                   <button className="text-muted-foreground group-hover:text-primary transition-colors">
