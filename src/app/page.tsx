@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, Shield, Zap, Globe, ArrowRight, BarChart3, CheckCircle2 } from 'lucide-react';
+import { TrendingUp, ShieldCheck, Zap, Globe, ArrowRight, BarChart3, CheckCircle2, Trophy, Wallet } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const fadeInUp = {
@@ -106,15 +106,31 @@ export default function Home() {
           </motion.div>
           
           <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="mt-24 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-5xl mx-auto"
+            className="mt-24 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto"
           >
-            <StatCard label="Funded Traders" value="12,480+" sub="Global Community" />
-            <StatCard label="Paid Out" value="$48.2M" sub="Profit Share" />
-            <StatCard label="Execution" value="0.1s" sub="Low Latency" />
-            <StatCard label="Support" value="24/7" sub="Live Assistance" />
+            <HighlightCard 
+              icon={<Trophy className="w-8 h-8" />}
+              title="Up To 10X Payouts"
+              subtitle="Scale your funded account up to 10X your initial size as you hit profit targets"
+            />
+            <HighlightCard 
+              icon={<Zap className="w-8 h-8" />}
+              title="Instant Account Access"
+              subtitle="Get funded instantly and start trading within minutes of purchase"
+            />
+            <HighlightCard 
+              icon={<Wallet className="w-8 h-8" />}
+              title="Up To 100% Profit Split"
+              subtitle="Keep up to 100% of your profits with our monthly reward program"
+            />
+            <HighlightCard 
+              icon={<ShieldCheck className="w-8 h-8" />}
+              title="Secure & Transparent"
+              subtitle="Fully verified payouts, real MT5 accounts and 24/7 trader support"
+            />
           </motion.div>
         </div>
       </section>
@@ -202,12 +218,14 @@ function HighlightBadge({ text }: { text: string }) {
   );
 }
 
-function StatCard({ label, value, sub }: { label: string, value: string, sub: string }) {
+function HighlightCard({ title, subtitle, icon }: { title: string, subtitle: string, icon: React.ReactNode }) {
   return (
-    <div className="p-6 rounded-3xl bg-white/5 backdrop-blur-md border border-white/10 hover:border-primary/50 transition-all duration-300 group flex flex-col items-center text-center hover:bg-white/10">
-      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-[0.2em] mb-2">{label}</p>
-      <p className="text-3xl font-headline font-bold text-white group-hover:text-primary transition-colors cyan-glow mb-1">{value}</p>
-      <p className="text-xs text-muted-foreground/60">{sub}</p>
+    <div className="p-8 rounded-[2.5rem] bg-white/5 backdrop-blur-md border border-white/10 hover:border-primary/50 transition-all duration-300 group flex flex-col items-center text-center hover:bg-white/10 hover:scale-[1.02]">
+      <div className="mb-6 p-4 bg-primary/10 rounded-2xl w-fit border border-primary/10 group-hover:scale-110 transition-transform duration-300 text-primary">
+        {icon}
+      </div>
+      <h3 className="text-xl font-headline font-bold text-white group-hover:text-primary transition-colors cyan-glow mb-3">{title}</h3>
+      <p className="text-sm text-muted-foreground leading-relaxed">{subtitle}</p>
     </div>
   );
 }
