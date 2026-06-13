@@ -10,8 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
-import { User, Mail, Shield, CheckCircle2, Phone, Globe, Save, Copy, Bell, Mail as MailIcon, Trophy, Wallet, Users, Megaphone } from 'lucide-react';
+import { User, Mail, Shield, CheckCircle2, Phone, Globe, Save, Copy } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -30,15 +29,6 @@ export default function ProfilePage() {
     country: ''
   });
 
-  const [preferences, setPreferences] = useState({
-    email: true,
-    inApp: true,
-    challenge: true,
-    payout: true,
-    referral: true,
-    announcements: true
-  });
-
   useEffect(() => {
     if (userData) {
       setFormData({
@@ -46,12 +36,6 @@ export default function ProfilePage() {
         phone: userData.phone || '',
         country: userData.country || ''
       });
-      if (userData.notificationPreferences) {
-        setPreferences({
-          ...preferences,
-          ...userData.notificationPreferences
-        });
-      }
     }
   }, [userData]);
 
@@ -61,15 +45,14 @@ export default function ProfilePage() {
     
     const userRef = doc(db, 'users', user.uid);
     const updates = {
-      ...formData,
-      notificationPreferences: preferences
+      ...formData
     };
 
     try {
       await updateDoc(userRef, updates);
       toast({
         title: "Profile Updated",
-        description: "Your personal details and notification preferences have been saved.",
+        description: "Your personal details have been saved successfully.",
       });
     } catch (err: any) {
       const permissionError = new FirestorePermissionError({
@@ -95,8 +78,8 @@ export default function ProfilePage() {
       <Navigation />
       <main className="flex-1 p-8 overflow-y-auto">
         <header className="mb-10">
-          <h1 className="text-3xl font-headline font-bold mb-1">Account Profile</h1>
-          <p className="text-muted-foreground">Manage your personal information and preferences.</p>
+          <h1 className="text-3xl font-headline font-bold mb-1 text-white">Account Profile</h1>
+          <p className="text-muted-foreground">Manage your personal information and account security.</p>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -107,7 +90,7 @@ export default function ProfilePage() {
                   <AvatarImage src={`https://picsum.photos/seed/${user?.uid}/200`} />
                   <AvatarFallback className="text-4xl bg-secondary">{userData?.name?.[0] || 'T'}</AvatarFallback>
                 </Avatar>
-                <h2 className="text-2xl font-headline font-bold mb-1">{userData?.name || 'Trader'}</h2>
+                <h2 className="text-2xl font-headline font-bold mb-1 text-white">{userData?.name || 'Trader'}</h2>
                 <p className="text-sm text-muted-foreground mb-4">{userData?.email}</p>
                 
                 <div 
@@ -139,10 +122,10 @@ export default function ProfilePage() {
 
             <Card className="border-border/50 bg-card/40 backdrop-blur-sm">
               <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
+                <CardTitle className="text-lg flex items-center gap-2 text-white">
                   <Shield className="w-5 h-5 text-primary" /> Security
                 </CardTitle>
-                <CardDescription>Protect your trading account.</CardDescription>
+                <CardDescription>Protect your trading account access.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <Button variant="secondary" className="w-full justify-start h-11 px-4 font-bold text-xs uppercase tracking-widest">
@@ -158,7 +141,8 @@ export default function ProfilePage() {
           <div className="lg:col-span-2 space-y-8">
             <Card className="border-border/50 bg-card/40 backdrop-blur-sm">
               <CardHeader>
-                <CardTitle className="font-headline">Personal Details</CardTitle>
+                <CardTitle className="font-headline text-white">Personal Details</CardTitle>
+                <CardDescription>Update your contact information and location details.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid md:grid-cols-2 gap-6">
@@ -169,14 +153,14 @@ export default function ProfilePage() {
                     <Input 
                       value={formData.name} 
                       onChange={(e) => setFormData({...formData, name: e.target.value})}
-                      className="bg-secondary/30 h-11"
+                      className="bg-secondary/30 h-11 text-white"
                     />
                   </div>
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
                       <Mail className="w-3.5 h-3.5 text-primary" /> Email Address
                     </Label>
-                    <Input value={userData?.email || ''} disabled className="bg-secondary/10 text-muted-foreground" />
+                    <Input value={userData?.email || ''} disabled className="bg-secondary/10 text-muted-foreground cursor-not-allowed" />
                   </div>
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
@@ -186,7 +170,7 @@ export default function ProfilePage() {
                       placeholder="+1 (555) 000-0000" 
                       value={formData.phone}
                       onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                      className="bg-secondary/30 h-11"
+                      className="bg-secondary/30 h-11 text-white"
                     />
                   </div>
                   <div className="space-y-2">
@@ -197,69 +181,7 @@ export default function ProfilePage() {
                       placeholder="United Kingdom" 
                       value={formData.country}
                       onChange={(e) => setFormData({...formData, country: e.target.value})}
-                      className="bg-secondary/30 h-11"
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-border/50 bg-card/40 backdrop-blur-sm">
-              <CardHeader>
-                <CardTitle className="font-headline flex items-center gap-2">
-                  <Bell className="w-5 h-5 text-primary" /> Notification Preferences
-                </CardTitle>
-                <CardDescription>Control how you receive alerts and updates.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid md:grid-cols-2 gap-8">
-                  <div className="space-y-6">
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-primary border-b border-primary/10 pb-2">Delivery Channels</h4>
-                    <PreferenceToggle 
-                      icon={<MailIcon />} 
-                      title="Email Notifications" 
-                      description="Receive critical alerts via email." 
-                      checked={preferences.email}
-                      onCheckedChange={(val) => setPreferences({...preferences, email: val})}
-                    />
-                    <PreferenceToggle 
-                      icon={<Bell />} 
-                      title="In-App Notifications" 
-                      description="Show alerts in the dashboard bell icon." 
-                      checked={preferences.inApp}
-                      onCheckedChange={(val) => setPreferences({...preferences, inApp: val})}
-                    />
-                  </div>
-                  
-                  <div className="space-y-6">
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-primary border-b border-primary/10 pb-2">Alert Categories</h4>
-                    <PreferenceToggle 
-                      icon={<Trophy />} 
-                      title="Challenge Updates" 
-                      description="Pass/fail status and drawdown warnings." 
-                      checked={preferences.challenge}
-                      onCheckedChange={(val) => setPreferences({...preferences, challenge: val})}
-                    />
-                    <PreferenceToggle 
-                      icon={<Wallet />} 
-                      title="Payout Updates" 
-                      description="Withdrawal request and processing status." 
-                      checked={preferences.payout}
-                      onCheckedChange={(val) => setPreferences({...preferences, payout: val})}
-                    />
-                    <PreferenceToggle 
-                      icon={<Users />} 
-                      title="Referral Earnings" 
-                      description="New referral signups and commissions." 
-                      checked={preferences.referral}
-                      onCheckedChange={(val) => setPreferences({...preferences, referral: val})}
-                    />
-                    <PreferenceToggle 
-                      icon={<Megaphone />} 
-                      title="Admin Announcements" 
-                      description="Global platform news and maintenance." 
-                      checked={preferences.announcements}
-                      onCheckedChange={(val) => setPreferences({...preferences, announcements: val})}
+                      className="bg-secondary/30 h-11 text-white"
                     />
                   </div>
                 </div>
@@ -271,7 +193,7 @@ export default function ProfilePage() {
                     disabled={loading}
                   >
                     <Save className="w-4 h-4 mr-2" />
-                    {loading ? 'Saving Preferences...' : 'Save All Changes'}
+                    {loading ? 'Saving Changes...' : 'Save All Changes'}
                   </Button>
                 </div>
               </CardContent>
@@ -279,23 +201,6 @@ export default function ProfilePage() {
           </div>
         </div>
       </main>
-    </div>
-  );
-}
-
-function PreferenceToggle({ icon, title, description, checked, onCheckedChange }: { icon: React.ReactNode, title: string, description: string, checked: boolean, onCheckedChange: (val: boolean) => void }) {
-  return (
-    <div className="flex items-start justify-between gap-4">
-      <div className="flex items-start gap-3">
-        <div className="mt-1 p-2 rounded-lg bg-secondary text-muted-foreground group-hover:text-primary transition-colors">
-          {icon}
-        </div>
-        <div>
-          <p className="text-sm font-bold text-white">{title}</p>
-          <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
-        </div>
-      </div>
-      <Switch checked={checked} onCheckedChange={onCheckedChange} />
     </div>
   );
 }
