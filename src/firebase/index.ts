@@ -1,8 +1,10 @@
+
 'use client';
 
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getPerformance, type FirebasePerformance } from 'firebase/performance';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 import { firebaseConfig } from './config';
 
@@ -13,11 +15,17 @@ export function initializeFirebase(): {
   firebaseApp: FirebaseApp;
   firestore: Firestore;
   auth: Auth;
+  performance?: FirebasePerformance;
 } {
   const firebaseApp =
     getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
   const auth = getAuth(firebaseApp);
   const firestore = getFirestore(firebaseApp);
+  
+  let performance;
+  if (typeof window !== 'undefined') {
+    performance = getPerformance(firebaseApp);
+  }
 
   // Initialize App Check
   if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
@@ -31,7 +39,7 @@ export function initializeFirebase(): {
     }
   }
 
-  return { firebaseApp, firestore, auth };
+  return { firebaseApp, firestore, auth, performance };
 }
 
 export * from './provider';

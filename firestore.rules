@@ -3,8 +3,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // --- Helper Functions ---
-    
     function isSignedIn() {
       return request.auth != null;
     }
@@ -17,68 +15,43 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Input validation: ensures incoming data is non-null and meets basic schema requirements
-    function validateUser(data) {
-      return data.name.size() <= 100 
-        && data.email.matches('^.+@.+\\..+$')
-        && (data.phone == null || data.phone.size() <= 20);
-    }
-
-    function validateOrder(data) {
-      return data.userId == request.auth.uid 
-        && data.txHash.size() >= 10
-        && data.email.matches('^.+@.+\\..+$');
-    }
-
-    // --- Collection Rules ---
-
-    // Users: Users can only read/write their own profile and sub-collections
     match /users/{userId} {
-      allow read: if isOwner(userId);
-      allow write: if isOwner(userId) && validateUser(request.resource.data);
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isOwner(userId);
       
       match /notifications/{notifId} {
         allow read, write: if isOwner(userId);
       }
 
       match /accounts/{accountId} {
-        allow read: if isOwner(userId);
+        allow read: if isOwner(userId) || isAdmin();
         allow write: if isAdmin();
       }
     }
 
-    // Accounts: Collection Group read for Admins
-    match /{path=**}/accounts/{accountId} {
-      allow read, write: if isAdmin();
+    match /error_logs/{logId} {
+      allow create: if true; // Allow anonymous logs for boot errors
+      allow read: if isAdmin();
     }
 
-    // Orders: Users can read their own orders and create new ones; only admins can verify/update
+    match /activity_logs/{logId} {
+      allow create: if isSignedIn();
+      allow read: if isAdmin();
+    }
+
     match /orders/{orderId} {
       allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid);
-      allow create: if isSignedIn() && validateOrder(request.resource.data);
+      allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 
-    // Payouts: Users can read/write their own withdrawal requests
     match /payouts/{payoutId} {
       allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid);
       allow write: if isSignedIn() && (request.resource.data.userId == request.auth.uid);
     }
 
-    // Admin: Entirely restricted to administrative users
-    match /admin/{document=**} {
-      allow read, write: if isAdmin();
-    }
-
-    // Broadcasts: Global read for authenticated users; write restricted to admins
     match /broadcasts/{broadcastId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
-
-    // Referrals: Referrers can see their earnings
-    match /referrals/{referralId} {
-      allow read: if isSignedIn() && (resource == null || resource.data.referrerId == request.auth.uid);
       allow write: if isAdmin();
     }
 
@@ -87,9 +60,8 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
 
-    // --- Global Deny ---
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if isAdmin();
     }
   }
 }

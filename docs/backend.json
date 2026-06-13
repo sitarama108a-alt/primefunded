@@ -84,17 +84,6 @@
         "createdAt": {
           "type": "string",
           "format": "date-time"
-        },
-        "notificationPreferences": {
-          "type": "object",
-          "properties": {
-            "email": { "type": "boolean" },
-            "inApp": { "type": "boolean" },
-            "challenge": { "type": "boolean" },
-            "payout": { "type": "boolean" },
-            "referral": { "type": "boolean" },
-            "announcements": { "type": "boolean" }
-          }
         }
       },
       "required": [
@@ -102,165 +91,28 @@
         "email"
       ]
     },
-    "Notification": {
-      "title": "Notification",
-      "description": "An in-app notification for the user.",
+    "ErrorLog": {
+      "title": "Error Log",
+      "description": "A record of an application error.",
+      "type": "object",
+      "properties": {
+        "message": { "type": "string" },
+        "stack": { "type": "string" },
+        "userId": { "type": "string" },
+        "path": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] }
+      }
+    },
+    "ActivityLog": {
+      "title": "Activity Log",
+      "description": "A record of a critical user action.",
       "type": "object",
       "properties": {
         "userId": { "type": "string" },
-        "title": { "type": "string" },
-        "message": { "type": "string" },
-        "type": { "type": "string" },
-        "isRead": { "type": "boolean" },
-        "priority": { "type": "string", "enum": ["normal", "important", "urgent"] },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "sentByAdmin": { "type": "boolean" }
-      }
-    },
-    "Broadcast": {
-      "title": "Broadcast",
-      "description": "An admin broadcast message log.",
-      "type": "object",
-      "properties": {
-        "title": { "type": "string" },
-        "message": { "type": "string" },
-        "sentBy": { "type": "string" },
-        "targetGroup": { "type": "string" },
-        "sentAt": { "type": "string", "format": "date-time" },
-        "totalRecipients": { "type": "number" }
-      }
-    },
-    "Order": {
-      "title": "Order",
-      "description": "A challenge purchase order.",
-      "type": "object",
-      "properties": {
-        "userId": {
-          "type": "string"
-        },
-        "email": {
-          "type": "string"
-        },
-        "plan": {
-          "type": "string"
-        },
-        "size": {
-          "type": "string"
-        },
-        "price": {
-          "type": "string"
-        },
-        "network": {
-          "type": "string"
-        },
-        "txHash": {
-          "type": "string"
-        },
-        "status": {
-          "type": "string",
-          "enum": [
-            "pending",
-            "verified",
-            "rejected"
-          ]
-        },
-        "date": {
-          "type": "string",
-          "format": "date-time"
-        }
-      }
-    },
-    "Referral": {
-      "title": "Referral Commission",
-      "description": "A record of commission earned via referral.",
-      "type": "object",
-      "properties": {
-        "referrerId": { "type": "string" },
-        "referredUserId": { "type": "string" },
-        "referredUserEmail": { "type": "string" },
-        "orderId": { "type": "string" },
-        "plan": { "type": "string" },
-        "amount": { "type": "number" },
-        "status": { "type": "string", "enum": ["pending", "paid"] },
-        "createdAt": { "type": "string", "format": "date-time" }
-      }
-    },
-    "TradingAccount": {
-      "title": "Trading Account",
-      "description": "Details of an MT5 trading account.",
-      "type": "object",
-      "properties": {
-        "userId": {
-          "type": "string"
-        },
-        "email": {
-          "type": "string"
-        },
-        "plan": {
-          "type": "string"
-        },
-        "size": {
-          "type": "string"
-        },
-        "mt5Login": {
-          "type": "string"
-        },
-        "mt5Password": {
-          "type": "string"
-        },
-        "mt5Server": {
-          "type": "string"
-        },
-        "balance": {
-          "type": "number"
-        },
-        "status": {
-          "type": "string",
-          "enum": [
-            "active",
-            "breached",
-            "passed"
-          ]
-        },
-        "startDate": {
-          "type": "string",
-          "format": "date-time"
-        }
-      }
-    },
-    "PayoutRequest": {
-      "title": "Payout Request",
-      "description": "A request for a profit withdrawal.",
-      "type": "object",
-      "properties": {
-        "userId": {
-          "type": "string"
-        },
-        "email": {
-          "type": "string"
-        },
-        "amount": {
-          "type": "string"
-        },
-        "method": {
-          "type": "string"
-        },
-        "address": {
-          "type": "string"
-        },
-        "status": {
-          "type": "string",
-          "enum": [
-            "pending",
-            "approved",
-            "done",
-            "rejected"
-          ]
-        },
-        "date": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "action": { "type": "string" },
+        "details": { "type": "object" },
+        "timestamp": { "type": "string", "format": "date-time" }
       }
     }
   },
@@ -276,53 +128,17 @@
       },
       "description": "Stores trader profiles."
     },
-    "/users/{userId}/notifications/{notificationId}": {
+    "/error_logs/{logId}": {
       "schema": {
-        "$ref": "#/backend/entities/Notification"
+        "$ref": "#/backend/entities/ErrorLog"
       },
-      "description": "Individual user notifications."
+      "description": "System error logs."
     },
-    "/users/{userId}/accounts/{accountId}": {
+    "/activity_logs/{logId}": {
       "schema": {
-        "$ref": "#/backend/entities/TradingAccount"
+        "$ref": "#/backend/entities/ActivityLog"
       },
-      "description": "Stores user MT5 accounts in subcollections for scalability."
-    },
-    "/broadcasts/{broadcastId}": {
-      "schema": {
-        "$ref": "#/backend/entities/Broadcast"
-      },
-      "description": "Admin broadcast history."
-    },
-    "/orders/{orderId}": {
-      "schema": {
-        "$ref": "#/backend/entities/Order"
-      },
-      "description": "Stores challenge purchase orders."
-    },
-    "/payouts/{payoutId}": {
-      "schema": {
-        "$ref": "#/backend/entities/PayoutRequest"
-      },
-      "description": "Stores profit withdrawal requests."
-    },
-    "/referrals/{referralId}": {
-      "schema": {
-        "$ref": "#/backend/entities/Referral"
-      },
-      "description": "Stores referral commissions."
-    },
-    "/referralCodes/{codeId}": {
-      "schema": {
-        "type": "object",
-        "properties": {
-          "code": { "type": "string" },
-          "userId": { "type": "string" },
-          "active": { "type": "boolean" },
-          "createdAt": { "type": "string", "format": "date-time" }
-        }
-      },
-      "description": "Registry for unique referral codes."
+      "description": "User activity logs."
     }
   }
 }
