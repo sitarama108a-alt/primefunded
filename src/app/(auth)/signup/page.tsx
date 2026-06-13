@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, Suspense } from 'react';
+import { useState, Suspense, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
@@ -10,10 +10,11 @@ import { auth, db } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { TrendingUp, CheckCircle2 } from 'lucide-react';
+import { TrendingUp, CheckCircle2, XCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
+import { cn } from '@/lib/utils';
 
 function SignupContent() {
   const [name, setName] = useState('');
@@ -21,12 +22,54 @@ function SignupContent() {
   const [phone, setPhone] = useState('');
   const [country, setCountry] = useState('');
   const [password, setPassword] = useState('');
+  const [referralInput, setReferralInput] = useState('');
+  const [referralStatus, setReferralStatus] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
 
   const referralCodeFromUrl = searchParams.get('ref');
+
+  // Handle URL referral code
+  useEffect(() => {
+    if (referralCodeFromUrl) {
+      setReferralInput(referralCodeFromUrl);
+      validateCode(referralCodeFromUrl);
+    }
+  }, [referralCodeFromUrl]);
+
+  // Debounced real-time validation
+  useEffect(() => {
+    if (!referralInput || referralInput === referralCodeFromUrl) return;
+    
+    const timeout = setTimeout(() => {
+      validateCode(referralInput);
+    }, 500);
+
+    return () => clearTimeout(timeout);
+  }, [referralInput]);
+
+  const validateCode = async (code: string) => {
+    if (!code) {
+      setReferralStatus('idle');
+      return;
+    }
+    setReferralStatus('validating');
+    try {
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('referralCode', '==', code));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        setReferralStatus('valid');
+      } else {
+        setReferralStatus('invalid');
+      }
+    } catch (err) {
+      setReferralStatus('invalid');
+    }
+  };
 
   const generateReferralCode = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -51,11 +94,11 @@ function SignupContent() {
       const traderId = generateTraderId();
       const referralCode = generateReferralCode();
 
-      // Find referring user UID if ref code exists
+      // Find referring user UID if ref code exists and is valid
       let referredByUid = null;
-      if (referralCodeFromUrl) {
+      if (referralStatus === 'valid' && referralInput) {
         const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('referralCode', '==', referralCodeFromUrl));
+        const q = query(usersRef, where('referralCode', '==', referralInput));
         const querySnapshot = await getDocs(q);
         if (!querySnapshot.empty) {
           referredByUid = querySnapshot.docs[0].id;
@@ -129,11 +172,6 @@ function SignupContent() {
           <div className="text-center">
             <h2 className="text-3xl font-headline font-bold">Create Account</h2>
             <p className="text-muted-foreground mt-2">Join the world's most transparent funding firm</p>
-            {referralCodeFromUrl && (
-              <p className="text-xs text-primary font-bold mt-2 uppercase tracking-widest">
-                Referral Code Active: {referralCodeFromUrl}
-              </p>
-            )}
           </div>
           
           <form onSubmit={handleSignup} className="space-y-4">
@@ -196,6 +234,39 @@ function SignupContent() {
                 className="h-11 bg-secondary/50"
               />
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="referral" className="flex items-center gap-2">
+                Referral Code (Optional)
+                {referralStatus === 'validating' && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
+                {referralStatus === 'valid' && <CheckCircle2 className="w-3 h-3 text-accent" />}
+                {referralStatus === 'invalid' && <XCircle className="w-3 h-3 text-destructive" />}
+              </Label>
+              <div className="relative">
+                <Input 
+                  id="referral" 
+                  placeholder="Enter referral code e.g. PRIME-AB1234" 
+                  value={referralInput}
+                  onChange={(e) => setReferralInput(e.target.value.toUpperCase())}
+                  readOnly={!!referralCodeFromUrl}
+                  className={cn(
+                    "h-11 bg-secondary/50 transition-all uppercase font-mono text-xs",
+                    referralStatus === 'valid' && "border-accent/50 focus-visible:ring-accent",
+                    referralStatus === 'invalid' && "border-destructive/50 focus-visible:ring-destructive"
+                  )}
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground px-1">
+                {referralStatus === 'valid' ? (
+                  <span className="text-accent flex items-center gap-1"><CheckCircle2 className="w-2.5 h-2.5" /> Referral code applied!</span>
+                ) : referralStatus === 'invalid' ? (
+                  <span className="text-destructive flex items-center gap-1"><AlertCircle className="w-2.5 h-2.5" /> Invalid referral code</span>
+                ) : (
+                  "Have a referral code? Enter it to support your referrer"
+                )}
+              </p>
+            </div>
+
             <div className="flex items-center space-x-2 pt-2">
               <input type="checkbox" id="terms" className="rounded border-border bg-secondary" required />
               <label htmlFor="terms" className="text-[10px] text-muted-foreground">
