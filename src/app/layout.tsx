@@ -1,17 +1,24 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
 import { Toaster } from '@/components/ui/toaster';
 import { FirebaseClientProvider } from '@/firebase';
 import { ProgressBar } from '@/components/ProgressBar';
 import { PerformanceTracker } from '@/components/PerformanceTracker';
+import { Suspense } from 'react';
+
+export const viewport: Viewport = {
+  themeColor: '#020817',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+};
 
 export const metadata: Metadata = {
   title: 'PrimeFunded | Institutional Trading Challenges',
   description: 'Scale your trading career with PrimeFunded institutional funding. No consistency rules, daily payouts, and up to $200,000 in capital.',
   keywords: ['prop firm', 'funded account', 'trading challenge', 'forex funding', 'institutional capital'],
   authors: [{ name: 'PrimeFunded Global' }],
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
   robots: 'index, follow',
   openGraph: {
     type: 'website',
@@ -45,15 +52,16 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <head>
-        <meta name="theme-color" content="#020817" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body antialiased bg-background text-foreground">
         <FirebaseClientProvider>
-          <PerformanceTracker />
-          <ProgressBar />
+          <Suspense fallback={null}>
+            <PerformanceTracker />
+            <ProgressBar />
+          </Suspense>
           <AuthProvider>
             {children}
             <Toaster />
