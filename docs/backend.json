@@ -9,6 +9,10 @@
         "uid": {
           "type": "string"
         },
+        "traderId": {
+          "type": "string",
+          "description": "Unique 8-digit numeric identifier for the trader."
+        },
         "name": {
           "type": "string"
         },

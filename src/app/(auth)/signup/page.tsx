@@ -32,8 +32,12 @@ export default function SignupPage() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       
+      // Generate unique 8-digit numeric ID
+      const traderId = Math.floor(10000000 + Math.random() * 90000000).toString();
+
       const userData = {
         uid: user.uid,
+        traderId, // New 8-digit numeric ID
         name,
         email,
         phone,
@@ -84,7 +88,7 @@ export default function SignupPage() {
             <FeatureItem text="Up to $200k in institutional capital" />
             <FeatureItem text="No hidden rules or time limits" />
             <FeatureItem text="Fast payouts and bi-weekly withdrawals" />
-            <FeatureItem text="80/20 Profit Split (up to 90%)" />
+            <FeatureItem text="80% Profit Split" />
           </div>
         </div>
       </div>

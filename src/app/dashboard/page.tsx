@@ -16,17 +16,16 @@ import {
   ShieldCheck,
   CheckCircle2,
   Clock,
-  Circle,
   BarChart3,
-  AlertTriangle,
-  User
+  User,
+  Copy,
+  Check
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { aiComplianceMonitorAlerts } from '@/ai/flows/ai-compliance-monitor-alerts';
 import { useFirestore, useCollection } from '@/firebase';
 import { where, doc, updateDoc } from 'firebase/firestore';
@@ -36,6 +35,7 @@ export default function DashboardPage() {
   const { user, userData, loading: authLoading } = useAuth();
   const [isConnected, setIsConnected] = useState(true);
   const [compliance, setCompliance] = useState<any>(null);
+  const [copied, setCopied] = useState(false);
   const { toast } = useToast();
   const db = useFirestore();
 
@@ -107,17 +107,39 @@ export default function DashboardPage() {
   }, [activeAccount?.id, activeAccount?.plan]);
 
   const metrics = useMemo(() => {
-    const balance = activeAccount?.balance || userData?.balance || 0;
+    // If no active account, everything is zero
+    if (!activeAccount) {
+      return {
+        balance: 0,
+        equity: 0,
+        dailyPnL: 0,
+        winRate: 0,
+        tradesToday: 0,
+        profitTarget: 0,
+        currentProfitPercent: 0
+      };
+    }
+
+    const balance = activeAccount?.balance || 0;
     return {
       balance,
-      equity: activeAccount?.balance ? activeAccount.balance * 1.02 : (userData?.balance || 100000) * 1.02,
+      equity: balance * 1.02, // Simulated equity
       dailyPnL: 0,
       winRate: 0,
       tradesToday: 0,
       profitTarget: activeAccount?.plan?.includes('1-Step') ? 10 : activeAccount?.plan?.includes('2-Step') ? 8 : 0,
       currentProfitPercent: 0
     };
-  }, [activeAccount, userData]);
+  }, [activeAccount]);
+
+  const copyTraderId = () => {
+    if (userData?.traderId) {
+      navigator.clipboard.writeText(userData.traderId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast({ title: "Copied!", description: "Trader ID copied to clipboard." });
+    }
+  };
 
   if (authLoading || accountsLoading) {
     return (
@@ -168,10 +190,23 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <header className="flex justify-between items-center mb-10">
+        <header className="flex justify-between items-start mb-10">
           <div>
             <h1 className="text-3xl font-headline font-bold mb-1">Trader Terminal</h1>
-            <p className="text-muted-foreground">Welcome back, {userData?.name || 'Trader'}.</p>
+            <div className="flex flex-col gap-2">
+              <p className="text-muted-foreground">Welcome back, {userData?.name || 'Trader'}.</p>
+              
+              {/* Numeric UID Badge */}
+              <div className="flex items-center gap-2 mt-1">
+                <div className="flex items-center gap-2 px-3 py-1 bg-secondary border border-primary/20 rounded-lg group hover:border-primary/50 transition-colors cursor-pointer" onClick={copyTraderId}>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-primary">UID:</span>
+                  <span className="font-mono text-sm font-bold text-white">{userData?.traderId || '--------'}</span>
+                  <button className="text-muted-foreground group-hover:text-primary transition-colors">
+                    {copied ? <Check className="w-3 h-3 text-accent" /> : <Copy className="w-3 h-3" />}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
           
           <div className="flex items-center gap-4">
@@ -188,27 +223,29 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <MetricCard 
             title="Account Balance" 
-            value={`$${metrics.balance.toLocaleString()}`} 
+            value={`$${metrics.balance.toLocaleString('en-US')}`} 
             icon={<Wallet className="text-primary" />}
-            footer={activeAccount ? `${activeAccount.size} ${activeAccount.plan}` : 'No active account'}
+            footer={activeAccount ? `${activeAccount.size} ${activeAccount.plan}` : 'NO ACTIVE ACCOUNT'}
           />
           <MetricCard 
             title="Current Equity" 
-            value={`$${metrics.equity.toLocaleString()}`} 
+            value={`$${metrics.equity.toLocaleString('en-US')}`} 
             icon={<Activity className="text-accent" />}
             trend={0}
+            footer={!activeAccount ? 'NO ACTIVE ACCOUNT' : undefined}
           />
           <MetricCard 
             title="Today's P&L" 
-            value={`$${metrics.dailyPnL.toLocaleString()}`} 
+            value={`$${metrics.dailyPnL.toLocaleString('en-US')}`} 
             icon={metrics.dailyPnL >= 0 ? <TrendingUp className="text-accent" /> : <TrendingDown className="text-destructive" />}
             trend={0}
+            footer={!activeAccount ? 'NO ACTIVE ACCOUNT' : undefined}
           />
           <MetricCard 
             title="Win Rate" 
             value={`${metrics.winRate}%`} 
             icon={<CheckCircle2 className="text-primary" />}
-            footer={`${metrics.tradesToday} trades executed today`}
+            footer={activeAccount ? `${metrics.tradesToday} trades executed today` : 'NO ACTIVE ACCOUNT'}
           />
         </div>
 
@@ -247,7 +284,9 @@ export default function DashboardPage() {
                 <div className="pt-4 border-t border-primary/10">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Progress</span>
-                    <Badge className="bg-accent text-accent-foreground font-bold px-2 py-0.5 text-[9px]">ACTIVE</Badge>
+                    <Badge className={activeAccount ? "bg-accent text-accent-foreground font-bold px-2 py-0.5 text-[9px]" : "bg-muted text-muted-foreground font-bold px-2 py-0.5 text-[9px]"}>
+                      {activeAccount ? 'ACTIVE' : 'INACTIVE'}
+                    </Badge>
                   </div>
                   <div className="space-y-1">
                     <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider">

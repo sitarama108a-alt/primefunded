@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useState, useMemo, Suspense } from 'react';
+import { useState, useMemo, Suspense, useEffect } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,7 +35,8 @@ import {
   User,
   Activity,
   UserCheck,
-  AlertTriangle
+  AlertTriangle,
+  Fingerprint
 } from 'lucide-react';
 import { useFirestore, useCollection } from '@/firebase';
 import { doc, updateDoc, deleteDoc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -63,6 +65,19 @@ export default function AdminPage() {
   const { data: accounts } = useCollection<any>('accounts', emptyConstraints);
   const { data: payouts } = useCollection<any>('payouts', emptyConstraints);
 
+  // Auto-assign numeric UID to existing users if missing
+  useEffect(() => {
+    if (isAuthenticated && traders.length > 0) {
+      traders.forEach(trader => {
+        if (!trader.traderId) {
+          const traderId = Math.floor(10000000 + Math.random() * 90000000).toString();
+          const userRef = doc(db, 'users', trader.uid);
+          updateDoc(userRef, { traderId });
+        }
+      });
+    }
+  }, [isAuthenticated, traders, db]);
+
   const filteredTraders = useMemo(() => {
     if (!searchTerm) return traders;
     const lower = searchTerm.toLowerCase();
@@ -71,6 +86,7 @@ export default function AdminPage() {
       t.email?.toLowerCase().includes(lower) ||
       t.phone?.includes(lower) ||
       t.uid?.toLowerCase().includes(lower) ||
+      t.traderId?.toLowerCase().includes(lower) || // Search by numeric UID
       t.country?.toLowerCase().includes(lower)
     );
   }, [traders, searchTerm]);
@@ -109,7 +125,6 @@ export default function AdminPage() {
 
       await setDoc(doc(db, 'accounts', accountId), accountData);
       
-      // Update user document too for quick metrics
       const userRef = doc(db, 'users', selectedUser.uid);
       await updateDoc(userRef, {
         plan: provisionPlan,
@@ -210,8 +225,8 @@ export default function AdminPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 <StatCard title="Total Traders" value={traders.length.toString()} icon={<Users />} color="blue" />
                 <StatCard title="Total Orders" value={orders.length.toString()} icon={<ShoppingCart />} color="amber" />
-                <StatCard title="Total Revenue" value={`$${orders.reduce((acc, o) => acc + (parseFloat(o.price?.replace('$', '').replace(',', '') || '0')), 0).toLocaleString()}`} icon={<DollarSign />} color="green" />
-                <StatCard title="Payouts Sent" value={`$${payouts?.filter(p => p.status === 'done').reduce((acc, p) => acc + (parseFloat(p.amount || '0')), 0).toLocaleString() || '0'}`} icon={<Wallet />} color="purple" />
+                <StatCard title="Total Revenue" value={`$${orders.reduce((acc, o) => acc + (parseFloat(o.price?.replace('$', '').replace(',', '') || '0')), 0).toLocaleString('en-US')}`} icon={<DollarSign />} color="green" />
+                <StatCard title="Payouts Sent" value={`$${payouts?.filter(p => p.status === 'done').reduce((acc, p) => acc + (parseFloat(p.amount || '0')), 0).toLocaleString('en-US') || '0'}`} icon={<Wallet />} color="purple" />
               </div>
 
               <div className="grid lg:grid-cols-2 gap-8">
@@ -328,6 +343,7 @@ export default function AdminPage() {
                     <table className="w-full text-sm text-left">
                       <thead>
                         <tr className="border-b border-border bg-secondary/30 text-muted-foreground uppercase text-[10px] font-bold tracking-widest">
+                          <th className="py-4 px-4">Trader ID</th>
                           <th className="py-4 px-4">Name/Contact</th>
                           <th className="py-4 px-4">Location</th>
                           <th className="py-4 px-4">Signup Info</th>
@@ -338,6 +354,14 @@ export default function AdminPage() {
                       <tbody className="divide-y divide-border/50">
                         {filteredTraders.map((trader) => (
                           <tr key={trader.id} className="hover:bg-secondary/10 transition-colors">
+                            <td className="py-4 px-4">
+                              <div className="flex items-center gap-2">
+                                <div className="p-1.5 bg-primary/10 rounded-lg">
+                                  <Fingerprint className="w-4 h-4 text-primary" />
+                                </div>
+                                <span className="font-mono text-sm font-bold">{trader.traderId || '--------'}</span>
+                              </div>
+                            </td>
                             <td className="py-4 px-4">
                               <div className="flex items-center gap-3">
                                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20">
@@ -358,7 +382,7 @@ export default function AdminPage() {
                             </td>
                             <td className="py-4 px-4">
                               <div className="flex flex-col gap-1">
-                                <span className="text-[10px] font-mono text-muted-foreground">UID: {trader.uid?.substring(0, 8)}...</span>
+                                <span className="text-[10px] font-mono text-muted-foreground">Auth: {trader.uid?.substring(0, 8)}...</span>
                                 <span className="text-[9px] text-muted-foreground uppercase">{new Date(trader.joinDate || trader.createdAt?.seconds * 1000).toLocaleDateString()}</span>
                               </div>
                             </td>
@@ -409,7 +433,7 @@ export default function AdminPage() {
                         {payouts?.map((p) => (
                           <tr key={p.id} className="hover:bg-secondary/10 transition-colors">
                             <td className="py-4 px-4 font-bold">{p.email}</td>
-                            <td className="py-4 px-4 text-accent font-bold text-lg">${p.amount}</td>
+                            <td className="py-4 px-4 text-accent font-bold text-lg">${p.amount?.toLocaleString('en-US')}</td>
                             <td className="py-4 px-4">
                               <div className="font-bold text-xs">{p.method}</div>
                               <div className="text-[10px] text-muted-foreground font-mono truncate max-w-[150px]">{p.address}</div>
@@ -613,7 +637,6 @@ export default function AdminPage() {
 
       await setDoc(doc(db, 'accounts', accountId), accountData);
       
-      // Also update user profile with latest account info
       const userRef = doc(db, 'users', order.userId);
       await updateDoc(userRef, {
         plan: order.plan,
