@@ -45,12 +45,15 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  LayoutDashboard
+  LayoutDashboard,
+  ChevronLeft
 } from 'lucide-react';
 import { useFirestore, useCollection } from '@/firebase';
 import { doc, updateDoc, deleteDoc, setDoc, serverTimestamp, getDoc, addDoc, collection } from 'firebase/firestore';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import DashboardPage from '@/app/dashboard/page';
+import { cn } from '@/lib/utils';
+import { sendKycApprovalEmail, sendKycRejectionEmail } from '@/lib/email';
 
 const ADMIN_PASSWORD = "93463962569392846256";
 
@@ -203,6 +206,16 @@ export default function AdminPage() {
         kycRejectionReason: reason || null,
         kycVerifiedAt: status === 'verified' ? serverTimestamp() : null
       });
+
+      const userSnap = await getDoc(userRef);
+      const email = userSnap.data()?.email;
+
+      if (status === 'verified') {
+        await sendKycApprovalEmail(email);
+      } else {
+        await sendKycRejectionEmail(email, reason || "Documents did not meet our requirements.");
+      }
+
       toast({ title: `KYC ${status === 'verified' ? 'Approved' : 'Rejected'}` });
       setIsManageAccountOpen(false);
     } catch (err) {
@@ -279,7 +292,7 @@ export default function AdminPage() {
             <TabsTrigger value="overview"><Activity className="w-4 h-4 mr-2" /> Overview</TabsTrigger>
             <TabsTrigger value="orders"><ShoppingCart className="w-4 h-4 mr-2" /> Orders</TabsTrigger>
             <TabsTrigger value="users"><Users className="w-4 h-4 mr-2" /> Users</TabsTrigger>
-            <TabsTrigger value="kyc"><Fingerprint className="w-4 h-4 mr-2" /> KYC</TabsTrigger>
+            <TabsTrigger value="kyc"><Fingerprint className="w-4 h-4 mr-2" /> KYC Hub</TabsTrigger>
             <TabsTrigger value="referrals"><TrendingUp className="w-4 h-4 mr-2" /> Referrals</TabsTrigger>
             <TabsTrigger value="payouts"><Wallet className="w-4 h-4 mr-2" /> Payouts</TabsTrigger>
           </TabsList>
@@ -291,32 +304,10 @@ export default function AdminPage() {
               <StatCard title="Pending Payouts" value={payouts?.filter(p => p.status === 'pending').length} icon={<Wallet />} />
               <StatCard title="Total Referral Owed" value={`$${referrals?.filter(r => r.status === 'pending').reduce((acc, r) => acc + (r.amount || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`} icon={<TrendingUp />} />
             </div>
-            
-            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card className="bg-secondary/20">
-                <CardHeader>
-                  <CardTitle className="text-lg">System Config</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">Min. Payout (Profits)</span>
-                    <span className="font-bold">$100.00</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">Min. Payout (Referrals)</span>
-                    <span className="font-bold">$100.00</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">Referral Commission Cap</span>
-                    <span className="font-bold text-accent">$50.00 / purchase</span>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
           </TabsContent>
 
           <TabsContent value="orders">
-            <Card className="bg-card/40">
+            <Card className="bg-card/40 backdrop-blur-sm border-border/50">
               <CardContent className="p-0">
                 <table className="w-full text-sm">
                   <thead>
@@ -329,7 +320,7 @@ export default function AdminPage() {
                   </thead>
                   <tbody>
                     {orders.map((o) => (
-                      <tr key={o.id} className="border-b hover:bg-secondary/10">
+                      <tr key={o.id} className="border-b hover:bg-secondary/10 transition-colors">
                         <td className="py-4 px-4">{o.email}</td>
                         <td className="py-4 px-4 font-bold">{o.plan} - {o.size}</td>
                         <td className="py-4 px-4"><Badge variant={o.status === 'verified' ? 'default' : 'outline'}>{o.status}</Badge></td>
@@ -345,7 +336,7 @@ export default function AdminPage() {
           </TabsContent>
 
           <TabsContent value="users">
-            <Card className="bg-card/40">
+            <Card className="bg-card/40 backdrop-blur-sm border-border/50">
               <CardHeader>
                 <div className="flex justify-between">
                   <Input placeholder="Search users by Name, Email, UID or Referral Code..." className="max-w-md" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
@@ -369,14 +360,14 @@ export default function AdminPage() {
                         <tr key={t.id} className="border-b hover:bg-secondary/10 transition-colors">
                           <td className="py-4 px-4">
                             <div className="flex flex-col">
-                              <span className="font-mono text-xs font-bold">{t.traderId}</span>
+                              <span className="font-mono text-xs font-bold text-white">{t.traderId}</span>
                               <span className="text-[10px] text-primary font-bold">{t.referralCode}</span>
                             </div>
                           </td>
-                          <td className="py-4 px-4 font-bold">{t.name}</td>
+                          <td className="py-4 px-4 font-bold text-white">{t.name}</td>
                           <td className="py-4 px-4">
                             <div className="flex flex-col">
-                              <span>{t.email}</span>
+                              <span className="text-white">{t.email}</span>
                               <span className="text-xs text-muted-foreground">{t.phone || 'No phone'}</span>
                             </div>
                           </td>
@@ -395,26 +386,26 @@ export default function AdminPage() {
                             </div>
                           </td>
                           <td className="py-4 px-4">
-                            <Badge variant="secondary">{t.codeChangesCount || 0} / 3</Badge>
+                            <Badge variant="secondary" className="bg-secondary/50 text-white">{t.codeChangesCount || 0} / 3</Badge>
                           </td>
                           <td className="py-4 px-4 text-right">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button>
+                                <Button variant="ghost" size="icon" className="hover:bg-secondary"><MoreVertical className="w-4 h-4 text-white" /></Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-56">
-                                <DropdownMenuLabel>User Actions</DropdownMenuLabel>
-                                <DropdownMenuItem onClick={() => { setSelectedUser(t); setIsManageAccountOpen(true); }}>
+                              <DropdownMenuContent align="end" className="w-56 bg-card border-border/50 shadow-2xl">
+                                <DropdownMenuLabel className="text-white">User Actions</DropdownMenuLabel>
+                                <DropdownMenuItem className="text-white hover:bg-secondary" onClick={() => { setSelectedUser(t); setIsManageAccountOpen(true); }}>
                                   <User className="w-4 h-4 mr-2" /> Manage Account
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setPreviewUserId(t.id)}>
+                                <DropdownMenuItem className="text-white hover:bg-secondary" onClick={() => setPreviewUserId(t.id)}>
                                   <LayoutDashboard className="w-4 h-4 mr-2" /> View Dashboard
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => { setSelectedUser(t); setIsGrantFreeOpen(true); }}>
+                                <DropdownMenuItem className="text-white hover:bg-secondary" onClick={() => { setSelectedUser(t); setIsGrantFreeOpen(true); }}>
                                   <Gift className="w-4 h-4 mr-2" /> Give Free Account
                                 </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-destructive" onClick={() => handleToggleUserStatus(t.id, t.status)}>
+                                <DropdownMenuSeparator className="bg-border/50" />
+                                <DropdownMenuItem className="text-destructive hover:bg-destructive/10" onClick={() => handleToggleUserStatus(t.id, t.status)}>
                                   <Ban className="w-4 h-4 mr-2" /> {t.status === 'suspended' ? 'Reactivate' : 'Suspend Account'}
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
@@ -436,9 +427,9 @@ export default function AdminPage() {
               <StatCard title="Rejected" value={kycStats.rejected} icon={<XCircle className="text-destructive" />} />
             </div>
 
-            <Card className="bg-card/40">
+            <Card className="bg-card/40 border-border/50">
               <CardHeader>
-                <CardTitle>KYC Submissions</CardTitle>
+                <CardTitle className="text-white">KYC Submissions</CardTitle>
                 <CardDescription>Review and verify user identity documents.</CardDescription>
               </CardHeader>
               <CardContent className="p-0">
@@ -453,10 +444,10 @@ export default function AdminPage() {
                   </thead>
                   <tbody>
                     {traders.filter(t => t.kycStatus === 'pending').map((t) => (
-                      <tr key={t.id} className="border-b hover:bg-secondary/10">
+                      <tr key={t.id} className="border-b hover:bg-secondary/10 transition-colors">
                         <td className="py-4 px-4">
                           <div className="flex flex-col">
-                            <span className="font-bold">{t.name}</span>
+                            <span className="font-bold text-white">{t.name}</span>
                             <span className="text-xs text-muted-foreground">{t.email}</span>
                           </div>
                         </td>
@@ -478,10 +469,74 @@ export default function AdminPage() {
             </Card>
           </TabsContent>
 
+          <TabsContent value="payouts">
+            <Card className="bg-card/40 backdrop-blur-sm border-border/50">
+              <CardContent className="p-0">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-secondary/30">
+                      <th className="py-4 px-4 text-left uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Trader</th>
+                      <th className="py-4 px-4 text-left uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Amount</th>
+                      <th className="py-4 px-4 text-left uppercase text-[10px] font-bold tracking-widest text-muted-foreground">KYC Status</th>
+                      <th className="py-4 px-4 text-left uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Request Status</th>
+                      <th className="py-4 px-4 text-right uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {payouts?.map((p) => {
+                      const user = traders.find(t => t.id === p.userId);
+                      return (
+                        <tr key={p.id} className="border-b hover:bg-secondary/10 transition-colors text-white">
+                          <td className="py-4 px-4">
+                            <div className="flex flex-col">
+                              <span className="font-bold">{user?.name || 'Unknown'}</span>
+                              <span className="text-xs text-muted-foreground">{p.email}</span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4 font-bold text-accent">${parseFloat(p.amount).toLocaleString('en-US')}</td>
+                          <td className="py-4 px-4">
+                            {user?.kycVerified ? (
+                              <Badge className="bg-accent text-accent-foreground text-[9px] h-5">KYC ✅ VERIFIED</Badge>
+                            ) : user?.kycStatus === 'pending' ? (
+                              <Badge variant="outline" className="border-amber-500 text-amber-500 text-[9px] h-5">KYC ⏳ PENDING</Badge>
+                            ) : (
+                              <Badge variant="destructive" className="text-[9px] h-5">KYC ❌ UNVERIFIED</Badge>
+                            )}
+                          </td>
+                          <td className="py-4 px-4"><Badge variant={p.status === 'done' ? 'default' : 'outline'}>{p.status}</Badge></td>
+                          <td className="py-4 px-4 text-right">
+                            {p.status === 'pending' && (
+                              <div className="flex justify-end gap-2">
+                                <Button 
+                                  size="sm" 
+                                  className="bg-accent text-accent-foreground font-bold"
+                                  disabled={!user?.kycVerified}
+                                  onClick={() => updateDoc(doc(db, 'payouts', p.id), { status: 'approved' })}
+                                >
+                                  Approve
+                                </Button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {payouts?.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="py-20 text-center text-muted-foreground italic">No payout requests found.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          {/* ... Referrals tab content matching same styling ... */}
           <TabsContent value="referrals">
-            <Card className="bg-card/40">
+            <Card className="bg-card/40 backdrop-blur-sm border-border/50">
               <CardHeader>
-                <CardTitle>Referral Commissions</CardTitle>
+                <CardTitle className="text-white">Referral Commissions</CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 <table className="w-full text-sm">
@@ -496,45 +551,14 @@ export default function AdminPage() {
                   </thead>
                   <tbody>
                     {referrals.map((r) => (
-                      <tr key={r.id} className="border-b hover:bg-secondary/10">
-                        <td className="py-4 px-4 font-mono">{r.referrerId.substring(0, 8)}...</td>
+                      <tr key={r.id} className="border-b hover:bg-secondary/10 transition-colors text-white">
+                        <td className="py-4 px-4 font-mono font-bold text-primary">{traders.find(t => t.id === r.referrerId)?.traderId || 'N/A'}</td>
                         <td className="py-4 px-4">{r.referredUserEmail}</td>
-                        <td className="py-4 px-4 text-accent font-bold">${r.amount.toFixed(2)}</td>
+                        <td className="py-4 px-4 text-accent font-bold">${parseFloat(r.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
                         <td className="py-4 px-4"><Badge variant={r.status === 'paid' ? 'default' : 'outline'}>{r.status}</Badge></td>
                         <td className="py-4 px-4 text-right">
                           {r.status === 'pending' && (
-                            <Button size="sm" className="bg-accent" onClick={() => handleUpdateReferral(r.id, 'paid')}>Mark Paid</Button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="payouts">
-            <Card className="bg-card/40">
-              <CardContent className="p-0">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-secondary/30">
-                      <th className="py-4 px-4 text-left uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Trader</th>
-                      <th className="py-4 px-4 text-left uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Amount</th>
-                      <th className="py-4 px-4 text-left uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Status</th>
-                      <th className="py-4 px-4 text-right uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {payouts?.map((p) => (
-                      <tr key={p.id} className="border-b hover:bg-secondary/10">
-                        <td className="py-4 px-4">{p.email}</td>
-                        <td className="py-4 px-4 font-bold">${p.amount}</td>
-                        <td className="py-4 px-4"><Badge variant={p.status === 'done' ? 'default' : 'outline'}>{p.status}</Badge></td>
-                        <td className="py-4 px-4 text-right">
-                          {p.status === 'pending' && (
-                            <Button size="sm" onClick={() => updateDoc(doc(db, 'payouts', p.id), { status: 'approved' })}>Approve</Button>
+                            <Button size="sm" className="bg-accent text-accent-foreground font-bold" onClick={() => handleUpdateReferral(r.id, 'paid')}>Mark Paid</Button>
                           )}
                         </td>
                       </tr>
@@ -548,9 +572,9 @@ export default function AdminPage() {
 
         {/* Manage Account Dialog */}
         <Dialog open={isManageAccountOpen} onOpenChange={setIsManageAccountOpen}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-card border-primary/20">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-card border-primary/20 shadow-2xl">
             <DialogHeader>
-              <DialogTitle className="text-2xl font-headline flex items-center gap-2">
+              <DialogTitle className="text-2xl font-headline flex items-center gap-2 text-white">
                 <User className="w-6 h-6 text-primary" /> Manage User Account
               </DialogTitle>
               <DialogDescription>
@@ -564,7 +588,7 @@ export default function AdminPage() {
                   <h4 className="text-xs font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
                     <User className="w-3.5 h-3.5" /> Personal Info
                   </h4>
-                  <div className="grid grid-cols-2 gap-4 p-4 rounded-xl bg-secondary/30 border border-white/5">
+                  <div className="grid grid-cols-2 gap-4 p-4 rounded-xl bg-secondary/30 border border-white/5 shadow-inner">
                     <DetailBox label="Full Name" value={selectedUser?.name} />
                     <DetailBox label="Email" value={selectedUser?.email} />
                     <DetailBox label="Phone" value={selectedUser?.phone || 'N/A'} />
@@ -580,29 +604,38 @@ export default function AdminPage() {
                   <h4 className="text-xs font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
                     <Fingerprint className="w-3.5 h-3.5" /> KYC Status
                   </h4>
-                  <div className="p-4 rounded-xl bg-secondary/30 border border-white/5 space-y-4">
+                  <div className="p-4 rounded-xl bg-secondary/30 border border-white/5 space-y-4 shadow-inner">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium">Current Status:</span>
+                      <span className="text-sm font-medium text-white">Current Status:</span>
                       <Badge variant={selectedUser?.kycVerified ? 'default' : 'outline'} className={selectedUser?.kycVerified ? 'bg-accent text-accent-foreground' : 'text-amber-500 border-amber-500'}>
                         {selectedUser?.kycVerified ? 'VERIFIED' : selectedUser?.kycStatus?.toUpperCase() || 'NOT SUBMITTED'}
                       </Badge>
                     </div>
                     {selectedUser?.kycStatus === 'pending' && (
                       <div className="pt-4 border-t border-white/5 space-y-4">
+                        <div className="space-y-2 text-center py-4 bg-background/30 rounded-lg">
+                          <p className="text-xs text-muted-foreground mb-4 italic">Verification documents should be reviewed against compliance standards.</p>
+                        </div>
                         <div className="space-y-2">
-                          <Label>Rejection Reason (Optional)</Label>
+                          <Label className="text-white">Rejection Reason (Optional)</Label>
                           <Input 
                             placeholder="e.g. ID blurry, wrong document type..." 
                             value={rejectionReason}
                             onChange={(e) => setRejectionReason(e.target.value)}
-                            className="bg-background/50"
+                            className="bg-background/50 border-border"
                           />
                         </div>
                         <div className="flex gap-2">
-                          <Button className="flex-1 bg-accent text-accent-foreground" onClick={() => handleUpdateKyc(selectedUser.id, 'verified')}>Approve KYC</Button>
-                          <Button variant="destructive" className="flex-1" onClick={() => handleUpdateKyc(selectedUser.id, 'rejected', rejectionReason)}>Reject KYC</Button>
+                          <Button className="flex-1 bg-accent text-accent-foreground font-bold" onClick={() => handleUpdateKyc(selectedUser.id, 'verified')}>Approve KYC</Button>
+                          <Button variant="destructive" className="flex-1 font-bold" onClick={() => handleUpdateKyc(selectedUser.id, 'rejected', rejectionReason)}>Reject KYC</Button>
                         </div>
                       </div>
+                    )}
+                    {selectedUser?.kycStatus === 'rejected' && (
+                       <div className="p-2 bg-destructive/10 rounded-lg">
+                         <p className="text-[10px] text-destructive font-bold uppercase mb-1">Last Rejection Reason:</p>
+                         <p className="text-xs text-white">{selectedUser?.kycRejectionReason}</p>
+                       </div>
                     )}
                   </div>
                 </div>
@@ -613,28 +646,28 @@ export default function AdminPage() {
                   <h4 className="text-xs font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
                     <Activity className="w-3.5 h-3.5" /> Account Access & Trading
                   </h4>
-                  <div className="p-4 rounded-xl bg-secondary/30 border border-white/5 space-y-4">
+                  <div className="p-4 rounded-xl bg-secondary/30 border border-white/5 space-y-4 shadow-inner">
                     <div className="flex flex-col gap-2">
                       <Button 
                         variant="secondary" 
-                        className="w-full justify-start" 
+                        className="w-full justify-start font-bold bg-background/50 hover:bg-background" 
                         onClick={() => setPreviewUserId(selectedUser.id)}
                       >
-                        <LayoutDashboard className="w-4 h-4 mr-2" /> View Dashboard (Admin View)
+                        <LayoutDashboard className="w-4 h-4 mr-2 text-primary" /> View Dashboard (Admin View)
                       </Button>
                       <Button 
                         variant="outline" 
-                        className="w-full justify-start text-destructive hover:text-destructive"
+                        className="w-full justify-start text-destructive hover:text-white hover:bg-destructive font-bold border-destructive/30"
                         onClick={() => handleToggleUserStatus(selectedUser.id, selectedUser.status)}
                       >
                         <Ban className="w-4 h-4 mr-2" /> {selectedUser?.status === 'suspended' ? 'Reactivate Account' : 'Suspend Account'}
                       </Button>
                       <Button 
                         variant="outline" 
-                        className="w-full justify-start"
+                        className="w-full justify-start font-bold text-white border-primary/30 hover:bg-primary/10"
                         onClick={() => { setIsManageAccountOpen(false); setIsGrantFreeOpen(true); }}
                       >
-                        <Gift className="w-4 h-4 mr-2" /> Give Free Challenge Access
+                        <Gift className="w-4 h-4 mr-2 text-primary" /> Give Free Challenge Access
                       </Button>
                     </div>
                   </div>
@@ -644,7 +677,7 @@ export default function AdminPage() {
                   <h4 className="text-xs font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
                     <TrendingUp className="w-3.5 h-3.5" /> Referral Info
                   </h4>
-                  <div className="p-4 rounded-xl bg-secondary/30 border border-white/5 grid grid-cols-2 gap-4">
+                  <div className="p-4 rounded-xl bg-secondary/30 border border-white/5 grid grid-cols-2 gap-4 shadow-inner">
                     <DetailBox label="Referred By" value={selectedUser?.referredBy || 'Organic'} />
                     <DetailBox label="Referral Count" value={referrals?.filter(r => r.referrerId === selectedUser?.id).length || 0} />
                     <DetailBox label="Total Earnings" value={`$${referrals?.filter(r => r.referrerId === selectedUser?.id).reduce((acc, r) => acc + (r.amount || 0), 0).toFixed(2)}`} />
@@ -655,28 +688,28 @@ export default function AdminPage() {
             </div>
             
             <DialogFooter>
-              <Button variant="secondary" onClick={() => setIsManageAccountOpen(false)}>Close Manager</Button>
+              <Button variant="secondary" onClick={() => setIsManageAccountOpen(false)} className="font-bold border-border/50">Close Manager</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
         {/* Grant Free Account Dialog */}
         <Dialog open={isGrantFreeOpen} onOpenChange={setIsGrantFreeOpen}>
-          <DialogContent className="bg-card border-primary/20">
+          <DialogContent className="bg-card border-primary/20 shadow-2xl">
             <DialogHeader>
-              <DialogTitle>Grant Free Challenge Access</DialogTitle>
+              <DialogTitle className="text-white">Grant Free Challenge Access</DialogTitle>
               <DialogDescription>
                 Provision a free trading challenge for {selectedUser?.name}. This will bypass payment verification.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label>Challenge Plan</Label>
+                <Label className="text-white">Challenge Plan</Label>
                 <Select value={provisionPlan} onValueChange={setProvisionPlan}>
-                  <SelectTrigger className="bg-background/50">
+                  <SelectTrigger className="bg-background/50 border-border text-white">
                     <SelectValue placeholder="Select Plan" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-card border-border">
                     <SelectItem value="1-Step Pro">1-Step Pro</SelectItem>
                     <SelectItem value="2-Step Classic">2-Step Classic</SelectItem>
                     <SelectItem value="3-Step Classic">3-Step Classic</SelectItem>
@@ -685,12 +718,12 @@ export default function AdminPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Account Size</Label>
+                <Label className="text-white">Account Size</Label>
                 <Select value={provisionSize} onValueChange={setProvisionSize}>
-                  <SelectTrigger className="bg-background/50">
+                  <SelectTrigger className="bg-background/50 border-border text-white">
                     <SelectValue placeholder="Select Size" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-card border-border">
                     <SelectItem value="$5,000">$5,000</SelectItem>
                     <SelectItem value="$10,000">$10,000</SelectItem>
                     <SelectItem value="$25,000">$25,000</SelectItem>
@@ -703,8 +736,8 @@ export default function AdminPage() {
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsGrantFreeOpen(false)}>Cancel</Button>
-              <Button onClick={handleGrantFreeAccess}>Grant Free Access</Button>
+              <Button variant="outline" onClick={() => setIsGrantFreeOpen(false)} className="border-border text-white hover:bg-secondary">Cancel</Button>
+              <Button onClick={handleGrantFreeAccess} className="bg-accent text-accent-foreground font-bold">Grant Free Access</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -715,12 +748,12 @@ export default function AdminPage() {
 
 function StatCard({ title, value, icon }: { title: string, value: any, icon: any }) {
   return (
-    <Card className="p-6 bg-secondary/30 group hover:border-primary/50 transition-colors">
+    <Card className="p-6 bg-card/40 border-border/50 group hover:border-primary/50 transition-all duration-300">
       <div className="flex justify-between items-center mb-4">
         <p className="text-xs font-black uppercase tracking-widest text-muted-foreground group-hover:text-primary transition-colors">{title}</p>
         <div className="text-primary group-hover:scale-110 transition-transform">{icon}</div>
       </div>
-      <p className="text-3xl font-bold font-headline tabular-nums">{value}</p>
+      <p className="text-3xl font-bold font-headline tabular-nums text-white">{value}</p>
     </Card>
   );
 }
@@ -729,26 +762,7 @@ function DetailBox({ label, value, color }: { label: string, value: any, color?:
   return (
     <div className="space-y-1">
       <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">{label}</p>
-      <p className={cn("text-sm font-bold truncate", color || "text-foreground")}>{value || 'N/A'}</p>
+      <p className={cn("text-sm font-bold truncate", color || "text-white")}>{value || 'N/A'}</p>
     </div>
   );
-}
-
-function ChevronLeft(props: any) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="m15 18-6-6 6-6" />
-    </svg>
-  )
 }

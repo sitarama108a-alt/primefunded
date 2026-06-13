@@ -20,7 +20,9 @@ import {
   User,
   Copy,
   Check,
-  ShieldAlert
+  ShieldAlert,
+  AlertTriangle,
+  ExternalLink
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -31,6 +33,7 @@ import { aiComplianceMonitorAlerts } from '@/ai/flows/ai-compliance-monitor-aler
 import { useFirestore, useCollection, useDoc } from '@/firebase';
 import { where, doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
+import Link from 'next/link';
 
 interface DashboardPageProps {
   adminViewMode?: boolean;
@@ -215,6 +218,24 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
           </div>
         )}
 
+        {/* KYC Warning Banner */}
+        {!adminViewMode && userData && !userData.kycVerified && (
+          <div className="mb-6 p-4 rounded-xl bg-destructive/10 border border-destructive/20 flex items-center justify-between shadow-lg shadow-destructive/5">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-destructive/20 flex items-center justify-center text-destructive">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-white uppercase tracking-tight">KYC Verification Required</p>
+                <p className="text-xs text-muted-foreground">Payouts and referral withdrawals are locked until you verify your identity.</p>
+              </div>
+            </div>
+            <Button size="sm" variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive hover:text-white font-bold" asChild>
+              <Link href="/kyc">Verify Now <ExternalLink className="ml-2 w-3 h-3" /></Link>
+            </Button>
+          </div>
+        )}
+
         {showProfilePrompt && !adminViewMode && (
           <div className="mb-8 p-6 rounded-2xl bg-primary/10 border border-primary/30 flex flex-col md:flex-row items-center justify-between gap-6 shadow-[0_0_20px_rgba(17,179,245,0.1)]">
             <div className="flex items-center gap-4">
@@ -222,7 +243,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                 <User className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="font-bold text-lg">Complete Your Profile</h3>
+                <h3 className="font-bold text-lg text-white">Complete Your Profile</h3>
                 <p className="text-sm text-muted-foreground">Please provide your contact details to enable full dashboard features.</p>
               </div>
             </div>
@@ -252,7 +273,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
 
         <header className="flex justify-between items-start mb-10">
           <div>
-            <h1 className="text-3xl font-headline font-bold mb-1">Trader Terminal</h1>
+            <h1 className="text-3xl font-headline font-bold mb-1 text-white">Trader Terminal</h1>
             <div className="flex flex-col gap-2">
               <p className="text-muted-foreground">Welcome back, {userData?.name || 'Trader'}.</p>
               
@@ -274,7 +295,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary border border-border">
               <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-accent live-indicator' : 'bg-destructive'}`} />
-              <span className="text-xs font-semibold uppercase tracking-wider">{isConnected ? 'LIVE DATA' : 'DISCONNECTED'}</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-white">{isConnected ? 'LIVE DATA' : 'DISCONNECTED'}</span>
             </div>
             <Button variant="outline" size="icon" onClick={() => setIsConnected(!isConnected)}>
               <RefreshCw className={`w-4 h-4 ${isConnected ? 'animate-spin-slow' : ''}`} />
@@ -315,7 +336,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
           <Card className="lg:col-span-2 border-border/50 shadow-xl shadow-primary/5 bg-card/40 backdrop-blur-sm">
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-xl font-headline">14-Day Performance</CardTitle>
+                <CardTitle className="text-xl font-headline text-white">14-Day Performance</CardTitle>
                 <CardDescription>Visualizing your daily trading P&L</CardDescription>
               </div>
             </CardHeader>
@@ -332,7 +353,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
           <div className="space-y-6">
             <Card className="border-primary/20 bg-primary/5">
               <CardHeader className="pb-2">
-                <CardTitle className="text-lg flex items-center gap-2">
+                <CardTitle className="text-lg flex items-center gap-2 text-white">
                   <ShieldCheck className="w-5 h-5 text-primary" /> My Account
                 </CardTitle>
               </CardHeader>
@@ -352,7 +373,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                   </div>
                   <div className="space-y-1">
                     <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider">
-                      <span>Profit Target</span>
+                      <span className="text-white">Profit Target</span>
                       <span className="text-accent">{metrics.currentProfitPercent}% / {metrics.profitTarget}%</span>
                     </div>
                     <Progress value={metrics.profitTarget > 0 ? (metrics.currentProfitPercent / metrics.profitTarget) * 100 : 0} className="h-2 bg-secondary" />
@@ -363,7 +384,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
 
             <Card className="border-border/50 bg-secondary/30">
               <CardHeader className="pb-2">
-                <CardTitle className="text-lg flex items-center gap-2">
+                <CardTitle className="text-lg flex items-center gap-2 text-white">
                   <Activity className="w-5 h-5 text-accent" /> AI Compliance
                 </CardTitle>
               </CardHeader>
@@ -374,7 +395,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-2 text-primary flex items-center gap-1.5">
                         <Clock className="w-3 h-3" /> System Insight
                       </p>
-                      <p className="text-sm font-medium leading-relaxed mb-3">{compliance.message}</p>
+                      <p className="text-sm font-medium leading-relaxed mb-3 text-white">{compliance.message}</p>
                     </div>
                   ) : (
                     <div className="h-24 flex items-center justify-center text-muted-foreground text-xs italic">
@@ -389,7 +410,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
 
         <Card className="border-border/50 bg-card/40 backdrop-blur-sm overflow-hidden">
           <CardHeader>
-            <CardTitle className="text-xl font-headline">Recent Executions</CardTitle>
+            <CardTitle className="text-xl font-headline text-white">Recent Executions</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
@@ -398,8 +419,8 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                   <tr className="border-b border-border bg-secondary/30 text-muted-foreground uppercase text-[10px] font-bold tracking-widest">
                     <th className="py-4 px-6">Symbol</th>
                     <th className="py-4 px-4">Direction</th>
-                    <th className="py-4 px-4">Lot Size</th>
-                    <th className="py-4 px-4">P&L</th>
+                    <th className="py-4 px-4 text-right">Lot Size</th>
+                    <th className="py-4 px-4 text-right">P&L</th>
                     <th className="py-4 px-6 text-right">Time</th>
                   </tr>
                 </thead>
@@ -428,7 +449,7 @@ function MetricCard({ title, value, icon, trend, footer }: { title: string, valu
           </div>
         </div>
         <div className="flex items-end gap-2 mb-4">
-          <span className="text-3xl font-bold font-headline tabular-nums leading-none">{value}</span>
+          <span className="text-3xl font-bold font-headline tabular-nums leading-none text-white">{value}</span>
           {trend !== undefined && trend !== 0 && (
             <span className={`text-[10px] font-black mb-1.5 flex items-center px-1.5 py-0.5 rounded-full ${trend >= 0 ? 'bg-accent/10 text-accent' : 'bg-destructive/10 text-destructive'}`}>
               {trend >= 0 ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
@@ -450,4 +471,3 @@ function DetailItem({ label, value }: { label: string, value: string }) {
     </div>
   );
 }
-

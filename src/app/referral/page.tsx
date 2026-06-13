@@ -27,7 +27,8 @@ import {
   Check,
   X,
   Loader2,
-  AlertTriangle
+  AlertTriangle,
+  Lock
 } from 'lucide-react';
 import { useCollection, useFirestore } from '@/firebase';
 import { where, doc, updateDoc, query, collection, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -44,6 +45,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export default function ReferralPage() {
   const { user, userData } = useAuth();
@@ -143,7 +145,8 @@ export default function ReferralPage() {
     };
   }, [referrals]);
 
-  const canWithdraw = stats.pendingEarned >= MIN_WITHDRAWAL;
+  const isKycVerified = userData?.kycVerified === true;
+  const canWithdraw = stats.pendingEarned >= MIN_WITHDRAWAL && isKycVerified;
   const progressPercent = Math.min((stats.pendingEarned / MIN_WITHDRAWAL) * 100, 100);
 
   const handleSaveCode = async () => {
@@ -213,7 +216,7 @@ export default function ReferralPage() {
       <Navigation />
       <main className="flex-1 p-8 overflow-y-auto">
         <header className="mb-10">
-          <h1 className="text-3xl font-headline font-bold mb-1">Referral Program</h1>
+          <h1 className="text-3xl font-headline font-bold mb-1 text-white">Referral Program</h1>
           <p className="text-muted-foreground">Invite friends and earn up to $50.00 on every challenge purchase they make.</p>
         </header>
 
@@ -347,30 +350,61 @@ export default function ReferralPage() {
               <StatSmall title="Paid" value={`$${stats.paidEarned.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} icon={<DollarSign />} color="green" />
               <Card className="bg-secondary/30 flex flex-col justify-center items-center p-4 text-center border-accent/20">
                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Min. Payout</p>
-                <p className="text-xl font-bold text-accent">${MIN_WITHDRAWAL}</p>
+                <p className="text-xl font-bold text-accent">$100.00</p>
               </Card>
             </div>
 
-            <Card className="bg-secondary/20 border-border/50">
+            <Card className="bg-secondary/20 border-border/50 overflow-hidden">
               <CardContent className="p-6">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-sm font-bold flex items-center gap-2">
                     Withdrawal Progress
-                    {!canWithdraw && <AlertCircle className="w-4 h-4 text-amber-500" />}
+                    {stats.pendingEarned < MIN_WITHDRAWAL && <AlertCircle className="w-4 h-4 text-amber-500" />}
+                    {stats.pendingEarned >= MIN_WITHDRAWAL && !isKycVerified && <Lock className="w-4 h-4 text-destructive" />}
                   </span>
-                  <span className="text-xs font-mono">${stats.pendingEarned.toFixed(2)} / ${MIN_WITHDRAWAL}.00</span>
+                  <span className="text-xs font-mono">${stats.pendingEarned.toFixed(2)} / $100.00</span>
                 </div>
                 <Progress value={progressPercent} className="h-2 mb-4" />
+                
+                {!isKycVerified && (
+                  <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 flex items-center gap-2">
+                    <AlertTriangle className="text-destructive w-4 h-4 shrink-0" />
+                    <p className="text-[10px] font-bold text-destructive uppercase">KYC verification required to withdraw referral earnings</p>
+                  </div>
+                )}
+
                 <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                   <p className="text-xs text-muted-foreground">
                     {canWithdraw 
-                      ? "You have reached the minimum requirement for withdrawal." 
+                      ? "You have reached the minimum requirement and are KYC verified." 
+                      : !isKycVerified 
+                      ? "Complete KYC verification to withdraw referral earnings."
                       : `Minimum $${MIN_WITHDRAWAL} required to withdraw pending commissions.`
                     }
                   </p>
-                  <Button disabled={!canWithdraw} size="sm" className="font-bold px-8">
-                    Request Payout
-                  </Button>
+                  
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="w-full md:w-auto">
+                          <Button 
+                            disabled={!canWithdraw} 
+                            size="sm" 
+                            className="font-bold px-8 w-full md:w-auto"
+                          >
+                            Request Payout
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      {!canWithdraw && (
+                        <TooltipContent className="bg-destructive text-white border-none">
+                          <p className="text-xs font-bold">
+                            {!isKycVerified ? "Complete KYC to unlock" : "Min. $100 required"}
+                          </p>
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
               </CardContent>
             </Card>
@@ -388,7 +422,7 @@ export default function ReferralPage() {
           </div>
         </section>
 
-        <Card className="border-border/50 bg-card/40">
+        <Card className="border-border/50 bg-card/40 backdrop-blur-sm">
           <CardHeader>
             <CardTitle>Referral History</CardTitle>
           </CardHeader>
@@ -471,7 +505,7 @@ function StatSmall({ title, value, icon, color = 'blue' }: { title: string, valu
     <Card className="bg-secondary/30 border-border/50 p-6">
       <div className={`p-2 rounded-lg w-fit mb-3 border ${colorMap[color]}`}>{icon}</div>
       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{title}</p>
-      <p className="text-2xl font-bold font-headline">{value}</p>
+      <p className="text-2xl font-bold font-headline tabular-nums">{value}</p>
     </Card>
   );
 }
