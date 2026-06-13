@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemo, useState, useEffect } from 'react';
@@ -7,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
 import { 
   Users, 
   Copy, 
@@ -20,46 +22,105 @@ import {
   Send,
   MessageCircle,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  Edit2,
+  Check,
+  X,
+  Loader2,
+  AlertTriangle
 } from 'lucide-react';
 import { useCollection, useFirestore } from '@/firebase';
-import { where, doc, updateDoc } from 'firebase/firestore';
+import { where, doc, updateDoc, query, collection, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/dialog";
 
 export default function ReferralPage() {
   const { user, userData } = useAuth();
   const db = useFirestore();
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [newCode, setNewCode] = useState('');
+  const [availabilityStatus, setAvailabilityStatus] = useState<'idle' | 'validating' | 'available' | 'taken' | 'invalid' | 'too-short'>('idle');
+  const [isSaving, setIsSaving] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   const MIN_WITHDRAWAL = 100;
+  const MAX_CHANGES = 3;
 
-  // Self-healing referral code generation
+  // Auto-generate numeric ID and initial referral code if missing
   useEffect(() => {
-    if (userData && user && !userData.referralCode && !isGenerating) {
-      setIsGenerating(true);
-      const generateCode = () => {
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        let result = 'PRIME-';
-        for (let i = 0; i < 6; i++) {
-          result += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        return result;
-      };
-
-      const newCode = generateCode();
+    if (userData && user && !userData.referralCode) {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let result = '';
+      for (let i = 0; i < 8; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
       const userRef = doc(db, 'users', user.uid);
-      updateDoc(userRef, { referralCode: newCode })
-        .then(() => {
-          setIsGenerating(false);
-        })
-        .catch(() => {
-          setIsGenerating(false);
-        });
+      updateDoc(userRef, { referralCode: result, codeChangesCount: 0 });
+      
+      const codeRegRef = doc(db, 'referralCodes', result);
+      setDoc(codeRegRef, {
+        code: result,
+        userId: user.uid,
+        active: true,
+        createdAt: serverTimestamp()
+      });
     }
-  }, [userData, user, db, isGenerating]);
+  }, [userData, user, db]);
+
+  // Real-time availability check
+  useEffect(() => {
+    if (!isEditing || !newCode) {
+      setAvailabilityStatus('idle');
+      return;
+    }
+
+    if (newCode.length < 4) {
+      setAvailabilityStatus('too-short');
+      return;
+    }
+
+    const alphanumericRegex = /^[A-Z0-9]+$/;
+    if (!alphanumericRegex.test(newCode)) {
+      setAvailabilityStatus('invalid');
+      return;
+    }
+
+    if (newCode === userData?.referralCode) {
+      setAvailabilityStatus('available');
+      return;
+    }
+
+    const timeout = setTimeout(async () => {
+      setAvailabilityStatus('validating');
+      try {
+        const codesRef = collection(db, 'referralCodes');
+        const q = query(codesRef, where('code', '==', newCode), where('active', '==', true));
+        const querySnapshot = await getDocs(q);
+        
+        if (querySnapshot.empty) {
+          setAvailabilityStatus('available');
+        } else {
+          setAvailabilityStatus('taken');
+        }
+      } catch (err) {
+        setAvailabilityStatus('idle');
+      }
+    }, 500);
+
+    return () => clearTimeout(timeout);
+  }, [newCode, isEditing, userData?.referralCode, db]);
 
   const referralConstraints = useMemo(() => {
     if (!user?.uid) return [];
@@ -84,6 +145,45 @@ export default function ReferralPage() {
   const canWithdraw = stats.pendingEarned >= MIN_WITHDRAWAL;
   const progressPercent = Math.min((stats.pendingEarned / MIN_WITHDRAWAL) * 100, 100);
 
+  const handleSaveCode = async () => {
+    if (!user || availabilityStatus !== 'available' || newCode === userData?.referralCode) return;
+    setIsSaving(true);
+    try {
+      const oldCode = userData.referralCode;
+      const userRef = doc(db, 'users', user.uid);
+      
+      // Update user doc
+      await updateDoc(userRef, {
+        referralCode: newCode,
+        codeChangesCount: (userData.codeChangesCount || 0) + 1,
+        lastCodeChange: serverTimestamp()
+      });
+
+      // Deactivate old code
+      if (oldCode) {
+        const oldCodeRef = doc(db, 'referralCodes', oldCode);
+        await updateDoc(oldCodeRef, { active: false });
+      }
+
+      // Register new code
+      const newCodeRef = doc(db, 'referralCodes', newCode);
+      await setDoc(newCodeRef, {
+        code: newCode,
+        userId: user.uid,
+        active: true,
+        createdAt: serverTimestamp()
+      });
+
+      toast({ title: "Code Updated!", description: `Your referral code has been changed to ${newCode}` });
+      setIsEditing(false);
+      setShowConfirmDialog(false);
+    } catch (err) {
+      toast({ variant: "destructive", title: "Error", description: "Failed to update referral code." });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const copyToClipboard = (text: string) => {
     if (!userData?.referralCode) return;
     navigator.clipboard.writeText(text);
@@ -105,6 +205,8 @@ export default function ReferralPage() {
     window.open(shareUrl, '_blank');
   };
 
+  const changesRemaining = MAX_CHANGES - (userData?.codeChangesCount || 0);
+
   return (
     <div className="flex min-h-screen bg-background">
       <Navigation />
@@ -119,35 +221,119 @@ export default function ReferralPage() {
             <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 blur-3xl rounded-full -mr-16 -mt-16" />
             <CardHeader>
               <CardTitle className="text-xl font-headline">My Referral Code</CardTitle>
-              <CardDescription>Share your unique code or link to earn.</CardDescription>
+              <CardDescription>Customize your code to share with your audience.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="p-4 rounded-xl bg-background/50 border border-primary/20 text-center min-h-[64px] flex items-center justify-center">
-                {userData?.referralCode ? (
-                  <span className="text-2xl font-mono font-bold tracking-widest text-primary uppercase">
-                    {userData.referralCode}
-                  </span>
-                ) : (
-                  <RefreshCw className="w-6 h-6 animate-spin text-primary/50" />
-                )}
+              <div className="relative">
+                <AnimatePresence mode="wait">
+                  {isEditing ? (
+                    <motion.div 
+                      key="editing"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="space-y-4"
+                    >
+                      <div className="relative">
+                        <Input 
+                          value={newCode}
+                          onChange={(e) => setNewCode(e.target.value.toUpperCase())}
+                          placeholder="ENTER NEW CODE"
+                          className={cn(
+                            "text-2xl font-mono font-bold tracking-widest h-16 text-center uppercase border-2",
+                            availabilityStatus === 'available' && "border-accent bg-accent/5",
+                            availabilityStatus === 'taken' && "border-destructive bg-destructive/5",
+                            availabilityStatus === 'invalid' && "border-amber-500 bg-amber-500/5",
+                            availabilityStatus === 'too-short' && "border-muted bg-muted/5"
+                          )}
+                          maxLength={12}
+                        />
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          {availabilityStatus === 'validating' && <Loader2 className="w-5 h-5 animate-spin text-primary" />}
+                          {availabilityStatus === 'available' && <CheckCircle2 className="w-5 h-5 text-accent" />}
+                          {availabilityStatus === 'taken' && <XCircle className="w-5 h-5 text-destructive" />}
+                        </div>
+                      </div>
+                      
+                      <div className="text-center">
+                        {availabilityStatus === 'available' && <p className="text-[10px] text-accent font-bold uppercase tracking-widest flex items-center justify-center gap-1"><Check className="w-3 h-3" /> {newCode} is available!</p>}
+                        {availabilityStatus === 'taken' && <p className="text-[10px] text-destructive font-bold uppercase tracking-widest flex items-center justify-center gap-1"><X className="w-3 h-3" /> Code already taken</p>}
+                        {availabilityStatus === 'too-short' && <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Min. 4 characters</p>}
+                        {availabilityStatus === 'invalid' && <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest">Letters & numbers only</p>}
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                          className="flex-1" 
+                          onClick={() => { setIsEditing(false); setNewCode(''); }}
+                        >
+                          Cancel
+                        </Button>
+                        <Button 
+                          className="flex-1 font-bold bg-accent hover:bg-accent/90" 
+                          disabled={availabilityStatus !== 'available' || newCode === userData?.referralCode}
+                          onClick={() => setShowConfirmDialog(true)}
+                        >
+                          Save
+                        </Button>
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <motion.div 
+                      key="display"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="p-4 rounded-xl bg-background/50 border border-primary/20 text-center min-h-[64px] flex items-center justify-center group relative"
+                    >
+                      {userData?.referralCode ? (
+                        <div className="flex items-center gap-4">
+                          <span className="text-2xl font-mono font-bold tracking-widest text-primary uppercase">
+                            {userData.referralCode}
+                          </span>
+                          {changesRemaining > 0 && (
+                            <button 
+                              onClick={() => { setIsEditing(true); setNewCode(userData.referralCode); }}
+                              className="p-2 hover:bg-primary/20 rounded-lg text-primary transition-colors"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <RefreshCw className="w-6 h-6 animate-spin text-primary/50" />
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
-              
-              <div className="space-y-2">
-                <Button 
-                  onClick={() => copyToClipboard(referralLink)} 
-                  className="w-full h-12 font-bold cyan-box-glow"
-                  disabled={!userData?.referralCode}
-                >
-                  <Copy className="w-4 h-4 mr-2" />
-                  {copied ? 'Copied Link!' : 'Copy Referral Link'}
-                </Button>
-                
-                <div className="grid grid-cols-3 gap-2">
-                  <Button variant="outline" size="icon" onClick={() => share('twitter')} className="h-12 w-full" disabled={!userData?.referralCode}><Twitter className="w-5 h-5" /></Button>
-                  <Button variant="outline" size="icon" onClick={() => share('telegram')} className="h-12 w-full" disabled={!userData?.referralCode}><Send className="w-5 h-5" /></Button>
-                  <Button variant="outline" size="icon" onClick={() => share('whatsapp')} className="h-12 w-full" disabled={!userData?.referralCode}><MessageCircle className="w-5 h-5" /></Button>
+
+              {!isEditing && (
+                <div className="space-y-4">
+                  <p className="text-[10px] text-center font-bold text-muted-foreground uppercase tracking-widest">
+                    {changesRemaining > 0 
+                      ? `Changes remaining: ${changesRemaining}/${MAX_CHANGES}`
+                      : "Maximum changes reached"
+                    }
+                  </p>
+                  
+                  <Button 
+                    onClick={() => copyToClipboard(referralLink)} 
+                    className="w-full h-12 font-bold cyan-box-glow"
+                    disabled={!userData?.referralCode}
+                  >
+                    <Copy className="w-4 h-4 mr-2" />
+                    {copied ? 'Copied Link!' : 'Copy Referral Link'}
+                  </Button>
+                  
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button variant="outline" size="icon" onClick={() => share('twitter')} className="h-12 w-full" disabled={!userData?.referralCode}><Twitter className="w-5 h-5" /></Button>
+                    <Button variant="outline" size="icon" onClick={() => share('telegram')} className="h-12 w-full" disabled={!userData?.referralCode}><Send className="w-5 h-5" /></Button>
+                    <Button variant="outline" size="icon" onClick={() => share('whatsapp')} className="h-12 w-full" disabled={!userData?.referralCode}><MessageCircle className="w-5 h-5" /></Button>
+                  </div>
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
 
@@ -195,8 +381,8 @@ export default function ReferralPage() {
             <TrendingUp className="text-primary w-6 h-6" /> How It Works
           </h2>
           <div className="grid md:grid-cols-3 gap-6">
-            <StepItem step="1" icon={<LinkIcon />} title="Copy Link" desc="Copy your unique referral link from above." />
-            <StepItem step="2" icon={<Users />} title="Share Link" desc="Share it with your trading community or friends." />
+            <StepItem step="1" icon={<LinkIcon />} title="Customize Code" desc="Choose a custom referral code that represents your brand." />
+            <StepItem step="2" icon={<Users />} title="Share Link" desc="Share your updated link with your trading community." />
             <StepItem step="3" icon={<DollarSign />} title="Earn Rewards" desc="Earn 10% commission (up to $50) on every purchase they make." />
           </div>
         </section>
@@ -245,6 +431,31 @@ export default function ReferralPage() {
           </CardContent>
         </Card>
       </main>
+
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent className="bg-card border-primary/20">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="text-amber-500 w-5 h-5" /> Confirm Code Change
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              Changing your referral code to <span className="text-white font-bold">{newCode}</span> will immediately invalidate all previously shared links. Users clicking your old links will no longer be linked to your account.
+              <br /><br />
+              Changes remaining: <span className="text-white font-bold">{changesRemaining}/{MAX_CHANGES}</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleSaveCode}
+              className="bg-accent text-accent-foreground hover:bg-accent/90"
+              disabled={isSaving}
+            >
+              {isSaving ? "Updating..." : "Yes, Change Code"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -275,4 +486,25 @@ function StepItem({ step, icon, title, desc }: { step: string, icon: any, title:
       <p className="text-sm text-muted-foreground">{desc}</p>
     </div>
   );
+}
+
+function XCircle(props: any) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <path d="m15 9-6 6" />
+      <path d="m9 9 6 6" />
+    </svg>
+  )
 }

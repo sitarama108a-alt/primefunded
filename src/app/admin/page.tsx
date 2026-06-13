@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, Suspense, useEffect } from 'react';
@@ -36,7 +37,8 @@ import {
   UserCheck,
   AlertTriangle,
   Fingerprint,
-  TrendingUp
+  TrendingUp,
+  Edit2
 } from 'lucide-react';
 import { useFirestore, useCollection } from '@/firebase';
 import { doc, updateDoc, deleteDoc, setDoc, serverTimestamp, getDoc, addDoc, collection } from 'firebase/firestore';
@@ -142,6 +144,15 @@ export default function AdminPage() {
       toast({ title: "Order Verified", description: `Account created for ${order.email}` });
     } catch (err: any) {
       toast({ variant: "destructive", title: "Verification Failed" });
+    }
+  };
+
+  const handleResetLimit = async (userId: string) => {
+    try {
+      await updateDoc(doc(db, 'users', userId), { codeChangesCount: 0 });
+      toast({ title: "Limit Reset", description: "Referral code change limit reset to 0." });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Error", description: "Failed to reset limit." });
     }
   };
 
@@ -288,7 +299,7 @@ export default function AdminPage() {
             <Card className="bg-card/40">
               <CardHeader>
                 <div className="flex justify-between">
-                  <Input placeholder="Search users by Name, Email or UID..." className="max-w-md" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                  <Input placeholder="Search users by Name, Email, UID or Referral Code..." className="max-w-md" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                 </div>
               </CardHeader>
               <CardContent className="p-0">
@@ -298,7 +309,8 @@ export default function AdminPage() {
                       <th className="py-4 px-4 text-left">ID / Code</th>
                       <th className="py-4 px-4 text-left">Name</th>
                       <th className="py-4 px-4 text-left">Email</th>
-                      <th className="py-4 px-4 text-left">Plan</th>
+                      <th className="py-4 px-4 text-left">Changes</th>
+                      <th className="py-4 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -307,12 +319,24 @@ export default function AdminPage() {
                         <td className="py-4 px-4">
                           <div className="flex flex-col">
                             <span className="font-mono text-xs font-bold">{t.traderId}</span>
-                            <span className="text-[10px] text-primary">{t.referralCode}</span>
+                            <span className="text-[10px] text-primary font-bold">{t.referralCode}</span>
                           </div>
                         </td>
                         <td className="py-4 px-4 font-bold">{t.name}</td>
                         <td className="py-4 px-4">{t.email}</td>
-                        <td className="py-4 px-4">{t.plan || 'None'}</td>
+                        <td className="py-4 px-4">
+                          <Badge variant="secondary">{t.codeChangesCount || 0} / 3</Badge>
+                        </td>
+                        <td className="py-4 px-4 text-right">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => handleResetLimit(t.id)}
+                            title="Reset Code Change Limit"
+                          >
+                            <RefreshCw className="w-4 h-4" />
+                          </Button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

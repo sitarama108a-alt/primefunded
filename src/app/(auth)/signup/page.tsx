@@ -34,14 +34,14 @@ function SignupContent() {
   // Handle URL referral code
   useEffect(() => {
     if (referralCodeFromUrl) {
-      setReferralInput(referralCodeFromUrl);
-      validateCode(referralCodeFromUrl);
+      setReferralInput(referralCodeFromUrl.toUpperCase());
+      validateCode(referralCodeFromUrl.toUpperCase());
     }
   }, [referralCodeFromUrl]);
 
   // Debounced real-time validation
   useEffect(() => {
-    if (!referralInput || referralInput === referralCodeFromUrl) return;
+    if (!referralInput || referralInput === referralCodeFromUrl?.toUpperCase()) return;
     
     const timeout = setTimeout(() => {
       validateCode(referralInput);
@@ -51,14 +51,14 @@ function SignupContent() {
   }, [referralInput]);
 
   const validateCode = async (code: string) => {
-    if (!code) {
+    if (!code || code.length < 4) {
       setReferralStatus('idle');
       return;
     }
     setReferralStatus('validating');
     try {
       const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('referralCode', '==', code));
+      const q = query(usersRef, where('referralCode', '==', code.toUpperCase()));
       const querySnapshot = await getDocs(q);
       
       if (!querySnapshot.empty) {
@@ -71,10 +71,10 @@ function SignupContent() {
     }
   };
 
-  const generateReferralCode = () => {
+  const generateInitialReferralCode = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let result = 'PRIME-';
-    for (let i = 0; i < 6; i++) {
+    let result = '';
+    for (let i = 0; i < 8; i++) {
       result += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return result;
@@ -92,13 +92,13 @@ function SignupContent() {
       const user = userCredential.user;
       
       const traderId = generateTraderId();
-      const referralCode = generateReferralCode();
+      const referralCode = generateInitialReferralCode();
 
       // Find referring user UID if ref code exists and is valid
       let referredByUid = null;
       if (referralStatus === 'valid' && referralInput) {
         const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('referralCode', '==', referralInput));
+        const q = query(usersRef, where('referralCode', '==', referralInput.toUpperCase()));
         const querySnapshot = await getDocs(q);
         if (!querySnapshot.empty) {
           referredByUid = querySnapshot.docs[0].id;
@@ -109,6 +109,7 @@ function SignupContent() {
         uid: user.uid,
         traderId,
         referralCode,
+        codeChangesCount: 0,
         referredBy: referredByUid,
         referralCount: 0,
         referralEarnings: 0,
@@ -126,7 +127,7 @@ function SignupContent() {
       };
 
       const userRef = doc(db, `users`, user.uid);
-      await setDoc(userRef, userData)
+      setDoc(userRef, userData)
         .catch(async (serverError) => {
           const permissionError = new FirestorePermissionError({
             path: userRef.path,
@@ -135,6 +136,15 @@ function SignupContent() {
           } satisfies SecurityRuleContext);
           errorEmitter.emit('permission-error', permissionError);
         });
+
+      // Also register the code in the registry
+      const codeRegRef = doc(db, 'referralCodes', referralCode);
+      setDoc(codeRegRef, {
+        code: referralCode,
+        userId: user.uid,
+        active: true,
+        createdAt: serverTimestamp()
+      });
 
       router.push('/dashboard');
     } catch (error: any) {
@@ -245,7 +255,7 @@ function SignupContent() {
               <div className="relative">
                 <Input 
                   id="referral" 
-                  placeholder="Enter referral code e.g. PRIME-AB1234" 
+                  placeholder="e.g. LAVANYA, NOMIS108" 
                   value={referralInput}
                   onChange={(e) => setReferralInput(e.target.value.toUpperCase())}
                   readOnly={!!referralCodeFromUrl}

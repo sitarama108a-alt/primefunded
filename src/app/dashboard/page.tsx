@@ -28,7 +28,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { aiComplianceMonitorAlerts } from '@/ai/flows/ai-compliance-monitor-alerts';
 import { useFirestore, useCollection } from '@/firebase';
-import { where, doc, updateDoc } from 'firebase/firestore';
+import { where, doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 
 export default function DashboardPage() {
@@ -56,11 +56,21 @@ export default function DashboardPage() {
       
       if (!userData.referralCode) {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        let result = 'PRIME-';
-        for (let i = 0; i < 6; i++) {
+        let result = '';
+        for (let i = 0; i < 8; i++) {
           result += chars.charAt(Math.floor(Math.random() * chars.length));
         }
         updates.referralCode = result;
+        updates.codeChangesCount = 0;
+
+        // Register initial code
+        const codeRegRef = doc(db, 'referralCodes', result);
+        setDoc(codeRegRef, {
+          code: result,
+          userId: user.uid,
+          active: true,
+          createdAt: serverTimestamp()
+        });
       }
 
       if (Object.keys(updates).length > 0) {

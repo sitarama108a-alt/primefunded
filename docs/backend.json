@@ -15,7 +15,15 @@
         },
         "referralCode": {
           "type": "string",
-          "description": "Unique alphanumeric referral code (e.g., PRIME-AB1234)."
+          "description": "Unique custom alphanumeric referral code."
+        },
+        "codeChangesCount": {
+          "type": "number",
+          "description": "Number of times the user has changed their referral code."
+        },
+        "lastCodeChange": {
+          "type": "string",
+          "format": "date-time"
         },
         "referredBy": {
           "type": "string",
@@ -241,6 +249,18 @@
         "$ref": "#/backend/entities/Referral"
       },
       "description": "Stores referral commissions."
+    },
+    "/referralCodes/{codeId}": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "string" },
+          "userId": { "type": "string" },
+          "active": { "type": "boolean" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "description": "Registry for unique referral codes."
     }
   }
 }
