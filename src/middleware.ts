@@ -15,8 +15,11 @@ export function middleware(request: NextRequest) {
   const isStaticAsset = request.nextUrl.pathname.startsWith('/_next') || request.nextUrl.pathname.startsWith('/favicon.ico');
 
   // CRITICAL: Bypassing middleware logic for API routes to ensure terminal compatibility
+  // This prevents redirects, rate limiting, and other checks from returning HTML to terminals.
   if (isApiRoute) {
-    return NextResponse.next();
+    const response = NextResponse.next();
+    // Ensure API responses are not redirected
+    return response;
   }
 
   // Maintenance mode check via environment variable
