@@ -1,5 +1,29 @@
-# Firebase Studio
+# PrimeFunded | Institutional Trading Platform
 
-This is a NextJS starter in Firebase Studio.
+This is a professional Next.js 15 trading platform integrated with Firebase.
 
-To get started, take a look at src/app/page.tsx.
+## Deployment Instructions (Vercel)
+
+1. **Push to Git**: Push this source code to GitHub, GitLab, or Bitbucket.
+2. **Import to Vercel**: Connect your repository to a new project in the [Vercel Dashboard](https://vercel.com/dashboard).
+3. **Set Environment Variables**: Ensure the following variables are set in the Vercel Project Settings:
+   - `NEXT_PUBLIC_FIREBASE_API_KEY`
+   - `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
+   - `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+   - `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
+   - `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+   - `NEXT_PUBLIC_FIREBASE_APP_ID`
+   - `ADMIN_PASSWORD`: Your secret admin terminal key.
+   - `MAINTENANCE_MODE`: Set to `true` to disable the terminal globally.
+4. **Custom Domain**: Add your domain under `Settings > Domains`.
+
+## Features
+- **MT5 Integration**: Automated balance and equity syncing via `/api/mt5-update`.
+- **Prop Firm Logic**: 1-Step, 2-Step, and Instant Funding models with hard-breach monitoring.
+- **Admin Terminal**: Full user management, KYC review, and manual order verification.
+- **Referral System**: Multi-tier referral tracking with custom codes.
+
+## Security
+- Firestore Security Rules enforce data ownership.
+- Input sanitization and Zod validation on all forms.
+- HSTS and CSP headers configured for production.
