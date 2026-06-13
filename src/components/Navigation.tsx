@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, memo } from 'react';
 import { 
   LayoutDashboard, 
   Trophy, 
@@ -73,12 +73,11 @@ function FingerprintIcon(props: any) {
   )
 }
 
-export function Navigation() {
+export const Navigation = memo(function Navigation() {
   const pathname = usePathname();
   const router = useRouter();
   const { logout, userData, user } = useAuth();
 
-  // Prefetch main routes on app startup
   useEffect(() => {
     const routesToPrefetch = [
       '/dashboard',
@@ -184,4 +183,4 @@ export function Navigation() {
       </div>
     </div>
   );
-}
+});

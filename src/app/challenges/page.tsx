@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
-import { Check, X, ChevronDown, ChevronUp, TicketPercent, Skull, AlertTriangle, AlertCircle } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, TicketPercent, Skull, AlertTriangle, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -150,105 +150,7 @@ const RULES = {
   }
 };
 
-export default function ChallengesPage() {
-  const [selectedPlan, setSelectedPlan] = useState('1-step');
-  const [couponCode, setCouponCode] = useState('');
-  const [discountApplied, setDiscountApplied] = useState(false);
-
-  const handleApplyCoupon = () => {
-    if (couponCode.toLowerCase() === 'primefunded20') {
-      setDiscountApplied(true);
-    } else {
-      setDiscountApplied(false);
-    }
-  };
-
-  return (
-    <div className="flex min-h-screen bg-background">
-      <Navigation />
-      
-      <main className="flex-1 p-8">
-        <header className="mb-12">
-          <motion.h1 
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-4xl font-headline font-bold mb-2"
-          >
-            Select Your Challenge
-          </motion.h1>
-          <motion.p 
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-muted-foreground"
-          >
-            Institutional funding starting from $5,000 up to $300,000.
-          </motion.p>
-        </header>
-
-        {/* Sticky Warning Banner */}
-        <div className="mb-8 p-4 bg-destructive/15 border-l-4 border-destructive rounded-r-lg flex items-center gap-3">
-          <AlertCircle className="text-destructive w-5 h-5 shrink-0" />
-          <p className="text-xs font-bold text-destructive">
-            ⚠️ Hard breaches result in immediate account termination with no appeal.
-          </p>
-        </div>
-
-        <div className="mb-12">
-          <Tabs defaultValue="1-step" className="w-full" onValueChange={(val) => {
-            setSelectedPlan(val);
-            if (val !== 'instant') setDiscountApplied(false);
-          }}>
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
-              <TabsList className="grid w-full max-w-2xl grid-cols-4 h-14 bg-secondary p-1 rounded-xl">
-                <TabsTrigger value="1-step" className="data-[state=active]:bg-background font-bold rounded-lg">1-Step Pro</TabsTrigger>
-                <TabsTrigger value="2-step" className="data-[state=active]:bg-background font-bold rounded-lg">2-Step Classic</TabsTrigger>
-                <TabsTrigger value="3-step" className="data-[state=active]:bg-background font-bold rounded-lg">3-Step Classic</TabsTrigger>
-                <TabsTrigger value="instant" className="data-[state=active]:bg-background font-bold rounded-lg">Instant Funding</TabsTrigger>
-              </TabsList>
-
-              {selectedPlan === 'instant' && (
-                <div className="flex items-center gap-2 bg-secondary/50 p-2 rounded-xl border border-border">
-                  <TicketPercent className="w-5 h-5 text-primary ml-2" />
-                  <Input 
-                    placeholder="Enter Coupon Code" 
-                    className="h-10 bg-transparent border-none focus-visible:ring-0 w-44" 
-                    value={couponCode}
-                    onChange={(e) => setCouponCode(e.target.value)}
-                  />
-                  <Button size="sm" className="font-bold" onClick={handleApplyCoupon}>Apply</Button>
-                </div>
-              )}
-            </div>
-
-            <div className="mt-6">
-              <AnimatePresence mode="wait">
-                <motion.div 
-                  key={selectedPlan + (discountApplied ? '-discount' : '')}
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -10 }}
-                  className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-                >
-                  {planData[selectedPlan as keyof typeof planData]?.map((tier, idx) => (
-                    <ChallengeCard 
-                      key={tier.size} 
-                      tier={tier} 
-                      planName={selectedPlan} 
-                      delay={idx * 0.03} 
-                      discountApplied={discountApplied && selectedPlan === 'instant'}
-                    />
-                  ))}
-                </motion.div>
-              </AnimatePresence>
-            </div>
-          </Tabs>
-        </div>
-      </main>
-    </div>
-  );
-}
-
-function ChallengeCard({ tier, planName, delay, discountApplied }: { tier: any, planName: string, delay: number, discountApplied: boolean }) {
+const ChallengeCard = memo(function ChallengeCard({ tier, planName, delay, discountApplied }: { tier: any, planName: string, delay: number, discountApplied: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
   const finalPrice = discountApplied ? Math.floor(tier.price * 0.8) : tier.price;
 
@@ -327,7 +229,7 @@ function ChallengeCard({ tier, planName, delay, discountApplied }: { tier: any, 
       </Card>
     </motion.div>
   );
-}
+});
 
 function RuleSection({ title, items }: { title: string, items: any[] }) {
   return (
@@ -347,6 +249,103 @@ function RuleSection({ title, items }: { title: string, items: any[] }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+export default function ChallengesPage() {
+  const [selectedPlan, setSelectedPlan] = useState('1-step');
+  const [couponCode, setCouponCode] = useState('');
+  const [discountApplied, setDiscountApplied] = useState(false);
+
+  const handleApplyCoupon = () => {
+    if (couponCode.toLowerCase() === 'primefunded20') {
+      setDiscountApplied(true);
+    } else {
+      setDiscountApplied(false);
+    }
+  };
+
+  return (
+    <div className="flex min-h-screen bg-background">
+      <Navigation />
+      
+      <main className="flex-1 p-8">
+        <header className="mb-12">
+          <motion.h1 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-4xl font-headline font-bold mb-2"
+          >
+            Select Your Challenge
+          </motion.h1>
+          <motion.p 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-muted-foreground"
+          >
+            Institutional funding starting from $5,000 up to $300,000.
+          </motion.p>
+        </header>
+
+        <div className="mb-8 p-4 bg-destructive/15 border-l-4 border-destructive rounded-r-lg flex items-center gap-3">
+          <AlertCircle className="text-destructive w-5 h-5 shrink-0" />
+          <p className="text-xs font-bold text-destructive">
+            ⚠️ Hard breaches result in immediate account termination with no appeal.
+          </p>
+        </div>
+
+        <div className="mb-12">
+          <Tabs defaultValue="1-step" className="w-full" onValueChange={(val) => {
+            setSelectedPlan(val);
+            if (val !== 'instant') setDiscountApplied(false);
+          }}>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
+              <TabsList className="grid w-full max-w-2xl grid-cols-4 h-14 bg-secondary p-1 rounded-xl">
+                <TabsTrigger value="1-step" className="data-[state=active]:bg-background font-bold rounded-lg cursor-pointer">1-Step Pro</TabsTrigger>
+                <TabsTrigger value="2-step" className="data-[state=active]:bg-background font-bold rounded-lg cursor-pointer">2-Step Classic</TabsTrigger>
+                <TabsTrigger value="3-step" className="data-[state=active]:bg-background font-bold rounded-lg cursor-pointer">3-Step Classic</TabsTrigger>
+                <TabsTrigger value="instant" className="data-[state=active]:bg-background font-bold rounded-lg cursor-pointer">Instant Funding</TabsTrigger>
+              </TabsList>
+
+              {selectedPlan === 'instant' && (
+                <div className="flex items-center gap-2 bg-secondary/50 p-2 rounded-xl border border-border">
+                  <TicketPercent className="w-5 h-5 text-primary ml-2" />
+                  <Input 
+                    placeholder="Enter Coupon Code" 
+                    className="h-10 bg-transparent border-none focus-visible:ring-0 w-44" 
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value)}
+                  />
+                  <Button size="sm" className="font-bold cursor-pointer" onClick={handleApplyCoupon}>Apply</Button>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6">
+              <AnimatePresence mode="wait">
+                <motion.div 
+                  key={selectedPlan + (discountApplied ? '-discount' : '')}
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+                >
+                  {planData[selectedPlan as keyof typeof planData]?.map((tier, idx) => (
+                    <ChallengeCard 
+                      key={tier.size} 
+                      tier={tier} 
+                      planName={selectedPlan} 
+                      delay={idx * 0.03} 
+                      discountApplied={discountApplied && selectedPlan === 'instant'}
+                    />
+                  ))}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          </Tabs>
+        </div>
+      </main>
     </div>
   );
 }

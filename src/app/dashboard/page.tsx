@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, Suspense } from 'react';
+import { useEffect, useState, useMemo, Suspense, memo } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { useAuth } from '@/context/AuthContext';
 import { 
@@ -37,6 +37,25 @@ interface DashboardPageProps {
   adminViewMode?: boolean;
   targetUid?: string;
 }
+
+const MetricCard = memo(function MetricCard({ title, value, icon, footer }: { title: string, value: string, icon: React.ReactNode, footer?: string }) {
+  return (
+    <Card className="border-border/50 bg-card/40 hover:border-primary/30 transition-all duration-300 group">
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground group-hover:text-primary transition-colors">{title}</span>
+          <div className="p-2 bg-secondary rounded-lg border border-border group-hover:border-primary/20 transition-colors">
+            {icon}
+          </div>
+        </div>
+        <div className="flex items-end gap-2 mb-4">
+          <span className="text-3xl font-bold font-headline tabular-nums leading-none text-white">{value}</span>
+        </div>
+        {footer && <p className="text-[10px] text-muted-foreground flex items-center gap-1.5 font-bold uppercase tracking-wider"><Server className="w-3 h-3" /> {footer}</p>}
+      </CardContent>
+    </Card>
+  );
+});
 
 export default function DashboardPage({ adminViewMode = false, targetUid }: DashboardPageProps) {
   const { user, userData: loggedInUserData, loading: authLoading } = useAuth();
@@ -406,25 +425,6 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
         </Card>
       </main>
     </div>
-  );
-}
-
-function MetricCard({ title, value, icon, footer }: { title: string, value: string, icon: React.ReactNode, footer?: string }) {
-  return (
-    <Card className="border-border/50 bg-card/40 hover:border-primary/30 transition-all duration-300 group">
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground group-hover:text-primary transition-colors">{title}</span>
-          <div className="p-2 bg-secondary rounded-lg border border-border group-hover:border-primary/20 transition-colors">
-            {icon}
-          </div>
-        </div>
-        <div className="flex items-end gap-2 mb-4">
-          <span className="text-3xl font-bold font-headline tabular-nums leading-none text-white">{value}</span>
-        </div>
-        {footer && <p className="text-[10px] text-muted-foreground flex items-center gap-1.5 font-bold uppercase tracking-wider"><Server className="w-3 h-3" /> {footer}</p>}
-      </CardContent>
-    </Card>
   );
 }
 

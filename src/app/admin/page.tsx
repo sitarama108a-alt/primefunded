@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, memo } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
-  Lock, Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Mail, Send, AlertTriangle, User, History, Trash2, Award, Terminal, ShieldAlert, BarChart3, Search, ExternalLink, Filter, Plus
+  Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Send, User, History, Award, BarChart3, Search, ExternalLink, Plus
 } from 'lucide-react';
 import { useFirestore, useCollection } from '@/firebase';
 import { doc, updateDoc, setDoc, serverTimestamp, getDoc, addDoc, collection, writeBatch, limit, orderBy } from 'firebase/firestore';
@@ -28,6 +28,28 @@ import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/e
 const ADMIN_PASSWORD = "93463962569392846256";
 const PAGE_SIZE = 20;
 
+const StatCard = memo(function StatCard({ title, value, icon, color }: { title: string, value: string | number, icon: any, color: string }) {
+  const colors: any = {
+    blue: 'text-primary bg-primary/10 border-primary/20',
+    purple: 'text-purple-500 bg-purple-500/10 border-purple-500/20',
+    green: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
+    amber: 'text-amber-500 bg-amber-500/10 border-amber-500/20',
+    red: 'text-destructive bg-destructive/10 border-destructive/20'
+  };
+  return (
+    <Card className="border-border/50 bg-card/30 hover:border-primary/20 transition-all duration-300 group">
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className={cn("p-2 rounded-lg border", colors[color])}>{icon}</div>
+          <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-white/10">LIVE</Badge>
+        </div>
+        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">{title}</p>
+        <h3 className="text-3xl font-headline font-bold text-white group-hover:text-primary transition-colors">{value}</h3>
+      </CardContent>
+    </Card>
+  );
+});
+
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
@@ -35,7 +57,6 @@ export default function AdminPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [previewUserId, setPreviewUserId] = useState<string | null>(null);
   
-  // Pagination State
   const [ordersLimit, setOrdersLimit] = useState(PAGE_SIZE);
   const [usersLimit, setUsersLimit] = useState(PAGE_SIZE);
   const [payoutsLimit, setPayoutsLimit] = useState(PAGE_SIZE);
@@ -43,25 +64,21 @@ export default function AdminPage() {
   const { toast } = useToast();
   const db = useFirestore();
 
-  // Dialog States
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [isManageAccountOpen, setIsManageAccountOpen] = useState(false);
   const [isFreeAccountOpen, setIsFreeAccountOpen] = useState(false);
   const [isKycReviewOpen, setIsKycReviewOpen] = useState(false);
   
-  // Form States
   const [rejectionReason, setRejectionReason] = useState('');
   const [provisionPlan, setProvisionPlan] = useState('1-Step Pro');
   const [provisionSize, setProvisionSize] = useState('$100,000');
 
-  // Notification States
   const [notifTitle, setNotifTitle] = useState('');
   const [notifMessage, setNotifMessage] = useState('');
   const [notifPriority, setNotifPriority] = useState('normal');
   const [notifTarget, setNotifTarget] = useState('all');
   const [isSendingNotif, setIsSendingNotif] = useState(false);
 
-  // Persistence for Tab
   useEffect(() => {
     const saved = localStorage.getItem('admin_active_tab');
     if (saved) setActiveTab(saved);
@@ -72,19 +89,17 @@ export default function AdminPage() {
     localStorage.setItem('admin_active_tab', val);
   };
 
-  // Memoized Constraints for parallel loading
   const ordersConstraints = useMemo(() => [orderBy('date', 'desc'), limit(ordersLimit)], [ordersLimit]);
   const usersConstraints = useMemo(() => [limit(usersLimit)], [usersLimit]);
   const payoutsConstraints = useMemo(() => [orderBy('date', 'desc'), limit(payoutsLimit)], [payoutsLimit]);
   const referralsConstraints = useMemo(() => [orderBy('createdAt', 'desc'), limit(PAGE_SIZE)], []);
   const broadcastsConstraints = useMemo(() => [orderBy('sentAt', 'desc'), limit(10)], []);
 
-  // Parallel Hook Initialization
   const { data: orders, loading: ordersLoading } = useCollection<any>('orders', ordersConstraints);
   const { data: traders, loading: tradersLoading } = useCollection<any>('users', usersConstraints);
   const { data: payouts, loading: payoutsLoading } = useCollection<any>('payouts', payoutsConstraints);
-  const { data: referrals, loading: referralsLoading } = useCollection<any>('referrals', referralsConstraints);
-  const { data: broadcasts, loading: broadcastsLoading } = useCollection<any>('broadcasts', broadcastsConstraints);
+  const { data: referrals } = useCollection<any>('referrals', referralsConstraints);
+  const { data: broadcasts } = useCollection<any>('broadcasts', broadcastsConstraints);
 
   const stats = useMemo(() => {
     if (!orders || !traders || !payouts) return null;
@@ -144,7 +159,6 @@ export default function AdminPage() {
         errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `accounts/${accountId}`, operation: 'create', requestResourceData: accountData }));
       });
 
-    // Referral commission logic
     try {
       const userSnap = await getDoc(doc(db, 'users', order.userId));
       const referredBy = userSnap.data()?.referredBy;
@@ -389,10 +403,8 @@ export default function AdminPage() {
           </Tabs>
         </div>
 
-        {/* CSS-based Visibility for Instant Switching */}
         <div className="flex-1 overflow-y-auto p-8 pt-0 custom-scrollbar">
           
-          {/* OVERVIEW SECTION */}
           <div className={cn("space-y-8 animate-in fade-in duration-300", activeTab === 'overview' ? "block" : "hidden")}>
             {!stats ? <LoadingGrid /> : (
               <>
@@ -442,7 +454,6 @@ export default function AdminPage() {
             )}
           </div>
 
-          {/* ORDERS SECTION */}
           <div className={cn("animate-in fade-in duration-300", activeTab === 'orders' ? "block" : "hidden")}>
             <Card className="border-border/50 bg-card/30">
               <CardHeader className="flex flex-row items-center justify-between">
@@ -509,7 +520,6 @@ export default function AdminPage() {
             </Card>
           </div>
 
-          {/* USERS SECTION */}
           <div className={cn("animate-in fade-in duration-300", activeTab === 'users' ? "block" : "hidden")}>
             <Card className="border-border/50 bg-card/30">
               <CardHeader className="flex flex-row items-center justify-between">
@@ -586,7 +596,6 @@ export default function AdminPage() {
             </Card>
           </div>
 
-          {/* KYC HUB SECTION */}
           <div className={cn("animate-in fade-in duration-300 space-y-8", activeTab === 'kyc' ? "block" : "hidden")}>
             <div className="grid grid-cols-3 gap-6">
               <StatCard title="Pending Review" value={traders?.filter(t => t.kycStatus === 'pending').length || 0} icon={<Fingerprint />} color="amber" />
@@ -635,7 +644,6 @@ export default function AdminPage() {
             </Card>
           </div>
 
-          {/* REFERRALS SECTION */}
           <div className={cn("animate-in fade-in duration-300 space-y-8", activeTab === 'referrals' ? "block" : "hidden")}>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <StatCard title="Total Commissions" value={`$${referrals?.reduce((acc, r) => acc + (r.amount || 0), 0).toFixed(2)}`} icon={<TrendingUp />} color="blue" />
@@ -684,7 +692,6 @@ export default function AdminPage() {
             </Card>
           </div>
 
-          {/* PAYOUTS SECTION */}
           <div className={cn("animate-in fade-in duration-300", activeTab === 'payouts' ? "block" : "hidden")}>
             <Card className="border-border/50 bg-card/30">
               <CardHeader>
@@ -757,7 +764,6 @@ export default function AdminPage() {
             </Card>
           </div>
 
-          {/* BROADCAST SECTION */}
           <div className={cn("animate-in fade-in duration-300 space-y-8", activeTab === 'notifications' ? "block" : "hidden")}>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2 space-y-8">
@@ -833,7 +839,6 @@ export default function AdminPage() {
         </div>
       </main>
 
-      {/* Persistent Dialogs */}
       <Dialog open={isFreeAccountOpen} onOpenChange={setIsFreeAccountOpen}>
         <DialogContent className="bg-card border-primary/20 text-white">
           <DialogHeader>
@@ -910,28 +915,6 @@ export default function AdminPage() {
         </DialogContent>
       </Dialog>
     </div>
-  );
-}
-
-function StatCard({ title, value, icon, color }: { title: string, value: string | number, icon: any, color: string }) {
-  const colors: any = {
-    blue: 'text-primary bg-primary/10 border-primary/20',
-    purple: 'text-purple-500 bg-purple-500/10 border-purple-500/20',
-    green: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
-    amber: 'text-amber-500 bg-amber-500/10 border-amber-500/20',
-    red: 'text-destructive bg-destructive/10 border-destructive/20'
-  };
-  return (
-    <Card className="border-border/50 bg-card/30 hover:border-primary/20 transition-all duration-300 group">
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className={cn("p-2 rounded-lg border", colors[color])}>{icon}</div>
-          <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-white/10">LIVE</Badge>
-        </div>
-        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">{title}</p>
-        <h3 className="text-3xl font-headline font-bold text-white group-hover:text-primary transition-colors">{value}</h3>
-      </CardContent>
-    </Card>
   );
 }
 
