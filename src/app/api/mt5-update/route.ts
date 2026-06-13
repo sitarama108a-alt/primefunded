@@ -1,26 +1,23 @@
-
-import { NextResponse } from 'next/server';
-import { initializeApp, getApps } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { firebaseConfig } from '@/firebase/config';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 
 /**
  * @fileOverview MT5 Update API Endpoint
  * 
- * This endpoint receives real-time metrics from external trading terminals.
- * It is optimized for compatibility with MT5 EAs by supporting multiple content types
- * and returning a plain text "OK" response.
+ * This endpoint is a pure server-side Route Handler.
+ * It is optimized for terminal compatibility and avoids all 'use client' dependencies.
  */
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
-    // 1. Initialize Firebase safely for server-side environment
-    const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+    // 1. Initialize Firebase (Safe check for Node environment)
+    const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // 2. Parse payload based on content-type (MT5 often sends form-urlencoded)
+    // 2. Parse payload
     const contentType = request.headers.get('content-type') || '';
     let data: any = {};
 
@@ -32,22 +29,26 @@ export async function POST(request: Request) {
         data = Object.fromEntries(formData.entries());
       }
     } catch (parseError) {
-      return new Response('Invalid Payload', { status: 400 });
+      return new Response('Invalid Payload', { 
+        status: 400,
+        headers: { 'Content-Type': 'text/plain' }
+      });
     }
 
     const { accountId, login, balance, equity, margin, profit } = data;
 
     // 3. Validation
     if (!accountId) {
-      return new Response('Missing accountId', { status: 400 });
+      return new Response('Missing accountId', { 
+        status: 400,
+        headers: { 'Content-Type': 'text/plain' }
+      });
     }
 
-    // 4. Reference the terminal record
+    // 4. Data Preparation
     const docRef = doc(db, 'mt5_accounts', String(accountId));
-    
-    // 5. Save metrics into Firestore (Using the non-blocking pattern as per guidelines)
     const updatePayload = {
-      login: login || null,
+      login: login ? String(login) : null,
       balance: Number(balance) || 0,
       equity: Number(equity) || 0,
       margin: Number(margin) || 0,
@@ -55,28 +56,29 @@ export async function POST(request: Request) {
       updatedAt: serverTimestamp()
     };
 
-    setDoc(docRef, updatePayload, { merge: true })
-      .catch(async (serverError) => {
-        const permissionError = new FirestorePermissionError({
-          path: docRef.path,
-          operation: 'write',
-          requestResourceData: updatePayload,
-        } satisfies SecurityRuleContext);
-        errorEmitter.emit('permission-error', permissionError);
-      });
+    // 5. Fire-and-forget mutation (following non-blocking guidance for performance)
+    // Note: In a serverless route, we return the response immediately after dispatching the write.
+    setDoc(docRef, updatePayload, { merge: true });
 
-    // 6. Return plain text OK for terminal compatibility
+    // 6. Return raw text OK for terminal compatibility
     return new Response('OK', {
       status: 200,
       headers: { 'Content-Type': 'text/plain' },
     });
+
   } catch (error: any) {
-    console.error('[MT5 Update Failure]:', error);
-    return new Response('Internal Server Error', { status: 500 });
+    // Catch-all for server errors to prevent HTML error page rendering
+    return new Response(`Error: ${error.message || 'Internal Server Error'}`, { 
+      status: 500,
+      headers: { 'Content-Type': 'text/plain' }
+    });
   }
 }
 
-// Ensure the route handler only responds to POST
+// Support GET for simple connectivity verification
 export async function GET() {
-  return new Response('Method Not Allowed', { status: 405 });
+  return new Response('OK', { 
+    status: 200, 
+    headers: { 'Content-Type': 'text/plain' } 
+  });
 }

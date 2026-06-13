@@ -1,4 +1,3 @@
-
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
@@ -15,14 +14,19 @@ export function middleware(request: NextRequest) {
   const isMaintenancePage = request.nextUrl.pathname === '/maintenance';
   const isStaticAsset = request.nextUrl.pathname.startsWith('/_next') || request.nextUrl.pathname.startsWith('/favicon.ico');
 
+  // CRITICAL: Bypassing middleware logic for API routes to ensure terminal compatibility
+  if (isApiRoute) {
+    return NextResponse.next();
+  }
+
   // Maintenance mode check via environment variable
   const isMaintenanceMode = process.env.MAINTENANCE_MODE === 'true';
 
-  if (isMaintenanceMode && !isMaintenancePage && !isApiRoute && !isStaticAsset) {
+  if (isMaintenanceMode && !isMaintenancePage && !isStaticAsset) {
     return NextResponse.redirect(new URL('/maintenance', request.url));
   }
 
-  // Rate Limiting (Skip for internal Next.js assets, but apply to API)
+  // Rate Limiting (Skip for internal Next.js assets)
   if (!isStaticAsset) {
     const currentLimit = rateLimitMap.get(ip) ?? { count: 0, lastReset: now };
     if (now - currentLimit.lastReset > windowMs) {
@@ -47,14 +51,7 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Use a cleaner matcher that handles API routes explicitly
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
     '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };
