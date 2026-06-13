@@ -12,11 +12,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
 import { 
-  Lock, Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Mail, Send, AlertTriangle, User, History, Trash2, Award, Terminal, ShieldAlert
+  Lock, Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Mail, Send, AlertTriangle, User, History, Trash2, Award, Terminal, ShieldAlert, BarChart3, Search, ExternalLink, Filter
 } from 'lucide-react';
 import { useFirestore, useCollection } from '@/firebase';
-import { doc, updateDoc, deleteDoc, setDoc, serverTimestamp, getDoc, addDoc, collection, writeBatch, query, where, getDocs, increment } from 'firebase/firestore';
+import { doc, updateDoc, deleteDoc, setDoc, serverTimestamp, getDoc, addDoc, collection, writeBatch, query, where, getDocs, increment, orderBy } from 'firebase/firestore';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import DashboardPage from '@/app/dashboard/page';
 import { cn } from '@/lib/utils';
@@ -28,54 +29,64 @@ const ADMIN_PASSWORD = "93463962569392846256";
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
+  const [activeTab, setActiveTab] = useState('overview');
   const [searchTerm, setSearchTerm] = useState('');
   const [previewUserId, setPreviewUserId] = useState<string | null>(null);
   const { toast } = useToast();
   const db = useFirestore();
 
+  // Dialog States
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [isManageAccountOpen, setIsManageAccountOpen] = useState(false);
-  const [isSendNotificationOpen, setIsSendNotificationOpen] = useState(false);
+  const [isFreeAccountOpen, setIsFreeAccountOpen] = useState(false);
+  const [isKycReviewOpen, setIsKycReviewOpen] = useState(false);
   
+  // Form States
+  const [rejectionReason, setRejectionReason] = useState('');
   const [provisionPlan, setProvisionPlan] = useState('1-Step Pro');
   const [provisionSize, setProvisionSize] = useState('$100,000');
-  const [rejectionReason, setRejectionReason] = useState('');
-  const [breachReason, setBreachReason] = useState('Daily Drawdown Exceeded');
 
-  // Notification states
+  // Notification States
   const [notifTitle, setNotifTitle] = useState('');
   const [notifMessage, setNotifMessage] = useState('');
   const [notifPriority, setNotifPriority] = useState('normal');
   const [notifTarget, setNotifTarget] = useState('all');
   const [isSendingNotif, setIsSendingNotif] = useState(false);
 
-  const emptyConstraints = useMemo(() => [], []);
-  const { data: orders } = useCollection<any>('orders', emptyConstraints);
-  const { data: traders } = useCollection<any>('users', emptyConstraints);
-  const { data: payouts } = useCollection<any>('payouts', emptyConstraints);
-  const { data: referrals } = useCollection<any>('referrals', emptyConstraints);
-  const { data: broadcasts } = useCollection<any>('broadcasts', emptyConstraints);
-
-  const [userAccounts, setUserAccounts] = useState<any[]>([]);
+  // Persistence for Tab
   useEffect(() => {
-    if (selectedUser && isManageAccountOpen) {
-      const q = query(collection(db, 'accounts'), where('userId', '==', selectedUser.id));
-      getDocs(q).then(snap => {
-        setUserAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      });
-    }
-  }, [selectedUser, isManageAccountOpen, db]);
+    const saved = localStorage.getItem('admin_active_tab');
+    if (saved) setActiveTab(saved);
+  }, []);
 
-  const filteredTraders = useMemo(() => {
-    if (!searchTerm) return traders;
-    const lower = searchTerm.toLowerCase();
-    return traders.filter(t => 
-      t.name?.toLowerCase().includes(lower) || 
-      t.email?.toLowerCase().includes(lower) ||
-      t.traderId?.toLowerCase().includes(lower) ||
-      t.referralCode?.toLowerCase().includes(lower)
-    );
-  }, [traders, searchTerm]);
+  const handleTabChange = (val: string) => {
+    setActiveTab(val);
+    localStorage.setItem('admin_active_tab', val);
+  };
+
+  // Data Fetching
+  const emptyConstraints = useMemo(() => [], []);
+  const { data: orders, loading: ordersLoading } = useCollection<any>('orders', emptyConstraints);
+  const { data: traders, loading: tradersLoading } = useCollection<any>('users', emptyConstraints);
+  const { data: payouts, loading: payoutsLoading } = useCollection<any>('payouts', emptyConstraints);
+  const { data: referrals, loading: referralsLoading } = useCollection<any>('referrals', emptyConstraints);
+  const { data: broadcasts, loading: broadcastsLoading } = useCollection<any>('broadcasts', emptyConstraints);
+
+  const stats = useMemo(() => {
+    const totalRevenue = orders?.filter(o => o.status === 'verified').reduce((acc, o) => acc + parseFloat(o.price?.replace('$', '') || 0), 0) || 0;
+    const pendingKyc = traders?.filter(t => t.kycStatus === 'pending').length || 0;
+    const pendingPayouts = payouts?.filter(p => p.status === 'pending').length || 0;
+    const activeChallenges = orders?.filter(o => o.status === 'verified').length || 0;
+
+    return {
+      totalUsers: traders?.length || 0,
+      totalOrders: orders?.length || 0,
+      revenue: totalRevenue,
+      pendingKyc,
+      pendingPayouts,
+      activeChallenges
+    };
+  }, [traders, orders, payouts]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,7 +105,7 @@ export default function AdminPage() {
       
       const accountId = Math.random().toString(36).substring(7).toUpperCase();
       const login = Math.floor(1000000 + Math.random() * 9000000).toString();
-      const password = Math.random().toString(36).substring(2, 12);
+      const pass = Math.random().toString(36).substring(2, 12);
       
       const accountData = {
         userId: order.userId,
@@ -102,9 +113,9 @@ export default function AdminPage() {
         plan: order.plan,
         size: order.size,
         mt5Login: login,
-        mt5Password: password,
+        mt5Password: pass,
         mt5Server: "PrimeFunded-Live",
-        balance: parseFloat(order.size.replace('$', '').replace(',', '').replace('k', '000')),
+        balance: parseFloat(order.size?.replace('$', '').replace(',', '').replace('k', '000') || 0),
         status: "active",
         startDate: new Date().toISOString(),
         createdAt: serverTimestamp(),
@@ -112,11 +123,11 @@ export default function AdminPage() {
 
       await setDoc(doc(db, 'accounts', accountId), accountData);
       
-      // Check referrer preferences before notifying
+      // Referral Logic
       const userSnap = await getDoc(doc(db, 'users', order.userId));
       const referredBy = userSnap.data()?.referredBy;
       if (referredBy) {
-        const amount = Math.min(parseFloat(order.price.replace('$', '')) * 0.10, 50);
+        const amount = Math.min(parseFloat(order.price?.replace('$', '') || 0) * 0.10, 50);
         const referralId = Math.random().toString(36).substring(7);
         await setDoc(doc(db, 'referrals', referralId), {
           referrerId: referredBy,
@@ -128,16 +139,16 @@ export default function AdminPage() {
           status: 'pending',
           createdAt: serverTimestamp()
         });
-
+        
+        // Notify Referrer
         const referrerSnap = await getDoc(doc(db, 'users', referredBy));
         if (referrerSnap.exists()) {
           const rData = referrerSnap.data();
           const prefs = rData.notificationPreferences || { inApp: true, email: true, referral: true };
-          
           if (prefs.inApp && prefs.referral) {
             await addDoc(collection(db, 'users', referredBy, 'notifications'), {
               title: "👥 Referral Earned!",
-              message: `Your referral ${order.email.split('@')[0].slice(0, 3)}*** just purchased a challenge. You earned $${amount.toFixed(2)} commission!`,
+              message: `Your referral just purchased a challenge. You earned $${amount.toFixed(2)} commission!`,
               type: 'referral_earned',
               isRead: false,
               createdAt: serverTimestamp()
@@ -149,21 +160,82 @@ export default function AdminPage() {
         }
       }
 
-      // Notify User about challenge (respecting prefs)
-      const uPrefs = userSnap.data()?.notificationPreferences || { inApp: true, email: true, challenge: true };
-      if (uPrefs.inApp && uPrefs.challenge) {
-        await addDoc(collection(db, 'users', order.userId, 'notifications'), {
-          title: "🎯 Challenge Activated",
-          message: `Your ${order.plan} - ${order.size} challenge is now live! Check your MT5 credentials.`,
-          type: 'challenge_active',
+      toast({ title: "Order Verified", description: "Account created and user notified." });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Verification Failed" });
+    }
+  };
+
+  const handleKycAction = async (user: any, action: 'verified' | 'rejected') => {
+    try {
+      const userRef = doc(db, 'users', user.id);
+      const updates: any = { 
+        kycStatus: action,
+        kycVerified: action === 'verified',
+        kycRejectionReason: action === 'rejected' ? rejectionReason : null
+      };
+      await updateDoc(userRef, updates);
+
+      const prefs = user.notificationPreferences || { inApp: true, email: true };
+      if (prefs.inApp) {
+        await addDoc(collection(db, 'users', user.id, 'notifications'), {
+          title: action === 'verified' ? "✅ KYC Approved" : "❌ KYC Rejected",
+          message: action === 'verified' ? "Your documents were verified! Payouts unlocked." : `Your KYC was rejected. Reason: ${rejectionReason}`,
+          type: action === 'verified' ? 'kyc_approved' : 'kyc_rejected',
           isRead: false,
           createdAt: serverTimestamp()
         });
       }
 
-      toast({ title: "Order Verified", description: `Account created and notifications sent.` });
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Verification Failed" });
+      if (action === 'verified') sendKycApprovalEmail(user.email);
+      else sendKycRejectionEmail(user.email, rejectionReason);
+
+      toast({ title: `KYC ${action.charAt(0).toUpperCase() + action.slice(1)}` });
+      setIsKycReviewOpen(false);
+      setRejectionReason('');
+    } catch (err) {
+      toast({ variant: "destructive", title: "Action failed" });
+    }
+  };
+
+  const handleGrantFreeAccount = async () => {
+    if (!selectedUser) return;
+    try {
+      const accountId = Math.random().toString(36).substring(7).toUpperCase();
+      const login = Math.floor(1000000 + Math.random() * 9000000).toString();
+      const pass = Math.random().toString(36).substring(2, 12);
+      
+      const accountData = {
+        userId: selectedUser.id,
+        email: selectedUser.email,
+        plan: provisionPlan,
+        size: provisionSize,
+        mt5Login: login,
+        mt5Password: pass,
+        mt5Server: "PrimeFunded-Live",
+        balance: parseFloat(provisionSize.replace('$', '').replace(',', '').replace('k', '000')),
+        status: "active",
+        startDate: new Date().toISOString(),
+        paymentStatus: "free_grant",
+        grantedBy: "admin",
+        createdAt: serverTimestamp(),
+      };
+
+      await setDoc(doc(db, 'accounts', accountId), accountData);
+      
+      await addDoc(collection(db, 'users', selectedUser.id, 'notifications'), {
+        title: "🎁 Free Account Granted",
+        message: `An admin has granted you a free ${provisionSize} ${provisionPlan} account.`,
+        type: 'admin_direct',
+        isRead: false,
+        createdAt: serverTimestamp()
+      });
+
+      sendFreeAccountGrantEmail(selectedUser.email, provisionPlan, provisionSize);
+      toast({ title: "Account Granted Successfully" });
+      setIsFreeAccountOpen(false);
+    } catch (err) {
+      toast({ variant: "destructive", title: "Failed to grant account" });
     }
   };
 
@@ -180,8 +252,6 @@ export default function AdminPage() {
 
       targetUsers.forEach(u => {
         const prefs = u.notificationPreferences || { inApp: true, email: true, announcements: true };
-        
-        // Only notify if they have announcements enabled
         if (prefs.announcements) {
           if (prefs.inApp) {
             const notifRef = doc(collection(db, 'users', u.id, 'notifications'));
@@ -212,40 +282,13 @@ export default function AdminPage() {
       });
 
       await batch.commit();
-      toast({ title: "Broadcast Sent", description: `Message delivered to ${sentCount} users (respecting preferences).` });
+      toast({ title: "Broadcast Sent", description: `Delivered to ${sentCount} users.` });
       setNotifTitle('');
       setNotifMessage('');
     } catch (err) {
       toast({ variant: "destructive", title: "Broadcast Failed" });
     } finally {
       setIsSendingNotif(false);
-    }
-  };
-
-  const handleSendIndividualNotif = async () => {
-    if (!selectedUser || !notifTitle || !notifMessage) return;
-    try {
-      const prefs = selectedUser.notificationPreferences || { inApp: true, email: true };
-      
-      if (prefs.inApp) {
-        await addDoc(collection(db, 'users', selectedUser.id, 'notifications'), {
-          title: notifTitle,
-          message: notifMessage,
-          type: 'admin_direct',
-          isRead: false,
-          sentByAdmin: true,
-          createdAt: serverTimestamp()
-        });
-      }
-      
-      if (prefs.email) {
-        sendBroadcastEmail(selectedUser.email, notifTitle, notifMessage, selectedUser.name);
-      }
-
-      toast({ title: "Notification Sent" });
-      setIsSendNotificationOpen(false);
-    } catch (err) {
-      toast({ variant: "destructive", title: "Failed to send" });
     }
   };
 
@@ -271,15 +314,21 @@ export default function AdminPage() {
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="w-full max-w-md border-primary/20 bg-card/50">
+        <Card className="w-full max-w-md border-primary/20 bg-card/50 backdrop-blur-xl">
           <CardHeader className="text-center">
-            <Lock className="text-primary w-12 h-12 mx-auto mb-4" />
-            <CardTitle>Admin Access</CardTitle>
+            <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-primary/20">
+              <Shield className="text-primary w-8 h-8" />
+            </div>
+            <CardTitle className="text-2xl font-headline font-bold">Admin Portal</CardTitle>
+            <CardDescription>Enter master credentials to access the terminal.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-6">
-              <Input type="password" placeholder="Master Password" value={password} onChange={(e) => setPassword(e.target.value)} />
-              <Button type="submit" className="w-full">Verify Credentials</Button>
+              <div className="space-y-2">
+                <Label>Master Key</Label>
+                <Input type="password" placeholder="••••••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="h-12 bg-secondary/30" />
+              </div>
+              <Button type="submit" className="w-full h-12 font-bold cyan-box-glow">Access Terminal</Button>
             </form>
           </CardContent>
         </Card>
@@ -290,27 +339,390 @@ export default function AdminPage() {
   return (
     <div className="flex min-h-screen bg-background">
       <Navigation />
-      <main className="flex-1 p-8 overflow-y-auto">
-        <Tabs defaultValue="overview" className="space-y-8">
-          <TabsList className="bg-secondary/50 p-1 h-12 w-full justify-start rounded-xl overflow-x-auto">
-            <TabsTrigger value="overview"><Activity className="w-4 h-4 mr-2" /> Overview</TabsTrigger>
-            <TabsTrigger value="orders"><ShoppingCart className="w-4 h-4 mr-2" /> Orders</TabsTrigger>
-            <TabsTrigger value="users"><Users className="w-4 h-4 mr-2" /> Users</TabsTrigger>
-            <TabsTrigger value="kyc"><Fingerprint className="w-4 h-4 mr-2" /> KYC Hub</TabsTrigger>
-            <TabsTrigger value="notifications"><Bell className="w-4 h-4 mr-2" /> Send Message</TabsTrigger>
-            <TabsTrigger value="referrals"><TrendingUp className="w-4 h-4 mr-2" /> Referrals</TabsTrigger>
-            <TabsTrigger value="payouts"><Wallet className="w-4 h-4 mr-2" /> Payouts</TabsTrigger>
+      <main className="flex-1 p-8 overflow-y-auto custom-scrollbar">
+        <div className="flex justify-between items-start mb-8">
+          <div>
+            <h1 className="text-4xl font-headline font-bold mb-1">Administrative Terminal</h1>
+            <p className="text-muted-foreground">Monitor performance, manage users, and process payouts.</p>
+          </div>
+          <div className="flex gap-4">
+             <div className="relative">
+               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+               <Input 
+                 placeholder="Quick search user/order..." 
+                 className="pl-10 w-64 h-10 bg-secondary/50" 
+                 value={searchTerm}
+                 onChange={e => setSearchTerm(e.target.value)}
+               />
+             </div>
+          </div>
+        </div>
+
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-8">
+          <TabsList className="bg-secondary/50 p-1 h-12 w-full justify-start rounded-xl overflow-x-auto border border-border/50">
+            <TabsTrigger value="overview" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg"><Activity className="w-4 h-4 mr-2" /> Overview</TabsTrigger>
+            <TabsTrigger value="orders" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg"><ShoppingCart className="w-4 h-4 mr-2" /> Orders</TabsTrigger>
+            <TabsTrigger value="users" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg"><Users className="w-4 h-4 mr-2" /> Users</TabsTrigger>
+            <TabsTrigger value="kyc" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg"><Fingerprint className="w-4 h-4 mr-2" /> KYC Hub</TabsTrigger>
+            <TabsTrigger value="referrals" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg"><TrendingUp className="w-4 h-4 mr-2" /> Referrals</TabsTrigger>
+            <TabsTrigger value="payouts" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg"><Wallet className="w-4 h-4 mr-2" /> Payouts</TabsTrigger>
+            <TabsTrigger value="notifications" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg"><Bell className="w-4 h-4 mr-2" /> Broadcast</TabsTrigger>
           </TabsList>
 
-          {/* Tab contents are omitted for brevity in this snippet as they follow standard patterns */}
+          <TabsContent value="overview">
+            {tradersLoading ? <LoadingGrid /> : (
+              <div className="space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <StatCard title="Total Revenue" value={`$${stats.revenue.toLocaleString()}`} icon={<Wallet />} color="blue" />
+                  <StatCard title="Total Traders" value={stats.totalUsers} icon={<Users />} color="purple" />
+                  <StatCard title="Active Challenges" value={stats.activeChallenges} icon={<Award />} color="green" />
+                  <StatCard title="Pending KYC" value={stats.pendingKyc} icon={<Fingerprint />} color="amber" />
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  <Card className="lg:col-span-2 border-border/50 bg-card/30">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2"><BarChart3 className="w-5 h-5 text-primary" /> Growth Metrics</CardTitle>
+                    </CardHeader>
+                    <CardContent className="h-[300px] flex items-center justify-center border-t border-border/30">
+                       <div className="text-center text-muted-foreground">
+                         <TrendingUp className="w-12 h-12 mx-auto mb-2 opacity-10" />
+                         <p className="text-sm font-medium">Platform growth tracking is visualizing...</p>
+                       </div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="border-border/50 bg-card/30">
+                    <CardHeader>
+                      <CardTitle className="text-lg flex items-center gap-2"><History className="w-5 h-5 text-primary" /> Activity Feed</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                       <div className="divide-y divide-border/30">
+                         {orders?.slice(0, 5).map((o: any) => (
+                           <div key={o.id} className="p-4 flex items-center gap-3">
+                             <div className="p-2 bg-primary/10 rounded-lg">
+                               <ShoppingCart className="w-4 h-4 text-primary" />
+                             </div>
+                             <div>
+                               <p className="text-xs font-bold text-white">{o.email.split('@')[0]} purchased {o.size}</p>
+                               <p className="text-[10px] text-muted-foreground">{new Date(o.date).toLocaleString()}</p>
+                             </div>
+                           </div>
+                         ))}
+                         {orders?.length === 0 && <p className="p-10 text-center text-xs text-muted-foreground italic">No recent activity</p>}
+                       </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="orders">
+            <Card className="border-border/50 bg-card/30">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Challenge Purchases</CardTitle>
+                  <CardDescription>Verify and provision new trading accounts.</CardDescription>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {ordersLoading ? <LoadingTable /> : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
+                        <tr>
+                          <th className="py-4 px-6">Order ID</th>
+                          <th className="py-4 px-6">User / UID</th>
+                          <th className="py-4 px-6">Challenge</th>
+                          <th className="py-4 px-6">Price</th>
+                          <th className="py-4 px-6">TX Hash</th>
+                          <th className="py-4 px-6">Status</th>
+                          <th className="py-4 px-6 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/30">
+                        {orders?.map((o: any) => (
+                          <tr key={o.id} className="hover:bg-primary/5 transition-colors">
+                            <td className="py-4 px-6 font-mono text-xs">{o.id.slice(0, 8)}</td>
+                            <td className="py-4 px-6">
+                              <div className="flex flex-col">
+                                <span className="font-bold text-white">{o.email}</span>
+                                <span className="text-[10px] text-muted-foreground">UID: {o.userId?.slice(0, 8)}</span>
+                              </div>
+                            </td>
+                            <td className="py-4 px-6">
+                              <Badge variant="outline" className="text-[10px] uppercase font-bold">{o.plan} {o.size}</Badge>
+                            </td>
+                            <td className="py-4 px-6 font-bold text-primary">{o.price}</td>
+                            <td className="py-4 px-6">
+                               <div className="flex items-center gap-1 group">
+                                 <span className="font-mono text-[10px] truncate max-w-[80px] text-muted-foreground">{o.txHash}</span>
+                                 <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" />
+                               </div>
+                            </td>
+                            <td className="py-4 px-6">
+                              <Badge className={o.status === 'verified' ? "bg-accent" : "bg-amber-500"}>{o.status}</Badge>
+                            </td>
+                            <td className="py-4 px-6 text-right">
+                              {o.status === 'pending' && (
+                                <Button size="sm" className="h-8 font-bold" onClick={() => handleVerifyOrder(o)}>Verify Payment</Button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="users">
+            <Card className="border-border/50 bg-card/30">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>User Directory</CardTitle>
+                  <CardDescription>Manage trader profiles and access levels.</CardDescription>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {tradersLoading ? <LoadingTable /> : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
+                        <tr>
+                          <th className="py-4 px-6">UID / ID</th>
+                          <th className="py-4 px-6">Name</th>
+                          <th className="py-4 px-6">Contact</th>
+                          <th className="py-4 px-6">KYC</th>
+                          <th className="py-4 px-6">Status</th>
+                          <th className="py-4 px-6">Code</th>
+                          <th className="py-4 px-6 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/30">
+                        {traders?.filter(t => !searchTerm || t.email?.toLowerCase().includes(searchTerm.toLowerCase())).map((t: any) => (
+                          <tr key={t.id} className="hover:bg-primary/5 transition-colors">
+                            <td className="py-4 px-6 font-mono text-xs text-muted-foreground">
+                              {t.traderId || 'N/A'}
+                            </td>
+                            <td className="py-4 px-6">
+                              <span className="font-bold text-white">{t.name}</span>
+                            </td>
+                            <td className="py-4 px-6">
+                              <div className="flex flex-col">
+                                <span className="text-xs">{t.email}</span>
+                                <span className="text-[10px] text-muted-foreground">{t.phone || 'No phone'}</span>
+                              </div>
+                            </td>
+                            <td className="py-4 px-6">
+                              <KycBadge status={t.kycStatus} />
+                            </td>
+                            <td className="py-4 px-6">
+                              <Badge variant={t.status === 'suspended' ? 'destructive' : 'outline'} className="text-[10px] font-black">{t.status || 'active'}</Badge>
+                            </td>
+                            <td className="py-4 px-6 font-mono text-xs font-bold text-primary">{t.referralCode}</td>
+                            <td className="py-4 px-6 text-right">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="w-4 h-4" /></Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-48 bg-card border-border/50">
+                                  <DropdownMenuLabel>User Actions</DropdownMenuLabel>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem onClick={() => setPreviewUserId(t.id)}><Eye className="w-4 h-4 mr-2" /> View Dashboard</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => { setSelectedUser(t); setIsFreeAccountOpen(true); }}><Gift className="w-4 h-4 mr-2" /> Give Free Account</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => { setSelectedUser(t); setIsManageAccountOpen(true); }}><User className="w-4 h-4 mr-2" /> Manage Profile</DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem className="text-destructive"><Ban className="w-4 h-4 mr-2" /> Suspend Account</DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="kyc">
+             <div className="space-y-8">
+               <div className="grid grid-cols-3 gap-6">
+                 <StatCard title="Pending Review" value={stats.pendingKyc} icon={<Fingerprint />} color="amber" />
+                 <StatCard title="Verified Traders" value={traders?.filter(t => t.kycVerified).length || 0} icon={<CheckCircle2 />} color="green" />
+                 <StatCard title="Rejected Requests" value={traders?.filter(t => t.kycStatus === 'rejected').length || 0} icon={<XCircle />} color="red" />
+               </div>
+
+               <Card className="border-border/50 bg-card/30">
+                 <CardHeader>
+                   <CardTitle>KYC Verification Queue</CardTitle>
+                 </CardHeader>
+                 <CardContent className="p-0">
+                   <div className="overflow-x-auto">
+                     <table className="w-full text-sm text-left">
+                       <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
+                         <tr>
+                           <th className="py-4 px-6">Submission Date</th>
+                           <th className="py-4 px-6">User</th>
+                           <th className="py-4 px-6">Email</th>
+                           <th className="py-4 px-6">Documents</th>
+                           <th className="py-4 px-6 text-right">Actions</th>
+                         </tr>
+                       </thead>
+                       <tbody className="divide-y divide-border/30">
+                         {traders?.filter(t => t.kycStatus === 'pending').map((t: any) => (
+                           <tr key={t.id} className="hover:bg-primary/5 transition-colors">
+                             <td className="py-4 px-6 text-xs text-muted-foreground">{t.kycSubmittedAt ? new Date(t.kycSubmittedAt).toLocaleDateString() : 'Unknown'}</td>
+                             <td className="py-4 px-6 font-bold">{t.name}</td>
+                             <td className="py-4 px-6 text-xs">{t.email}</td>
+                             <td className="py-4 px-6">
+                               <Button variant="outline" size="sm" className="h-7 text-[10px] font-black" onClick={() => { setSelectedUser(t); setIsKycReviewOpen(true); }}>VIEW DOCUMENTS</Button>
+                             </td>
+                             <td className="py-4 px-6 text-right space-x-2">
+                               <Button size="sm" className="h-8 bg-accent font-bold" onClick={() => handleKycAction(t, 'verified')}>Approve</Button>
+                               <Button size="sm" variant="destructive" className="h-8 font-bold" onClick={() => { setSelectedUser(t); setIsKycReviewOpen(true); }}>Reject</Button>
+                             </td>
+                           </tr>
+                         ))}
+                         {traders?.filter(t => t.kycStatus === 'pending').length === 0 && (
+                           <tr><td colSpan={5} className="py-12 text-center text-muted-foreground italic">No pending KYC applications</td></tr>
+                         )}
+                       </tbody>
+                     </table>
+                   </div>
+                 </CardContent>
+               </Card>
+             </div>
+          </TabsContent>
+
+          <TabsContent value="referrals">
+             <div className="space-y-8">
+               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <StatCard title="Total Commissions" value={`$${referrals?.reduce((acc, r) => acc + (r.amount || 0), 0).toFixed(2)}`} icon={<TrendingUp />} color="blue" />
+                  <StatCard title="Paid Earnings" value={`$${referrals?.filter(r => r.status === 'paid').reduce((acc, r) => acc + (r.amount || 0), 0).toFixed(2)}`} icon={<CheckCircle2 />} color="green" />
+                  <StatCard title="Outstanding" value={`$${referrals?.filter(r => r.status === 'pending').reduce((acc, r) => acc + (r.amount || 0), 0).toFixed(2)}`} icon={<Clock />} color="amber" />
+               </div>
+
+               <Card className="border-border/50 bg-card/30">
+                 <CardHeader>
+                   <CardTitle>Commission Transactions</CardTitle>
+                 </CardHeader>
+                 <CardContent className="p-0">
+                   <div className="overflow-x-auto">
+                     <table className="w-full text-sm text-left">
+                       <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
+                         <tr>
+                           <th className="py-4 px-6">Referrer ID</th>
+                           <th className="py-4 px-6">Referred User</th>
+                           <th className="py-4 px-6">Challenge</th>
+                           <th className="py-4 px-6">Commission</th>
+                           <th className="py-4 px-6">Status</th>
+                           <th className="py-4 px-6 text-right">Action</th>
+                         </tr>
+                       </thead>
+                       <tbody className="divide-y divide-border/30">
+                         {referrals?.map((r: any) => (
+                           <tr key={r.id} className="hover:bg-primary/5">
+                             <td className="py-4 px-6 font-mono text-xs">{r.referrerId?.slice(0, 8)}</td>
+                             <td className="py-4 px-6 font-bold">{r.referredUserEmail}</td>
+                             <td className="py-4 px-6 text-xs uppercase">{r.plan}</td>
+                             <td className="py-4 px-6 font-bold text-accent">${r.amount?.toFixed(2)}</td>
+                             <td className="py-4 px-6">
+                               <Badge variant={r.status === 'paid' ? 'default' : 'outline'}>{r.status}</Badge>
+                             </td>
+                             <td className="py-4 px-6 text-right">
+                               {r.status === 'pending' && (
+                                 <Button size="sm" className="h-8" onClick={() => updateDoc(doc(db, 'referrals', r.id), { status: 'paid' })}>Mark Paid</Button>
+                               )}
+                             </td>
+                           </tr>
+                         ))}
+                       </tbody>
+                     </table>
+                   </div>
+                 </CardContent>
+               </Card>
+             </div>
+          </TabsContent>
+
+          <TabsContent value="payouts">
+            <Card className="border-border/50 bg-card/30">
+              <CardHeader>
+                <CardTitle>Payout Management</CardTitle>
+                <CardDescription>Review and approve profit split requests.</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                {payoutsLoading ? <LoadingTable /> : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
+                        <tr>
+                          <th className="py-4 px-6">Date</th>
+                          <th className="py-4 px-6">Trader / UID</th>
+                          <th className="py-4 px-6">Amount</th>
+                          <th className="py-4 px-6">KYC Status</th>
+                          <th className="py-4 px-6">Method</th>
+                          <th className="py-4 px-6">Status</th>
+                          <th className="py-4 px-6 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/30">
+                        {payouts?.map((p: any) => (
+                          <tr key={p.id} className="hover:bg-primary/5 transition-colors">
+                            <td className="py-4 px-6 text-xs text-muted-foreground">{new Date(p.date).toLocaleDateString()}</td>
+                            <td className="py-4 px-6">
+                              <div className="flex flex-col">
+                                <span className="font-bold text-white">{p.email}</span>
+                                <span className="text-[10px] text-muted-foreground">UID: {p.userId?.slice(0, 8)}</span>
+                              </div>
+                            </td>
+                            <td className="py-4 px-6 font-bold text-accent">${p.amount}</td>
+                            <td className="py-4 px-6">
+                              <KycBadge status={traders?.find(t => t.id === p.userId)?.kycStatus} />
+                            </td>
+                            <td className="py-4 px-6 text-xs uppercase font-bold">{p.method}</td>
+                            <td className="py-4 px-6">
+                               <Badge variant={p.status === 'done' ? 'default' : 'outline'}>{p.status}</Badge>
+                            </td>
+                            <td className="py-4 px-6 text-right space-x-2">
+                              {p.status === 'pending' && (
+                                <>
+                                  <Button size="sm" className="h-8" onClick={() => {
+                                    updateDoc(doc(db, 'payouts', p.id), { status: 'approved' });
+                                    toast({ title: "Payout Approved" });
+                                  }}>Approve</Button>
+                                  <Button size="sm" variant="destructive" className="h-8">Reject</Button>
+                                </>
+                              )}
+                              {p.status === 'approved' && (
+                                <Button size="sm" className="h-8 bg-accent" onClick={() => {
+                                  updateDoc(doc(db, 'payouts', p.id), { status: 'done' });
+                                  sendPayoutProcessedEmail(p.email, p.amount);
+                                  toast({ title: "Payout marked as Complete" });
+                                }}>Mark as Sent</Button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="notifications">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2 space-y-8">
                 <Card className="bg-card/40 border-border/50">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Send className="w-5 h-5 text-primary" /> Send Global Message
-                    </CardTitle>
+                    <CardTitle className="flex items-center gap-2"><Send className="w-5 h-5 text-primary" /> Send Global Message</CardTitle>
                     <CardDescription>Dispatch alerts to users who have "Announcements" enabled.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
@@ -356,12 +768,152 @@ export default function AdminPage() {
                   </CardContent>
                 </Card>
               </div>
+              
+              <div className="space-y-6">
+                <Card className="border-border/50 bg-card/30">
+                  <CardHeader><CardTitle className="text-lg">Recent Broadcasts</CardTitle></CardHeader>
+                  <CardContent className="p-0">
+                    <div className="divide-y divide-border/30">
+                      {broadcasts?.map((b: any) => (
+                        <div key={b.id} className="p-4 space-y-1">
+                          <p className="text-xs font-bold text-white">{b.title}</p>
+                          <div className="flex justify-between text-[10px] text-muted-foreground uppercase font-black tracking-widest">
+                             <span>To: {b.targetGroup}</span>
+                             <span>Recipients: {b.totalRecipients}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           </TabsContent>
-          
-          {/* Other tab contents... */}
         </Tabs>
       </main>
+
+      {/* Dialogs */}
+      <Dialog open={isFreeAccountOpen} onOpenChange={setIsFreeAccountOpen}>
+        <DialogContent className="bg-card border-primary/20">
+          <DialogHeader>
+            <DialogTitle>Grant Free Account Access</DialogTitle>
+            <DialogDescription>Provision an MT5 account for {selectedUser?.email} without payment.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-6 py-4">
+            <div className="space-y-2">
+              <Label>Challenge Plan</Label>
+              <Select value={provisionPlan} onValueChange={setProvisionPlan}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1-Step Pro">1-Step Pro</SelectItem>
+                  <SelectItem value="2-Step Classic">2-Step Classic</SelectItem>
+                  <SelectItem value="3-Step Classic">3-Step Classic</SelectItem>
+                  <SelectItem value="Instant Funding">Instant Funding</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Account Size</Label>
+              <Select value={provisionSize} onValueChange={setProvisionSize}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="$5,000">$5,000</SelectItem>
+                  <SelectItem value="$10,000">$10,000</SelectItem>
+                  <SelectItem value="$25,000">$25,000</SelectItem>
+                  <SelectItem value="$50,000">$50,000</SelectItem>
+                  <SelectItem value="$100,000">$100,000</SelectItem>
+                  <SelectItem value="$200,000">$200,000</SelectItem>
+                  <SelectItem value="$300,000">$300,000</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsFreeAccountOpen(false)}>Cancel</Button>
+            <Button onClick={handleGrantFreeAccount}>Confirm Grant</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isKycReviewOpen} onOpenChange={setIsKycReviewOpen}>
+        <DialogContent className="bg-card border-primary/20 max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Review KYC Application</DialogTitle>
+            <DialogDescription>Reviewing documents for {selectedUser?.name}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+               <div className="p-4 bg-secondary/50 rounded-xl border border-border text-center">
+                 <p className="text-[10px] font-black uppercase text-muted-foreground mb-2">ID Proof</p>
+                 <div className="aspect-video bg-black/40 rounded-lg flex items-center justify-center"><Fingerprint className="w-8 h-8 opacity-10" /></div>
+               </div>
+               <div className="p-4 bg-secondary/50 rounded-xl border border-border text-center">
+                 <p className="text-[10px] font-black uppercase text-muted-foreground mb-2">Address Proof</p>
+                 <div className="aspect-video bg-black/40 rounded-lg flex items-center justify-center"><Fingerprint className="w-8 h-8 opacity-10" /></div>
+               </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Rejection Reason (Required only for Rejection)</Label>
+              <Textarea 
+                placeholder="Explain why documents were rejected..." 
+                value={rejectionReason}
+                onChange={e => setRejectionReason(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+             <Button variant="destructive" className="font-bold" onClick={() => handleKycAction(selectedUser, 'rejected')} disabled={!rejectionReason}>Reject Documents</Button>
+             <Button className="bg-accent font-bold" onClick={() => handleKycAction(selectedUser, 'verified')}>Approve & Verify</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function StatCard({ title, value, icon, color }: { title: string, value: string | number, icon: any, color: string }) {
+  const colors: any = {
+    blue: 'text-primary bg-primary/10 border-primary/20',
+    purple: 'text-purple-500 bg-purple-500/10 border-purple-500/20',
+    green: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
+    amber: 'text-amber-500 bg-amber-500/10 border-amber-500/20',
+    red: 'text-destructive bg-destructive/10 border-destructive/20'
+  };
+  return (
+    <Card className="border-border/50 bg-card/30 hover:border-primary/20 transition-all duration-300 group">
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className={cn("p-2 rounded-lg border", colors[color])}>{icon}</div>
+          <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">LIVE</Badge>
+        </div>
+        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">{title}</p>
+        <h3 className="text-3xl font-headline font-bold text-white group-hover:text-primary transition-colors">{value}</h3>
+      </CardContent>
+    </Card>
+  );
+}
+
+function KycBadge({ status }: { status: string }) {
+  switch (status) {
+    case 'verified': return <Badge className="bg-accent text-accent-foreground font-black text-[10px] uppercase">VERIFIED ✅</Badge>;
+    case 'pending': return <Badge className="bg-amber-500 text-white font-black text-[10px] uppercase">PENDING ⏳</Badge>;
+    case 'rejected': return <Badge variant="destructive" className="font-black text-[10px] uppercase">REJECTED ❌</Badge>;
+    default: return <Badge variant="outline" className="text-muted-foreground font-black text-[10px] uppercase">NONE</Badge>;
+  }
+}
+
+function LoadingGrid() {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32 w-full rounded-xl bg-secondary/50" />)}
+    </div>
+  );
+}
+
+function LoadingTable() {
+  return (
+    <div className="space-y-4 p-8">
+      {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-12 w-full rounded-lg bg-secondary/30" />)}
     </div>
   );
 }
