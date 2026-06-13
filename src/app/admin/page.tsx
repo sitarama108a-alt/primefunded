@@ -61,7 +61,6 @@ export default function AdminPage() {
 
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [isManageAccountOpen, setIsManageAccountOpen] = useState(false);
-  const [isGrantFreeOpen, setIsGrantFreeOpen] = useState(false);
   const [isSendNotificationOpen, setIsSendNotificationOpen] = useState(false);
   
   const [provisionPlan, setProvisionPlan] = useState('1-Step Pro');
@@ -154,7 +153,6 @@ export default function AdminPage() {
         balance: accountData.balance
       });
 
-      // Add Notification
       await addDoc(collection(db, 'users', order.userId, 'notifications'), {
         title: "🎯 Challenge Activated",
         message: `Your ${order.plan} - ${order.size} challenge is now live! Check your MT5 credentials.`,
@@ -217,6 +215,7 @@ export default function AdminPage() {
     try {
       let targetUsers = traders;
       if (notifTarget === 'kyc_pending') targetUsers = traders.filter(t => t.kycStatus === 'pending');
+      if (notifTarget === 'funded') targetUsers = traders.filter(t => t.kycVerified === true);
       
       const batch = writeBatch(db);
       targetUsers.forEach(u => {
@@ -352,7 +351,7 @@ export default function AdminPage() {
             <TabsTrigger value="orders"><ShoppingCart className="w-4 h-4 mr-2" /> Orders</TabsTrigger>
             <TabsTrigger value="users"><Users className="w-4 h-4 mr-2" /> Users</TabsTrigger>
             <TabsTrigger value="kyc"><Fingerprint className="w-4 h-4 mr-2" /> KYC Hub</TabsTrigger>
-            <TabsTrigger value="notifications"><Bell className="w-4 h-4 mr-2" /> Notifications</TabsTrigger>
+            <TabsTrigger value="notifications"><Bell className="w-4 h-4 mr-2" /> Send Message</TabsTrigger>
             <TabsTrigger value="referrals"><TrendingUp className="w-4 h-4 mr-2" /> Referrals</TabsTrigger>
             <TabsTrigger value="payouts"><Wallet className="w-4 h-4 mr-2" /> Payouts</TabsTrigger>
           </TabsList>
@@ -372,9 +371,9 @@ export default function AdminPage() {
                 <Card className="bg-card/40 border-border/50">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <Send className="w-5 h-5 text-primary" /> Send Broadcast Message
+                      <Send className="w-5 h-5 text-primary" /> Send Global Message
                     </CardTitle>
-                    <CardDescription>Send a message and email to specific user segments.</CardDescription>
+                    <CardDescription>Dispatch an in-app notification and email to your selected target audience.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <div className="grid md:grid-cols-2 gap-4">
@@ -406,14 +405,14 @@ export default function AdminPage() {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label>Title</Label>
-                      <Input placeholder="e.g. System Maintenance" value={notifTitle} onChange={e => setNotifTitle(e.target.value)} />
+                      <Label>Notification Title</Label>
+                      <Input placeholder="e.g. System Update or Holiday Schedule" value={notifTitle} onChange={e => setNotifTitle(e.target.value)} />
                     </div>
                     <div className="space-y-2">
                       <Label>Message Body</Label>
-                      <Textarea placeholder="Type your message here..." className="min-h-[150px]" value={notifMessage} onChange={e => setNotifMessage(e.target.value)} />
+                      <Textarea placeholder="Type your broadcast message here..." className="min-h-[150px]" value={notifMessage} onChange={e => setNotifMessage(e.target.value)} />
                     </div>
-                    <Button className="w-full font-bold h-12" disabled={isSendingNotif} onClick={handleSendBroadcast}>
+                    <Button className="w-full font-bold h-12 cyan-box-glow" disabled={isSendingNotif || !notifTitle || !notifMessage} onClick={handleSendBroadcast}>
                       {isSendingNotif ? 'Sending Broadcast...' : 'Send Global Broadcast'}
                     </Button>
                   </CardContent>
@@ -453,12 +452,13 @@ export default function AdminPage() {
               <div className="space-y-6">
                  <Card className="border-primary/20 bg-primary/5">
                    <CardHeader>
-                     <CardTitle className="text-lg flex items-center gap-2"><Bell className="w-5 h-5" /> Quick Tips</CardTitle>
+                     <CardTitle className="text-lg flex items-center gap-2"><Bell className="w-5 h-5" /> Targeting Rules</CardTitle>
                    </CardHeader>
                    <CardContent className="text-xs text-muted-foreground leading-relaxed space-y-4">
-                     <p>• Broadcasts send an in-app notification to all matching users.</p>
-                     <p>• Targeted emails are triggered automatically along with the broadcast.</p>
-                     <p>• Priority "Urgent" will show the notification in red for users.</p>
+                     <p>• <strong>All Users</strong>: Every registered trader in the database.</p>
+                     <p>• <strong>KYC Pending</strong>: Users who have submitted documents but are not yet verified.</p>
+                     <p>• <strong>Funded Traders</strong>: Users with a "Verified" KYC status and an active trading balance.</p>
+                     <p className="pt-2 italic">Note: Every broadcast sends both an in-app notification and an automated email.</p>
                    </CardContent>
                  </Card>
               </div>
@@ -552,21 +552,22 @@ export default function AdminPage() {
         <Dialog open={isSendNotificationOpen} onOpenChange={setIsSendNotificationOpen}>
           <DialogContent className="bg-card">
             <DialogHeader>
-              <DialogTitle>Send Notification to {selectedUser?.name}</DialogTitle>
+              <DialogTitle>Send Message to {selectedUser?.name}</DialogTitle>
+              <DialogDescription>This will send a direct in-app notification and push alert to this specific trader.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
                <div className="space-y-2">
                  <Label>Notification Title</Label>
-                 <Input value={notifTitle} onChange={e => setNotifTitle(e.target.value)} placeholder="Alert Title" />
+                 <Input value={notifTitle} onChange={e => setNotifTitle(e.target.value)} placeholder="e.g. Account Update" />
                </div>
                <div className="space-y-2">
                  <Label>Message</Label>
-                 <Textarea value={notifMessage} onChange={e => setNotifMessage(e.target.value)} placeholder="Detailed message..." />
+                 <Textarea value={notifMessage} onChange={e => setNotifMessage(e.target.value)} placeholder="Detailed message..." className="min-h-[120px]" />
                </div>
             </div>
             <DialogFooter>
                <Button variant="outline" onClick={() => setIsSendNotificationOpen(false)}>Cancel</Button>
-               <Button onClick={handleSendIndividualNotif} disabled={!notifTitle || !notifMessage}>Send Notification</Button>
+               <Button onClick={handleSendIndividualNotif} disabled={!notifTitle || !notifMessage} className="cyan-box-glow">Send Message</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
