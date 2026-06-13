@@ -28,7 +28,8 @@ import {
   X,
   Loader2,
   AlertTriangle,
-  Lock
+  Lock,
+  XCircle
 } from 'lucide-react';
 import { useCollection, useFirestore } from '@/firebase';
 import { where, doc, updateDoc, query, collection, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -239,12 +240,12 @@ export default function ReferralPage() {
                       className="space-y-4"
                     >
                       <div className="relative">
-                        <Input 
+                        <input 
                           value={newCode}
                           onChange={(e) => setNewCode(e.target.value.toUpperCase())}
                           placeholder="ENTER NEW CODE"
                           className={cn(
-                            "text-2xl font-mono font-bold tracking-widest h-16 text-center uppercase border-2",
+                            "flex h-16 w-full rounded-md border-2 bg-background px-3 py-2 text-2xl font-mono font-bold tracking-widest text-center uppercase ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
                             availabilityStatus === 'available' && "border-accent bg-accent/5",
                             availabilityStatus === 'taken' && "border-destructive bg-destructive/5",
                             availabilityStatus === 'invalid' && "border-amber-500 bg-amber-500/5",
@@ -378,7 +379,7 @@ export default function ReferralPage() {
                     {canWithdraw 
                       ? "You have reached the minimum requirement and are KYC verified." 
                       : !isKycVerified 
-                      ? "Complete KYC verification to withdraw referral earnings."
+                      ? "Complete KYC verification to unlock referral earnings."
                       : `Minimum $${MIN_WITHDRAWAL} required to withdraw pending commissions.`
                     }
                   </p>
@@ -521,25 +522,4 @@ function StepItem({ step, icon, title, desc }: { step: string, icon: any, title:
       <p className="text-sm text-muted-foreground">{desc}</p>
     </div>
   );
-}
-
-function XCircle(props: any) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <path d="m15 9-6 6" />
-      <path d="m9 9 6 6" />
-    </svg>
-  )
 }
