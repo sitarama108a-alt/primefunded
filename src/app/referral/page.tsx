@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -30,7 +30,7 @@ import {
   Info
 } from 'lucide-react';
 import { useCollection, useFirestore } from '@/firebase';
-import { where, doc, updateDoc, query, collection, getDocs, setDoc, serverTimestamp, limit, orderBy } from 'firebase/firestore';
+import { where, doc, updateDoc, query, collection, getDocs, setDoc, serverTimestamp, limit, orderBy, getDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -47,7 +47,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
+import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 
 export default function ReferralPage() {
   const { user, userData, loading: authLoading } = useAuth();
@@ -60,33 +60,78 @@ export default function ReferralPage() {
   const [availabilityStatus, setAvailabilityStatus] = useState<'idle' | 'validating' | 'available' | 'taken' | 'invalid' | 'too-short'>('idle');
   const [isSaving, setIsSaving] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [initializing, setInitializing] = useState(true);
 
   const MIN_WITHDRAWAL = 100;
   const MAX_CHANGES = 3;
 
-  // Auto-generate code if missing
-  useEffect(() => {
-    if (userData && user && !userData.referralCode && !authLoading) {
-      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-      let result = '';
-      for (let i = 0; i < 8; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      
-      const userRef = doc(db, 'users', user.uid);
-      const codeRegRef = doc(db, 'referralCodes', result);
-
-      updateDoc(userRef, { referralCode: result, codeChangesCount: 0 })
-        .catch(() => { /* Silent fail if doc doesn't exist yet */ });
-      
-      setDoc(codeRegRef, {
-        code: result,
-        userId: user.uid,
-        active: true,
-        createdAt: serverTimestamp()
-      }).catch(() => {});
+  const generateUniqueCode = useCallback(() => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 8; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-  }, [userData, user, db, authLoading]);
+    return result;
+  }, []);
+
+  // Comprehensive Data Initialization
+  useEffect(() => {
+    const initializeReferralData = async (userId: string) => {
+      try {
+        const userRef = doc(db, 'users', userId);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists()) {
+          const data = userSnap.data();
+          const updates: any = {};
+          let shouldUpdate = false;
+
+          // Check for missing referral fields
+          if (!data?.referralCode) {
+            const code = generateUniqueCode();
+            updates.referralCode = code;
+            updates.codeChangesCount = 0;
+            shouldUpdate = true;
+
+            // Register code in global registry
+            const codeRegRef = doc(db, 'referralCodes', code);
+            setDoc(codeRegRef, {
+              code,
+              userId: userId,
+              active: true,
+              createdAt: serverTimestamp()
+            }).catch(() => {});
+          }
+
+          if (data?.referralCount === undefined) { updates.referralCount = 0; shouldUpdate = true; }
+          if (data?.referralEarnings === undefined) { updates.referralEarnings = 0; shouldUpdate = true; }
+          if (data?.pendingReferralEarnings === undefined) { updates.pendingReferralEarnings = 0; shouldUpdate = true; }
+          if (data?.paidReferralEarnings === undefined) { updates.paidReferralEarnings = 0; shouldUpdate = true; }
+          if (data?.codeChangesCount === undefined) { updates.codeChangesCount = data?.codeChangesCount || 0; shouldUpdate = true; }
+
+          if (shouldUpdate) {
+            updateDoc(userRef, updates).catch(async (err) => {
+              errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+                path: userRef.path, 
+                operation: 'update',
+                requestResourceData: updates
+              } satisfies SecurityRuleContext));
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Initialization error:", err);
+      } finally {
+        setInitializing(false);
+      }
+    };
+
+    if (user && !authLoading) {
+      initializeReferralData(user.uid);
+    } else if (!authLoading && !user) {
+      setInitializing(false);
+    }
+  }, [user, authLoading, db, generateUniqueCode]);
 
   // Code availability check
   useEffect(() => {
@@ -143,7 +188,8 @@ export default function ReferralPage() {
 
   const referralLink = useMemo(() => {
     const code = userData?.referralCode || '';
-    return typeof window !== 'undefined' ? `${window.location.origin}/signup?ref=${code}` : `https://primefunded.com/signup?ref=${code}`;
+    if (typeof window === 'undefined') return `https://primefunded.com/signup?ref=${code}`;
+    return `${window.location.origin}/signup?ref=${code}`;
   }, [userData?.referralCode]);
 
   const stats = useMemo(() => {
@@ -176,14 +222,16 @@ export default function ReferralPage() {
         lastCodeChange: serverTimestamp()
       };
 
-      await updateDoc(userRef, updates);
+      updateDoc(userRef, updates).catch(async (err) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: updates }));
+      });
 
       if (oldCode) {
         const oldCodeRef = doc(db, 'referralCodes', oldCode);
         updateDoc(oldCodeRef, { active: false });
       }
 
-      await setDoc(newCodeRef, {
+      setDoc(newCodeRef, {
         code: newCode,
         userId: user.uid,
         active: true,
@@ -223,13 +271,15 @@ export default function ReferralPage() {
 
   const changesRemaining = MAX_CHANGES - (userData?.codeChangesCount || 0);
 
-  // Safety checks
-  if (authLoading) {
+  if (authLoading || initializing) {
     return (
       <div className="flex min-h-screen bg-background">
         <Navigation />
         <main className="flex-1 p-8 flex items-center justify-center">
-          <Loader2 className="w-10 h-10 animate-spin text-primary" />
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="w-10 h-10 animate-spin text-primary" />
+            <p className="text-xs font-black uppercase tracking-widest text-muted-foreground animate-pulse">Syncing Referral Terminal...</p>
+          </div>
         </main>
       </div>
     );
@@ -241,25 +291,9 @@ export default function ReferralPage() {
         <Navigation />
         <main className="flex-1 p-8 flex flex-col items-center justify-center text-center">
           <XCircle className="w-16 h-16 text-destructive mb-4" />
-          <h2 className="text-2xl font-bold">Unable to load profile</h2>
-          <p className="text-muted-foreground mt-2">Please check your internet connection and try again.</p>
-          <Button className="mt-6 font-bold" onClick={() => window.location.reload()}>Retry</Button>
-        </main>
-      </div>
-    );
-  }
-
-  if (referralsError) {
-    return (
-      <div className="flex min-h-screen bg-background">
-        <Navigation />
-        <main className="flex-1 p-8">
-          <div className="bg-destructive/10 border border-destructive/20 p-10 rounded-3xl text-center">
-            <AlertTriangle className="w-12 h-12 text-destructive mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-white">Database connection error</h2>
-            <p className="text-muted-foreground mt-2 max-w-sm mx-auto">We encountered an issue fetching your referral history. This may be due to missing database indexes.</p>
-            <Button className="mt-6" variant="outline" onClick={() => window.location.reload()}>Refresh Page</Button>
-          </div>
+          <h2 className="text-2xl font-bold">Session hydration incomplete</h2>
+          <p className="text-muted-foreground mt-2">We couldn't load your trader profile. Please try refreshing.</p>
+          <Button className="mt-6 font-bold cursor-pointer" onClick={() => window.location.reload()}>Retry Connection</Button>
         </main>
       </div>
     );
@@ -273,6 +307,16 @@ export default function ReferralPage() {
           <h1 className="text-3xl font-headline font-bold mb-1 text-white">Referral Program</h1>
           <p className="text-muted-foreground">Invite friends and earn up to $50.00 on every challenge purchase they make.</p>
         </header>
+
+        {referralsError && (
+          <div className="mb-10 bg-destructive/10 border border-destructive/20 p-6 rounded-2xl flex items-start gap-4">
+            <AlertTriangle className="w-6 h-6 text-destructive shrink-0" />
+            <div>
+              <p className="text-sm font-bold text-white uppercase tracking-tight">Database Indexing Required</p>
+              <p className="text-xs text-muted-foreground mt-1">We are having trouble sorting your referral history. This is usually resolved automatically by the system within a few minutes.</p>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
           <Card className="lg:col-span-1 border-primary/20 bg-primary/5 relative overflow-hidden">
@@ -323,7 +367,7 @@ export default function ReferralPage() {
                       <div className="flex gap-2">
                         <Button 
                           variant="outline" 
-                          className="flex-1 cursor-pointer" 
+                          className="flex-1 cursor-pointer font-bold" 
                           onClick={() => { setIsEditing(false); setNewCode(''); }}
                         >
                           Cancel
@@ -360,7 +404,10 @@ export default function ReferralPage() {
                           )}
                         </div>
                       ) : (
-                        <RefreshCw className="w-6 h-6 animate-spin text-primary/50" />
+                        <div className="flex flex-col items-center gap-2">
+                          <Loader2 className="w-6 h-6 animate-spin text-primary/50" />
+                          <p className="text-[9px] uppercase font-black tracking-widest text-muted-foreground">Generating Code...</p>
+                        </div>
                       )}
                     </motion.div>
                   )}
@@ -423,7 +470,7 @@ export default function ReferralPage() {
                 {!isKycVerified && (
                   <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 flex items-center gap-2">
                     <AlertTriangle className="text-destructive w-4 h-4 shrink-0" />
-                    <p className="text-[10px] font-bold text-destructive uppercase">KYC verification required to withdraw referral earnings</p>
+                    <p className="text-[10px] font-bold text-destructive uppercase tracking-tighter leading-none">KYC verification required to withdraw referral earnings</p>
                   </div>
                 )}
 
@@ -497,7 +544,7 @@ export default function ReferralPage() {
                     [1, 2, 3].map(i => (
                       <tr key={i}><td colSpan={5} className="py-4"><Skeleton className="h-10 w-full rounded-lg mx-6" /></td></tr>
                     ))
-                  ) : referrals && referrals.length > 0 ? referrals.map((r: any) => (
+                  ) : (referrals && referrals.length > 0) ? referrals.map((r: any) => (
                     <tr key={r.id} className="hover:bg-secondary/10">
                       <td className="py-4 px-6 text-xs text-muted-foreground">
                         {r.createdAt?.seconds ? new Date(r.createdAt.seconds * 1000).toLocaleDateString() : 'Processing...'}
@@ -505,19 +552,20 @@ export default function ReferralPage() {
                       <td className="py-4 px-6 font-bold truncate max-w-[150px]">
                         {r.referredUserEmail ? `${r.referredUserEmail.split('@')[0].slice(0, 3)}***@${r.referredUserEmail.split('@')[1]}` : 'Anonymous'}
                       </td>
-                      <td className="py-4 px-6 text-xs">{r.plan || 'N/A'}</td>
+                      <td className="py-4 px-6 text-xs uppercase font-black text-muted-foreground/50">{r.plan || 'N/A'}</td>
                       <td className="py-4 px-6 font-bold text-accent">${(r.amount || 0).toFixed(2)}</td>
                       <td className="py-4 px-6 text-right">
-                        <Badge variant={r.status === 'paid' ? 'default' : 'outline'} className="uppercase text-[9px]">
+                        <Badge variant={r.status === 'paid' ? 'default' : 'outline'} className="uppercase text-[9px] font-black">
                           {r.status || 'pending'}
                         </Badge>
                       </td>
                     </tr>
                   )) : (
                     <tr>
-                      <td colSpan={5} className="py-12 text-center text-muted-foreground flex flex-col items-center gap-2">
-                        <Info className="w-8 h-8 opacity-20" />
-                        <p className="italic">No referrals found yet. Start sharing to earn!</p>
+                      <td colSpan={5} className="py-20 text-center text-muted-foreground flex flex-col items-center gap-2">
+                        <Info className="w-12 h-12 opacity-10 mb-2" />
+                        <h3 className="text-lg font-bold text-white/40">No earnings found</h3>
+                        <p className="text-sm italic max-w-xs mx-auto">Your referrals will appear here once they complete a challenge purchase.</p>
                       </td>
                     </tr>
                   )}
@@ -541,10 +589,10 @@ export default function ReferralPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="cursor-pointer">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="cursor-pointer font-bold">Cancel</AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleSaveCode}
-              className="bg-accent text-accent-foreground hover:bg-accent/90 cursor-pointer"
+              className="bg-accent text-accent-foreground hover:bg-accent/90 cursor-pointer font-bold"
               disabled={isSaving}
             >
               {isSaving ? "Updating..." : "Yes, Change Code"}
@@ -563,10 +611,10 @@ function StatSmall({ title, value, icon, color = 'blue' }: { title: string, valu
     green: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
   };
   return (
-    <Card className="bg-secondary/30 border-border/50 p-6">
-      <div className={`p-2 rounded-lg w-fit mb-3 border ${colorMap[color]}`}>{icon}</div>
+    <Card className="bg-secondary/30 border-border/50 p-6 group hover:border-primary/20 transition-colors">
+      <div className={`p-2 rounded-lg w-fit mb-3 border transition-transform group-hover:scale-110 ${colorMap[color]}`}>{icon}</div>
       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{title}</p>
-      <p className="text-2xl font-bold font-headline tabular-nums">{value}</p>
+      <p className="text-2xl font-bold font-headline tabular-nums text-white">{value}</p>
     </Card>
   );
 }
@@ -578,8 +626,8 @@ function StepItem({ step, icon, title, desc }: { step: string, icon: any, title:
         {icon}
         <div className="absolute -top-2 -right-2 w-6 h-6 bg-primary text-primary-foreground rounded-full text-xs font-bold flex items-center justify-center border-2 border-background">{step}</div>
       </div>
-      <h3 className="font-bold text-lg mb-2">{title}</h3>
-      <p className="text-sm text-muted-foreground">{desc}</p>
+      <h3 className="font-bold text-lg mb-2 text-white">{title}</h3>
+      <p className="text-sm text-muted-foreground leading-relaxed">{desc}</p>
     </div>
   );
 }
