@@ -17,7 +17,7 @@ import {
   Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Send, User, History, Award, BarChart3, Search, ExternalLink, Plus
 } from 'lucide-react';
 import { useFirestore, useCollection } from '@/firebase';
-import { doc, updateDoc, setDoc, serverTimestamp, getDoc, addDoc, collection, writeBatch, limit, orderBy } from 'firebase/firestore';
+import { doc, updateDoc, setDoc, serverTimestamp, getDoc, addDoc, collection, writeBatch, limit, orderBy, query, collectionGroup } from 'firebase/firestore';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { sendKycApprovalEmail, sendKycRejectionEmail, sendBroadcastEmail, sendFreeAccountGrantEmail, sendReferralCommissionEmail, sendPayoutProcessedEmail } from '@/lib/email';
@@ -155,9 +155,10 @@ export default function AdminPage() {
         errorEmitter.emit('permission-error', new FirestorePermissionError({ path: orderRef.path, operation: 'update', requestResourceData: { status: 'verified' } }));
       });
       
-    setDoc(doc(db, 'accounts', accountId), accountData)
+    // Provision to subcollection for scalability
+    setDoc(doc(db, 'users', order.userId, 'accounts', accountId), accountData)
       .catch(async (err) => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `accounts/${accountId}`, operation: 'create', requestResourceData: accountData }));
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `users/${order.userId}/accounts/${accountId}`, operation: 'create', requestResourceData: accountData }));
       });
 
     try {
@@ -254,7 +255,7 @@ export default function AdminPage() {
       createdAt: serverTimestamp(),
     };
 
-    setDoc(doc(db, 'accounts', accountId), accountData);
+    setDoc(doc(db, 'users', selectedUser.id, 'accounts', accountId), accountData);
     
     addDoc(collection(db, 'users', selectedUser.id, 'notifications'), {
       title: "🎁 Free Account Granted",
@@ -280,7 +281,9 @@ export default function AdminPage() {
     const batch = writeBatch(db);
     let sentCount = 0;
 
-    targetUsers.forEach(u => {
+    // Firebase batch limit is 500. For 1M users, this should be handled in chunks via Cloud Functions.
+    // For this MVP, we batch the first 500 for safety.
+    targetUsers.slice(0, 500).forEach(u => {
       const prefs = u.notificationPreferences || { inApp: true, email: true, announcements: true };
       if (prefs.announcements) {
         if (prefs.inApp) {
@@ -465,9 +468,9 @@ export default function AdminPage() {
               </CardHeader>
               <CardContent className="p-0">
                 {ordersLoading && orders?.length === 0 ? <LoadingTable /> : (
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto max-h-[600px] custom-scrollbar">
                     <table className="w-full text-sm text-left">
-                      <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
+                      <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest sticky top-0 z-10">
                         <tr>
                           <th className="py-4 px-6">Order ID</th>
                           <th className="py-4 px-6">User / UID</th>
@@ -531,9 +534,9 @@ export default function AdminPage() {
               </CardHeader>
               <CardContent className="p-0">
                 {tradersLoading && traders?.length === 0 ? <LoadingTable /> : (
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto max-h-[600px] custom-scrollbar">
                     <table className="w-full text-sm text-left">
-                      <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
+                      <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest sticky top-0 z-10">
                         <tr>
                           <th className="py-4 px-6">UID / ID</th>
                           <th className="py-4 px-6">Name</th>
@@ -609,9 +612,9 @@ export default function AdminPage() {
                 <CardTitle className="text-white">KYC Verification Queue</CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto max-h-[500px] custom-scrollbar">
                   <table className="w-full text-sm text-left">
-                    <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
+                    <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest sticky top-0 z-10">
                       <tr>
                         <th className="py-4 px-6">Submission Date</th>
                         <th className="py-4 px-6">User</th>
@@ -657,9 +660,9 @@ export default function AdminPage() {
                 <CardTitle className="text-white">Commission Transactions</CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto max-h-[500px] custom-scrollbar">
                   <table className="w-full text-sm text-left">
-                    <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
+                    <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest sticky top-0 z-10">
                       <tr>
                         <th className="py-4 px-6">Referrer ID</th>
                         <th className="py-4 px-6">Referred User</th>
@@ -701,9 +704,9 @@ export default function AdminPage() {
               </CardHeader>
               <CardContent className="p-0">
                 {payoutsLoading && payouts?.length === 0 ? <LoadingTable /> : (
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto max-h-[600px] custom-scrollbar">
                     <table className="w-full text-sm text-left">
-                      <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
+                      <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest sticky top-0 z-10">
                         <tr>
                           <th className="py-4 px-6">Date</th>
                           <th className="py-4 px-6">Trader / UID</th>

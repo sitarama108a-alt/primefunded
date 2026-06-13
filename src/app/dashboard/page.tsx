@@ -131,11 +131,12 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
 
   const accountConstraints = useMemo(() => {
     if (!effectiveUid) return [];
-    return [where('userId', '==', effectiveUid), where('status', '==', 'active')];
+    return [where('status', '==', 'active'), limit(1)];
   }, [effectiveUid]);
 
+  // Updated to scalable subcollection path
   const { data: accounts, loading: accountsLoading } = useCollection<any>(
-    effectiveUid ? 'accounts' : null, 
+    effectiveUid ? `users/${effectiveUid}/accounts` : null, 
     accountConstraints
   );
 
@@ -404,9 +405,9 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
             <CardTitle className="text-xl font-headline text-white">Recent Executions</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto max-h-[300px] custom-scrollbar">
               <table className="w-full text-sm text-left">
-                <thead>
+                <thead className="sticky top-0 z-10">
                   <tr className="border-b border-border bg-secondary/30 text-muted-foreground uppercase text-[10px] font-bold tracking-widest">
                     <th className="py-4 px-6">Symbol</th>
                     <th className="py-4 px-4">Direction</th>

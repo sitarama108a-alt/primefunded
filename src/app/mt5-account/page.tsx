@@ -1,10 +1,11 @@
+
 "use client";
 
 import { useState, useMemo } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useCollection } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query, where, limit } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -35,11 +36,12 @@ export default function MT5AccountPage() {
 
   const accountConstraints = useMemo(() => {
     if (!user?.uid) return [];
-    return [where('userId', '==', user.uid), where('status', '==', 'active')];
+    return [where('status', '==', 'active'), limit(1)];
   }, [user?.uid]);
 
+  // Scalable subcollection path
   const { data: accounts, loading: accountsLoading } = useCollection<any>(
-    user ? 'accounts' : null, 
+    user ? `users/${user.uid}/accounts` : null, 
     accountConstraints
   );
 

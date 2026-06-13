@@ -282,6 +282,12 @@
       },
       "description": "Individual user notifications."
     },
+    "/users/{userId}/accounts/{accountId}": {
+      "schema": {
+        "$ref": "#/backend/entities/TradingAccount"
+      },
+      "description": "Stores user MT5 accounts in subcollections for scalability."
+    },
     "/broadcasts/{broadcastId}": {
       "schema": {
         "$ref": "#/backend/entities/Broadcast"
@@ -293,12 +299,6 @@
         "$ref": "#/backend/entities/Order"
       },
       "description": "Stores challenge purchase orders."
-    },
-    "/accounts/{accountId}": {
-      "schema": {
-        "$ref": "#/backend/entities/TradingAccount"
-      },
-      "description": "Stores provisioned MT5 accounts."
     },
     "/payouts/{payoutId}": {
       "schema": {
