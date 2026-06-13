@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useMemo, Suspense, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,14 +36,17 @@ import {
   AlertTriangle,
   User,
   History,
-  Trash2
+  Trash2,
+  Award,
+  Terminal,
+  ShieldAlert
 } from 'lucide-react';
 import { useFirestore, useCollection } from '@/firebase';
-import { doc, updateDoc, deleteDoc, setDoc, serverTimestamp, getDoc, addDoc, collection, writeBatch, query, getDocs } from 'firebase/firestore';
+import { doc, updateDoc, deleteDoc, setDoc, serverTimestamp, getDoc, addDoc, collection, writeBatch, query, where, getDocs } from 'firebase/firestore';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import DashboardPage from '@/app/dashboard/page';
 import { cn } from '@/lib/utils';
-import { sendKycApprovalEmail, sendKycRejectionEmail, sendBroadcastEmail } from '@/lib/email';
+import { sendKycApprovalEmail, sendKycRejectionEmail, sendBroadcastEmail, sendChallengePassEmail, sendChallengeFailEmail } from '@/lib/email';
 import { Textarea } from '@/components/ui/textarea';
 
 const ADMIN_PASSWORD = "93463962569392846256";
@@ -64,6 +67,7 @@ export default function AdminPage() {
   const [provisionPlan, setProvisionPlan] = useState('1-Step Pro');
   const [provisionSize, setProvisionSize] = useState('$100,000');
   const [rejectionReason, setRejectionReason] = useState('');
+  const [breachReason, setBreachReason] = useState('Daily Drawdown Exceeded');
 
   // Notification states
   const [notifTitle, setNotifTitle] = useState('');
@@ -78,6 +82,17 @@ export default function AdminPage() {
   const { data: payouts } = useCollection<any>('payouts', emptyConstraints);
   const { data: referrals } = useCollection<any>('referrals', emptyConstraints);
   const { data: broadcasts } = useCollection<any>('broadcasts', emptyConstraints);
+
+  // Fetch accounts for selected user when dialog is open
+  const [userAccounts, setUserAccounts] = useState<any[]>([]);
+  useEffect(() => {
+    if (selectedUser && isManageAccountOpen) {
+      const q = query(collection(db, 'accounts'), where('userId', '==', selectedUser.id));
+      getDocs(q).then(snap => {
+        setUserAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      });
+    }
+  }, [selectedUser, isManageAccountOpen, db]);
 
   const filteredTraders = useMemo(() => {
     if (!searchTerm) return traders;
@@ -141,7 +156,7 @@ export default function AdminPage() {
 
       // Add Notification
       await addDoc(collection(db, 'users', order.userId, 'notifications'), {
-        title: "Challenge Activated",
+        title: "🎯 Challenge Activated",
         message: `Your ${order.plan} - ${order.size} challenge is now live! Check your MT5 credentials.`,
         type: 'challenge_active',
         isRead: false,
@@ -151,6 +166,48 @@ export default function AdminPage() {
       toast({ title: "Order Verified", description: `Account created for ${order.email}` });
     } catch (err: any) {
       toast({ variant: "destructive", title: "Verification Failed" });
+    }
+  };
+
+  const handlePassChallenge = async (account: any) => {
+    try {
+      await updateDoc(doc(db, 'accounts', account.id), { status: 'passed' });
+      
+      await addDoc(collection(db, 'users', account.userId, 'notifications'), {
+        title: "🎉 Challenge Passed!",
+        message: `Congratulations! You have passed your ${account.plan} - ${account.size} challenge. Promotion initiated.`,
+        type: 'challenge_passed',
+        isRead: false,
+        createdAt: serverTimestamp()
+      });
+
+      await sendChallengePassEmail(account.email, selectedUser.name, account.plan, account.size);
+      
+      toast({ title: "Challenge Marked as Passed", description: `Notification and email sent to ${account.email}` });
+      setIsManageAccountOpen(false);
+    } catch (err) {
+      toast({ variant: "destructive", title: "Action Failed" });
+    }
+  };
+
+  const handleFailChallenge = async (account: any) => {
+    try {
+      await updateDoc(doc(db, 'accounts', account.id), { status: 'breached' });
+      
+      await addDoc(collection(db, 'users', account.userId, 'notifications'), {
+        title: "❌ Challenge Terminated",
+        message: `Your challenge has been terminated. Reason: ${breachReason}`,
+        type: 'challenge_failed',
+        isRead: false,
+        createdAt: serverTimestamp()
+      });
+
+      await sendChallengeFailEmail(account.email, selectedUser.name, account.plan, account.size, breachReason);
+      
+      toast({ title: "Challenge Terminated", description: `Breach recorded for ${account.email}` });
+      setIsManageAccountOpen(false);
+    } catch (err) {
+      toast({ variant: "destructive", title: "Action Failed" });
     }
   };
 
@@ -173,7 +230,6 @@ export default function AdminPage() {
           sentByAdmin: true,
           createdAt: serverTimestamp()
         });
-        // Logic for email would go here...
         sendBroadcastEmail(u.email, notifTitle, notifMessage, u.name);
       });
 
@@ -229,7 +285,7 @@ export default function AdminPage() {
       const email = userSnap.data()?.email;
 
       await addDoc(collection(db, 'users', userId, 'notifications'), {
-        title: status === 'verified' ? "KYC Approved ✅" : "KYC Rejected ❌",
+        title: status === 'verified' ? "✅ KYC Approved" : "❌ KYC Rejected",
         message: status === 'verified' 
           ? "Your identity verification is complete. Payouts are now unlocked!" 
           : `Your KYC documents were rejected. Reason: ${reason || "Invalid documents."}`,
@@ -409,7 +465,6 @@ export default function AdminPage() {
             </div>
           </TabsContent>
 
-          {/* ... Users tab with Send Notification action ... */}
           <TabsContent value="users">
             <Card className="bg-card/40 border-border/50">
               <CardHeader>
@@ -464,7 +519,6 @@ export default function AdminPage() {
           </TabsContent>
           
           <TabsContent value="orders">
-            {/* Same as existing orders tab */}
             <Card className="bg-card/40 border-border/50">
               <CardContent className="p-0">
                 <table className="w-full text-sm">
@@ -492,7 +546,6 @@ export default function AdminPage() {
               </CardContent>
             </Card>
           </TabsContent>
-          {/* Referrals & Payouts tabs would continue matching their current logic */}
         </Tabs>
 
         {/* Send Individual Notification Dialog */}
@@ -518,18 +571,55 @@ export default function AdminPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Manage User Dialog (Updated) */}
+        {/* Manage User Dialog */}
         <Dialog open={isManageAccountOpen} onOpenChange={setIsManageAccountOpen}>
-          <DialogContent className="max-w-2xl bg-card border-primary/20">
+          <DialogContent className="max-w-3xl bg-card border-primary/20 max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="text-white flex items-center gap-2"><User className="w-5 h-5 text-primary" /> Manage Account: {selectedUser?.name}</DialogTitle>
             </DialogHeader>
             <div className="space-y-6 py-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <DetailBox label="UID" value={selectedUser?.traderId} />
                 <DetailBox label="KYC Status" value={selectedUser?.kycStatus} color={selectedUser?.kycVerified ? 'text-accent' : 'text-amber-500'} />
+                <DetailBox label="Country" value={selectedUser?.country} />
+                <DetailBox label="Email" value={selectedUser?.email} />
               </div>
               
+              <div className="border-t border-white/5 pt-6">
+                 <h4 className="text-sm font-bold uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-2">
+                   <Terminal className="w-4 h-4 text-primary" /> Trading Accounts
+                 </h4>
+                 {userAccounts.length === 0 ? (
+                   <p className="text-xs italic text-muted-foreground">No active accounts found.</p>
+                 ) : (
+                   <div className="space-y-4">
+                     {userAccounts.map(acc => (
+                       <Card key={acc.id} className="bg-secondary/30 border-border/50">
+                         <CardContent className="p-4 flex items-center justify-between">
+                            <div>
+                              <p className="font-bold text-sm">{acc.size} {acc.plan}</p>
+                              <p className="text-xs font-mono text-muted-foreground">ID: PF-{acc.mt5Login} | Bal: ${acc.balance.toLocaleString()}</p>
+                              <Badge className="mt-2 text-[10px]" variant={acc.status === 'active' ? 'default' : 'outline'}>{acc.status}</Badge>
+                            </div>
+                            <div className="flex gap-2">
+                              {acc.status === 'active' && (
+                                <>
+                                  <Button size="sm" className="bg-accent text-accent-foreground font-bold text-xs" onClick={() => handlePassChallenge(acc)}>
+                                    <Award className="w-3 h-3 mr-1" /> Pass Challenge
+                                  </Button>
+                                  <Button size="sm" variant="destructive" className="font-bold text-xs" onClick={() => handleFailChallenge(acc)}>
+                                    <Ban className="w-3 h-3 mr-1" /> Terminate
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                         </CardContent>
+                       </Card>
+                     ))}
+                   </div>
+                 )}
+              </div>
+
               {selectedUser?.kycStatus === 'pending' && (
                 <div className="p-4 border border-amber-500/20 bg-amber-500/5 rounded-xl space-y-4">
                    <p className="text-xs font-bold text-amber-500 uppercase tracking-widest">Verify Documents</p>
@@ -540,6 +630,25 @@ export default function AdminPage() {
                    </div>
                 </div>
               )}
+
+              <div className="p-4 rounded-xl bg-destructive/5 border border-destructive/10">
+                <p className="text-xs font-bold text-destructive uppercase tracking-widest mb-3">Breach Configuration</p>
+                <div className="space-y-2">
+                   <Label className="text-xs">Reason for account termination (if failing)</Label>
+                   <Select value={breachReason} onValueChange={setBreachReason}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                         <SelectItem value="Daily Drawdown Exceeded">Daily Drawdown Exceeded</SelectItem>
+                         <SelectItem value="Max Drawdown Exceeded">Max Drawdown Exceeded</SelectItem>
+                         <SelectItem value="Hard Breach: 1% Floating Loss">1% Max Floating Loss</SelectItem>
+                         <SelectItem value="Rule Violation: News Trading">News Trading Restriction</SelectItem>
+                         <SelectItem value="Inactivity Breach">Inactivity (30 Days)</SelectItem>
+                      </SelectContent>
+                   </Select>
+                </div>
+              </div>
             </div>
             <DialogFooter>
                <Button variant="outline" onClick={() => setIsManageAccountOpen(false)}>Close</Button>

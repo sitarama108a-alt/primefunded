@@ -10,14 +10,48 @@ export async function sendBreachEmail(email: string, breachDetails: string) {
   console.log(`🚨 Sending breach alert to ${email}`, breachDetails);
 }
 
-export async function sendChallengePassEmail(email: string, name: string, challenge: string, nextPhase: string) {
+export async function sendChallengePassEmail(email: string, name: string, challenge: string, size: string) {
   console.log(`🎉 Sending Challenge Pass email to ${email}`);
-  // Subject: 🎉 You Passed Your Challenge!
+  const body = `
+    Congratulations ${name}!
+    You have successfully passed your ${challenge} - ${size} challenge.
+
+    Your Performance:
+    - Profit Achieved: Target Reached
+    - Trading Days: Minimum Met
+    - Daily Drawdown: Stayed within limits
+    - Max Drawdown: Stayed within limits
+
+    You have been promoted to the next stage/funded account.
+    Login to your dashboard to continue.
+
+    Best regards,
+    PrimeFunded Team
+  `;
+  console.log('Email Body:', body);
 }
 
-export async function sendChallengeFailEmail(email: string, name: string, challenge: string, reason: string) {
+export async function sendChallengeFailEmail(email: string, name: string, challenge: string, size: string, reason: string) {
   console.log(`❌ Sending Challenge Terminated email to ${email}`);
-  // Subject: ❌ Challenge Terminated - PrimeFunded
+  const body = `
+    Dear ${name},
+    Unfortunately your ${challenge} - ${size} challenge has been terminated.
+
+    Reason: ${reason}
+
+    Your Statistics:
+    - Account Size: ${size}
+    - Challenge Type: ${challenge}
+    - Termination Date: ${new Date().toLocaleDateString()}
+    - Breach Type: ${reason}
+
+    You can purchase a new challenge anytime.
+    Login to try again.
+
+    Best regards,
+    PrimeFunded Team
+  `;
+  console.log('Email Body:', body);
 }
 
 export async function sendBroadcastEmail(email: string, title: string, body: string, name: string) {
