@@ -136,7 +136,7 @@ const RULES = {
   },
   'instant': {
     funded: [
-      { text: "80% profit split", type: 'check' },
+      { text: "70% profit split", type: 'check' },
       { text: "Trading Leverage 1:30", type: 'check' },
       { text: "Instruments: Fx, Commodities, Indices, Stock, Crypto", type: 'check' },
       { text: "Daily payouts available", type: 'check' },
