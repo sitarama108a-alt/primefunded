@@ -65,6 +65,7 @@ export async function POST(request: Request) {
       updatedAt: serverTimestamp()
     };
 
+    // Use await to ensure the function doesn't terminate before the write is complete
     await setDoc(docRef, updatePayload, { merge: true });
 
     // 5. Return raw text OK for terminal compatibility
