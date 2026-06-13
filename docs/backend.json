@@ -1,4 +1,3 @@
-
 {
   "entities": {
     "UserProfile": {
@@ -6,158 +5,66 @@
       "description": "Details about the trader's profile.",
       "type": "object",
       "properties": {
-        "uid": {
-          "type": "string"
-        },
-        "traderId": {
-          "type": "string",
-          "description": "Unique 8-digit numeric identifier for the trader."
-        },
-        "referralCode": {
-          "type": "string",
-          "description": "Unique custom alphanumeric referral code."
-        },
-        "codeChangesCount": {
-          "type": "number",
-          "description": "Number of times the user has changed their referral code."
-        },
-        "lastCodeChange": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "referredBy": {
-          "type": "string",
-          "description": "The UID of the user who referred this trader."
-        },
-        "name": {
-          "type": "string"
-        },
-        "email": {
-          "type": "string",
-          "format": "email"
-        },
-        "phone": {
-          "type": "string"
-        },
-        "country": {
-          "type": "string"
-        },
-        "tier": {
-          "type": "string",
-          "enum": [
-            "Bronze",
-            "Silver",
-            "Gold"
-          ]
-        },
-        "joinDate": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "balance": {
-          "type": "number"
-        },
-        "equity": {
-          "type": "number"
-        },
-        "status": {
-          "type": "string",
-          "enum": [
-            "active",
-            "suspended"
-          ]
-        },
-        "kycVerified": {
-          "type": "boolean"
-        },
-        "kycStatus": {
-          "type": "string",
-          "enum": ["none", "pending", "verified", "rejected"]
-        },
-        "kycRejectionReason": {
-          "type": "string"
-        },
-        "kycSubmittedAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "uid": { "type": "string" },
+        "traderId": { "type": "string" },
+        "referralCode": { "type": "string" },
+        "codeChangesCount": { "type": "number" },
+        "lastCodeChange": { "type": "string", "format": "date-time" },
+        "referredBy": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "country": { "type": "string" },
+        "tier": { "type": "string", "enum": ["Bronze", "Silver", "Gold"] },
+        "joinDate": { "type": "string", "format": "date-time" },
+        "balance": { "type": "number" },
+        "equity": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "suspended"] },
+        "kycVerified": { "type": "boolean" },
+        "kycStatus": { "type": "string", "enum": ["none", "pending", "verified", "rejected"] },
+        "kycRejectionReason": { "type": "string" },
+        "kycSubmittedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": [
-        "name",
-        "email"
-      ]
+      "required": ["name", "email"]
     },
     "Mt5Account": {
       "title": "MT5 Account Sync",
-      "description": "Real-time metrics from the trading terminal.",
+      "description": "Real-time metrics and compliance status for a trading account.",
       "type": "object",
       "properties": {
+        "userId": { "type": "string" },
         "login": { "type": "string" },
         "balance": { "type": "number" },
         "equity": { "type": "number" },
-        "margin": { "type": "number" },
         "profit": { "type": "number" },
+        "startingBalance": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "terminated", "warning", "passed"] },
+        "planType": { "type": "string", "enum": ["1-step-pro", "2-step-classic", "3-step-classic", "instant-funding"] },
+        "phase": { "type": "string", "enum": ["evaluation", "phase1", "phase2", "phase3", "funded"] },
+        "breachType": { "type": "string", "enum": ["hard", "soft"] },
+        "breachReason": { "type": "string" },
+        "breachTime": { "type": "string", "format": "date-time" },
+        "profitPct": { "type": "number" },
+        "dailyDrawdownPct": { "type": "number" },
+        "maxDrawdownPct": { "type": "number" },
+        "floatingLossPct": { "type": "number" },
+        "tradingDays": { "type": "number" },
         "updatedAt": { "type": "string", "format": "date-time" }
-      }
-    },
-    "ErrorLog": {
-      "title": "Error Log",
-      "description": "A record of an application error.",
-      "type": "object",
-      "properties": {
-        "message": { "type": "string" },
-        "stack": { "type": "string" },
-        "userId": { "type": "string" },
-        "path": { "type": "string" },
-        "timestamp": { "type": "string", "format": "date-time" },
-        "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] }
-      }
-    },
-    "ActivityLog": {
-      "title": "Activity Log",
-      "description": "A record of a critical user action.",
-      "type": "object",
-      "properties": {
-        "userId": { "type": "string" },
-        "action": { "type": "string" },
-        "details": { "type": "object" },
-        "timestamp": { "type": "string", "format": "date-time" }
       }
     }
   },
   "auth": {
-    "providers": [
-      "password"
-    ]
+    "providers": ["password"]
   },
   "firestore": {
     "/users/{userId}": {
-      "schema": {
-        "$ref": "#/backend/entities/UserProfile"
-      },
+      "schema": { "$ref": "#/backend/entities/UserProfile" },
       "description": "Stores trader profiles."
     },
     "/mt5_accounts/{accountId}": {
-      "schema": {
-        "$ref": "#/backend/entities/Mt5Account"
-      },
-      "description": "Stores real-time terminal metrics synced via external terminals."
-    },
-    "/error_logs/{logId}": {
-      "schema": {
-        "$ref": "#/backend/entities/ErrorLog"
-      },
-      "description": "System error logs."
-    },
-    "/activity_logs/{logId}": {
-      "schema": {
-        "$ref": "#/backend/entities/ActivityLog"
-      },
-      "description": "User activity logs."
+      "schema": { "$ref": "#/backend/entities/Mt5Account" },
+      "description": "Real-time terminal metrics and compliance tracking."
     }
   }
 }
