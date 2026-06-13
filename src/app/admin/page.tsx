@@ -16,7 +16,7 @@ import {
   Lock, Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Mail, Send, AlertTriangle, User, History, Trash2, Award, Terminal, ShieldAlert, BarChart3, Search, ExternalLink, Filter
 } from 'lucide-react';
 import { useFirestore, useCollection } from '@/firebase';
-import { doc, updateDoc, setDoc, serverTimestamp, getDoc, addDoc, collection, writeBatch } from 'firebase/firestore';
+import { doc, updateDoc, setDoc, serverTimestamp, getDoc, addDoc, collection, writeBatch, limit, orderBy } from 'firebase/firestore';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { sendKycApprovalEmail, sendKycRejectionEmail, sendBroadcastEmail, sendFreeAccountGrantEmail, sendReferralCommissionEmail, sendPayoutProcessedEmail } from '@/lib/email';
@@ -65,13 +65,18 @@ export default function AdminPage() {
     localStorage.setItem('admin_active_tab', val);
   };
 
-  // Data Fetching
-  const emptyConstraints = useMemo(() => [], []);
-  const { data: orders, loading: ordersLoading } = useCollection<any>('orders', emptyConstraints);
-  const { data: traders, loading: tradersLoading } = useCollection<any>('users', emptyConstraints);
-  const { data: payouts, loading: payoutsLoading } = useCollection<any>('payouts', emptyConstraints);
-  const { data: referrals, loading: referralsLoading } = useCollection<any>('referrals', emptyConstraints);
-  const { data: broadcasts, loading: broadcastsLoading } = useCollection<any>('broadcasts', emptyConstraints);
+  // Optimized Data Fetching with Limits
+  const ordersConstraints = useMemo(() => [orderBy('date', 'desc'), limit(20)], []);
+  const usersConstraints = useMemo(() => [limit(20)], []);
+  const payoutsConstraints = useMemo(() => [orderBy('date', 'desc'), limit(20)], []);
+  const referralsConstraints = useMemo(() => [orderBy('createdAt', 'desc'), limit(20)], []);
+  const broadcastsConstraints = useMemo(() => [orderBy('sentAt', 'desc'), limit(10)], []);
+
+  const { data: orders, loading: ordersLoading } = useCollection<any>('orders', ordersConstraints);
+  const { data: traders, loading: tradersLoading } = useCollection<any>('users', usersConstraints);
+  const { data: payouts, loading: payoutsLoading } = useCollection<any>('payouts', payoutsConstraints);
+  const { data: referrals, loading: referralsLoading } = useCollection<any>('referrals', referralsConstraints);
+  const { data: broadcasts, loading: broadcastsLoading } = useCollection<any>('broadcasts', broadcastsConstraints);
 
   const stats = useMemo(() => {
     const totalRevenue = orders?.filter(o => o.status === 'verified').reduce((acc, o) => acc + parseFloat(o.price?.replace('$', '') || 0), 0) || 0;
@@ -119,7 +124,6 @@ export default function AdminPage() {
       createdAt: serverTimestamp(),
     };
 
-    // Non-blocking writes for instant feedback
     updateDoc(orderRef, { status: 'verified' })
       .catch(async (err) => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({ path: orderRef.path, operation: 'update', requestResourceData: { status: 'verified' } }));
@@ -130,7 +134,6 @@ export default function AdminPage() {
         errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `accounts/${accountId}`, operation: 'create', requestResourceData: accountData }));
       });
 
-    // We still need to await read for referral logic
     try {
       const userSnap = await getDoc(doc(db, 'users', order.userId));
       const referredBy = userSnap.data()?.referredBy;

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMemo, useState } from 'react';
@@ -9,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Wallet, ArrowDownRight, History, Clock, AlertTriangle, ShieldCheck, XCircle, Info, Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useCollection, useFirestore } from '@/firebase';
-import { where, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { where, addDoc, collection, serverTimestamp, limit, orderBy } from 'firebase/firestore';
 import Link from 'next/link';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
@@ -23,7 +22,7 @@ export default function PayoutsPage() {
   
   const payoutConstraints = useMemo(() => {
     if (!user?.uid) return [];
-    return [where('userId', '==', user.uid)];
+    return [where('userId', '==', user.uid), limit(20)];
   }, [user?.uid]);
 
   const { data: payouts, loading } = useCollection<any>('payouts', payoutConstraints);
@@ -52,9 +51,9 @@ export default function PayoutsPage() {
         createdAt: serverTimestamp()
       };
       
-      await addDoc(collection(db, 'payouts'), payoutData);
+      addDoc(collection(db, 'payouts'), payoutData);
       
-      await addDoc(collection(db, 'users', user.uid, 'notifications'), {
+      addDoc(collection(db, 'users', user.uid, 'notifications'), {
         title: "💸 Payout Requested",
         message: "Your payout request has been submitted and is being processed by our finance team.",
         type: 'payout_requested',
@@ -107,7 +106,7 @@ export default function PayoutsPage() {
         <p className="text-sm text-muted-foreground leading-relaxed">
           You must complete KYC verification before requesting a payout.
         </p>
-        <Button size="sm" className="bg-primary hover:bg-primary/90 font-bold" asChild>
+        <Button size="sm" className="bg-primary hover:bg-primary/90 font-bold cursor-pointer" asChild>
           <Link href="/kyc">Complete KYC Now</Link>
         </Button>
       </div>
@@ -117,7 +116,7 @@ export default function PayoutsPage() {
   return (
     <div className="flex min-h-screen bg-background">
       <Navigation />
-      <main className="flex-1 p-8">
+      <main className="flex-1 p-8 overflow-y-auto">
         <header className="mb-10">
           <h1 className="text-3xl font-headline font-bold mb-1 text-white">Payouts & Withdrawals</h1>
           <p className="text-muted-foreground">Monitor your earnings and request profit splits.</p>
@@ -139,7 +138,7 @@ export default function PayoutsPage() {
                   <TooltipTrigger asChild>
                     <span className="w-full">
                       <Button 
-                        className="w-full mt-6 font-bold" 
+                        className="w-full mt-6 font-bold cursor-pointer" 
                         disabled={!isKycVerified || requesting}
                         onClick={handleRequestPayout}
                       >
@@ -166,7 +165,6 @@ export default function PayoutsPage() {
               </div>
               <h3 className="text-4xl font-headline font-bold mb-2">${stats.totalPaid.toLocaleString('en-US')}</h3>
             </CardContent>
-          </Card>
 
           <Card>
             <CardContent className="pt-6">
@@ -197,7 +195,11 @@ export default function PayoutsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/50">
-                  {payouts?.length > 0 ? payouts.map(p => (
+                  {loading ? (
+                    [1, 2, 3].map(i => (
+                      <tr key={i}><td colSpan={4} className="py-4"><Skeleton className="h-10 w-full rounded-lg" /></td></tr>
+                    ))
+                  ) : payouts?.length > 0 ? payouts.map(p => (
                     <tr key={p.id} className="hover:bg-secondary/20 transition-colors">
                       <td className="py-4 px-2 font-medium">{new Date(p.date).toLocaleDateString()}</td>
                       <td className="py-4 px-2 text-muted-foreground">{p.method}</td>

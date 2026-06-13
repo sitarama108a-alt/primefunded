@@ -8,7 +8,11 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  experimental: {
+    optimizeCss: true,
+  },
   images: {
+    minimumCacheTTL: 60,
     remotePatterns: [
       {
         protocol: 'https',

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo, useState } from 'react';
@@ -10,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Bell, Check, Trash2, Clock, ShieldCheck, XCircle, Wallet, Award, TrendingUp, Info } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useCollection, useFirestore } from '@/firebase';
-import { orderBy, doc, updateDoc, deleteDoc, writeBatch, collection, getDocs, query, where } from 'firebase/firestore';
+import { orderBy, doc, updateDoc, deleteDoc, writeBatch, collection, getDocs, query, where, limit } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 
@@ -20,7 +19,8 @@ export default function NotificationsPage() {
   const [filter, setFilter] = useState('all');
 
   const constraints = useMemo(() => [
-    orderBy('createdAt', 'desc')
+    orderBy('createdAt', 'desc'),
+    limit(20)
   ], []);
 
   const { data: notifications, loading } = useCollection<any>(
@@ -89,9 +89,10 @@ export default function NotificationsPage() {
 
         <div className="space-y-4 max-w-4xl">
           {loading ? (
-            <div className="p-20 text-center">
-              <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-              <p className="text-muted-foreground uppercase font-black text-xs tracking-widest">Syncing with server...</p>
+            <div className="space-y-4">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-32 w-full rounded-3xl bg-secondary/20 animate-pulse" />
+              ))}
             </div>
           ) : filteredNotifications.length === 0 ? (
             <div className="p-20 text-center flex flex-col items-center border-2 border-dashed border-border rounded-[2rem] bg-secondary/10">

@@ -30,7 +30,7 @@ import {
   XCircle
 } from 'lucide-react';
 import { useCollection, useFirestore } from '@/firebase';
-import { where, doc, updateDoc, query, collection, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
+import { where, doc, updateDoc, query, collection, getDocs, setDoc, serverTimestamp, limit, orderBy } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -108,7 +108,7 @@ export default function ReferralPage() {
       setAvailabilityStatus('validating');
       try {
         const codesRef = collection(db, 'referralCodes');
-        const q = query(codesRef, where('code', '==', newCode), where('active', '==', true));
+        const q = query(codesRef, where('code', '==', newCode), where('active', '==', true), limit(1));
         const querySnapshot = await getDocs(q);
         
         if (querySnapshot.empty) {
@@ -126,12 +126,12 @@ export default function ReferralPage() {
 
   const referralConstraints = useMemo(() => {
     if (!user?.uid) return [];
-    return [where('referrerId', '==', user.uid)];
+    return [where('referrerId', '==', user.uid), orderBy('createdAt', 'desc'), limit(20)];
   }, [user?.uid]);
 
   const { data: referrals, loading: referralsLoading } = useCollection<any>('referrals', referralConstraints);
 
-  const referralLink = `https://primefunded.com/signup?ref=${userData?.referralCode || ''}`;
+  const referralLink = useMemo(() => `https://primefunded.com/signup?ref=${userData?.referralCode || ''}`, [userData?.referralCode]);
 
   const stats = useMemo(() => {
     if (!referrals) return { total: 0, successful: 0, totalEarned: 0, pendingEarned: 0, paidEarned: 0 };
@@ -161,7 +161,6 @@ export default function ReferralPage() {
       lastCodeChange: serverTimestamp()
     };
 
-    // Optimistic non-blocking updates
     updateDoc(userRef, updates)
       .catch(async (err) => errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: updates })));
 
@@ -434,7 +433,11 @@ export default function ReferralPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/50">
-                  {referrals?.length > 0 ? referrals.map((r: any) => (
+                  {referralsLoading ? (
+                    [1, 2, 3].map(i => (
+                      <tr key={i}><td colSpan={5} className="py-4"><Skeleton className="h-10 w-full rounded-lg mx-6" /></td></tr>
+                    ))
+                  ) : referrals?.length > 0 ? referrals.map((r: any) => (
                     <tr key={r.id} className="hover:bg-secondary/10">
                       <td className="py-4 px-6 text-xs text-muted-foreground">
                         {r.createdAt?.seconds ? new Date(r.createdAt.seconds * 1000).toLocaleDateString() : 'Processing...'}
