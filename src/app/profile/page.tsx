@@ -4,18 +4,20 @@
 import { useState, useEffect } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { useAuth } from '@/context/AuthContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { User, Mail, Shield, CheckCircle2, Phone, Globe, Save, Copy } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { User, Mail, Shield, CheckCircle2, Phone, Globe, Save, Copy, Bell, Mail as MailIcon, Trophy, Wallet, Users, Megaphone } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
+import { cn } from '@/lib/utils';
 
 export default function ProfilePage() {
   const { user, userData } = useAuth();
@@ -28,14 +30,14 @@ export default function ProfilePage() {
     country: ''
   });
 
-  // Auto-generate numeric ID if missing
-  useEffect(() => {
-    if (userData && !userData.traderId && user) {
-      const traderId = Math.floor(10000000 + Math.random() * 90000000).toString();
-      const userRef = doc(db, 'users', user.uid);
-      updateDoc(userRef, { traderId });
-    }
-  }, [userData, user]);
+  const [preferences, setPreferences] = useState({
+    email: true,
+    inApp: true,
+    challenge: true,
+    payout: true,
+    referral: true,
+    announcements: true
+  });
 
   useEffect(() => {
     if (userData) {
@@ -44,6 +46,12 @@ export default function ProfilePage() {
         phone: userData.phone || '',
         country: userData.country || ''
       });
+      if (userData.notificationPreferences) {
+        setPreferences({
+          ...preferences,
+          ...userData.notificationPreferences
+        });
+      }
     }
   }, [userData]);
 
@@ -52,17 +60,22 @@ export default function ProfilePage() {
     setLoading(true);
     
     const userRef = doc(db, 'users', user.uid);
+    const updates = {
+      ...formData,
+      notificationPreferences: preferences
+    };
+
     try {
-      await updateDoc(userRef, formData);
+      await updateDoc(userRef, updates);
       toast({
         title: "Profile Updated",
-        description: "Your personal details have been saved successfully.",
+        description: "Your personal details and notification preferences have been saved.",
       });
     } catch (err: any) {
       const permissionError = new FirestorePermissionError({
         path: userRef.path,
         operation: 'update',
-        requestResourceData: formData
+        requestResourceData: updates
       } satisfies SecurityRuleContext);
       errorEmitter.emit('permission-error', permissionError);
     } finally {
@@ -80,115 +93,209 @@ export default function ProfilePage() {
   return (
     <div className="flex min-h-screen bg-background">
       <Navigation />
-      <main className="flex-1 p-8">
+      <main className="flex-1 p-8 overflow-y-auto">
         <header className="mb-10">
           <h1 className="text-3xl font-headline font-bold mb-1">Account Profile</h1>
-          <p className="text-muted-foreground">Manage your personal information and KYC status.</p>
+          <p className="text-muted-foreground">Manage your personal information and preferences.</p>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <Card className="lg:col-span-1 border-border/50 bg-card/40 backdrop-blur-sm">
-            <CardContent className="pt-10 flex flex-col items-center text-center">
-              <Avatar className="w-32 h-32 mb-6 border-4 border-primary/20 shadow-[0_0_30px_rgba(17,179,245,0.15)]">
-                <AvatarImage src={`https://picsum.photos/seed/${user?.uid}/200`} />
-                <AvatarFallback className="text-4xl bg-secondary">{userData?.name?.[0] || 'T'}</AvatarFallback>
-              </Avatar>
-              <h2 className="text-2xl font-headline font-bold mb-1">{userData?.name || 'Trader'}</h2>
-              <p className="text-sm text-muted-foreground mb-4">{userData?.email}</p>
-              
-              <div 
-                className="flex items-center gap-2 px-3 py-1 bg-secondary border border-primary/20 rounded-lg cursor-pointer hover:border-primary/50 transition-colors mb-6 group" 
-                onClick={copyTraderId}
-              >
-                <span className="text-[10px] font-black uppercase tracking-widest text-primary">UID:</span>
-                <span className="font-mono text-sm font-bold text-white">{userData?.traderId || '--------'}</span>
-                <Copy className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors" />
-              </div>
+          <div className="lg:col-span-1 space-y-8">
+            <Card className="border-border/50 bg-card/40 backdrop-blur-sm">
+              <CardContent className="pt-10 flex flex-col items-center text-center">
+                <Avatar className="w-32 h-32 mb-6 border-4 border-primary/20 shadow-[0_0_30px_rgba(17,179,245,0.15)]">
+                  <AvatarImage src={`https://picsum.photos/seed/${user?.uid}/200`} />
+                  <AvatarFallback className="text-4xl bg-secondary">{userData?.name?.[0] || 'T'}</AvatarFallback>
+                </Avatar>
+                <h2 className="text-2xl font-headline font-bold mb-1">{userData?.name || 'Trader'}</h2>
+                <p className="text-sm text-muted-foreground mb-4">{userData?.email}</p>
+                
+                <div 
+                  className="flex items-center gap-2 px-3 py-1 bg-secondary border border-primary/20 rounded-lg cursor-pointer hover:border-primary/50 transition-colors mb-6 group" 
+                  onClick={copyTraderId}
+                >
+                  <span className="text-[10px] font-black uppercase tracking-widest text-primary">UID:</span>
+                  <span className="font-mono text-sm font-bold text-white">{userData?.traderId || '--------'}</span>
+                  <Copy className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors" />
+                </div>
 
-              <div className="flex flex-col gap-2 w-full mb-8">
-                <Badge className="bg-primary/20 text-primary border-primary/30 uppercase text-[10px] font-bold tracking-widest px-3 py-1 justify-center">
-                  {userData?.tier || 'Bronze'} Tier
-                </Badge>
-                {userData?.kycVerified ? (
-                  <Badge className="bg-accent/20 text-accent border-accent/30 uppercase text-[10px] flex gap-1 font-bold tracking-widest px-3 py-1 justify-center">
-                    <CheckCircle2 className="w-3 h-3" /> KYC Verified
+                <div className="flex flex-col gap-2 w-full mb-8">
+                  <Badge className="bg-primary/20 text-primary border-primary/30 uppercase text-[10px] font-bold tracking-widest px-3 py-1 justify-center">
+                    {userData?.tier || 'Bronze'} Tier
                   </Badge>
-                ) : (
-                  <Badge variant="outline" className="text-muted-foreground uppercase text-[10px] font-bold tracking-widest px-3 py-1 border-border/50 justify-center">
-                    KYC Not Verified
-                  </Badge>
-                )}
-              </div>
-              <Button variant="outline" className="w-full border-border/50 hover:bg-secondary">Update Photo</Button>
-            </CardContent>
-          </Card>
+                  {userData?.kycVerified ? (
+                    <Badge className="bg-accent/20 text-accent border-accent/30 uppercase text-[10px] flex gap-1 font-bold tracking-widest px-3 py-1 justify-center">
+                      <CheckCircle2 className="w-3 h-3" /> KYC Verified
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-muted-foreground uppercase text-[10px] font-bold tracking-widest px-3 py-1 border-border/50 justify-center">
+                      KYC Not Verified
+                    </Badge>
+                  )}
+                </div>
+                <Button variant="outline" className="w-full border-border/50 hover:bg-secondary">Update Photo</Button>
+              </CardContent>
+            </Card>
 
-          <Card className="lg:col-span-2 border-border/50 bg-card/40 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle className="font-headline">Personal Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                    <User className="w-3.5 h-3.5 text-primary" /> Full Name
-                  </Label>
-                  <Input 
-                    value={formData.name} 
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    className="bg-secondary/30 h-11"
-                  />
+            <Card className="border-border/50 bg-card/40 backdrop-blur-sm">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-primary" /> Security
+                </CardTitle>
+                <CardDescription>Protect your trading account.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Button variant="secondary" className="w-full justify-start h-11 px-4 font-bold text-xs uppercase tracking-widest">
+                  Change Password
+                </Button>
+                <Button variant="secondary" className="w-full justify-start h-11 px-4 font-bold text-xs uppercase tracking-widest">
+                  Enable 2FA Authentication
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="lg:col-span-2 space-y-8">
+            <Card className="border-border/50 bg-card/40 backdrop-blur-sm">
+              <CardHeader>
+                <CardTitle className="font-headline">Personal Details</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                      <User className="w-3.5 h-3.5 text-primary" /> Full Name
+                    </Label>
+                    <Input 
+                      value={formData.name} 
+                      onChange={(e) => setFormData({...formData, name: e.target.value})}
+                      className="bg-secondary/30 h-11"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                      <Mail className="w-3.5 h-3.5 text-primary" /> Email Address
+                    </Label>
+                    <Input value={userData?.email || ''} disabled className="bg-secondary/10 text-muted-foreground" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                      <Phone className="w-3.5 h-3.5 text-primary" /> Phone Number
+                    </Label>
+                    <Input 
+                      placeholder="+1 (555) 000-0000" 
+                      value={formData.phone}
+                      onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                      className="bg-secondary/30 h-11"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                      <Globe className="w-3.5 h-3.5 text-primary" /> Country
+                    </Label>
+                    <Input 
+                      placeholder="United Kingdom" 
+                      value={formData.country}
+                      onChange={(e) => setFormData({...formData, country: e.target.value})}
+                      className="bg-secondary/30 h-11"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                    <Mail className="w-3.5 h-3.5 text-primary" /> Email Address
-                  </Label>
-                  <Input value={userData?.email || ''} disabled className="bg-secondary/10 text-muted-foreground" />
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/50 bg-card/40 backdrop-blur-sm">
+              <CardHeader>
+                <CardTitle className="font-headline flex items-center gap-2">
+                  <Bell className="w-5 h-5 text-primary" /> Notification Preferences
+                </CardTitle>
+                <CardDescription>Control how you receive alerts and updates.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid md:grid-cols-2 gap-8">
+                  <div className="space-y-6">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-primary border-b border-primary/10 pb-2">Delivery Channels</h4>
+                    <PreferenceToggle 
+                      icon={<MailIcon />} 
+                      title="Email Notifications" 
+                      description="Receive critical alerts via email." 
+                      checked={preferences.email}
+                      onCheckedChange={(val) => setPreferences({...preferences, email: val})}
+                    />
+                    <PreferenceToggle 
+                      icon={<Bell />} 
+                      title="In-App Notifications" 
+                      description="Show alerts in the dashboard bell icon." 
+                      checked={preferences.inApp}
+                      onCheckedChange={(val) => setPreferences({...preferences, inApp: val})}
+                    />
+                  </div>
+                  
+                  <div className="space-y-6">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-primary border-b border-primary/10 pb-2">Alert Categories</h4>
+                    <PreferenceToggle 
+                      icon={<Trophy />} 
+                      title="Challenge Updates" 
+                      description="Pass/fail status and drawdown warnings." 
+                      checked={preferences.challenge}
+                      onCheckedChange={(val) => setPreferences({...preferences, challenge: val})}
+                    />
+                    <PreferenceToggle 
+                      icon={<Wallet />} 
+                      title="Payout Updates" 
+                      description="Withdrawal request and processing status." 
+                      checked={preferences.payout}
+                      onCheckedChange={(val) => setPreferences({...preferences, payout: val})}
+                    />
+                    <PreferenceToggle 
+                      icon={<Users />} 
+                      title="Referral Earnings" 
+                      description="New referral signups and commissions." 
+                      checked={preferences.referral}
+                      onCheckedChange={(val) => setPreferences({...preferences, referral: val})}
+                    />
+                    <PreferenceToggle 
+                      icon={<Megaphone />} 
+                      title="Admin Announcements" 
+                      description="Global platform news and maintenance." 
+                      checked={preferences.announcements}
+                      onCheckedChange={(val) => setPreferences({...preferences, announcements: val})}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                    <Phone className="w-3.5 h-3.5 text-primary" /> Phone Number
-                  </Label>
-                  <Input 
-                    placeholder="+1 (555) 000-0000" 
-                    value={formData.phone}
-                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                    className="bg-secondary/30 h-11"
-                  />
+
+                <div className="pt-8 border-t border-border/50">
+                  <Button 
+                    className="font-bold px-10 h-12 rounded-xl cyan-box-glow hover:scale-[1.02] transition-all"
+                    onClick={handleSave}
+                    disabled={loading}
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    {loading ? 'Saving Preferences...' : 'Save All Changes'}
+                  </Button>
                 </div>
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                    <Globe className="w-3.5 h-3.5 text-primary" /> Country
-                  </Label>
-                  <Input 
-                    placeholder="United Kingdom" 
-                    value={formData.country}
-                    onChange={(e) => setFormData({...formData, country: e.target.value})}
-                    className="bg-secondary/30 h-11"
-                  />
-                </div>
-              </div>
-              <div className="pt-4 border-t border-border/50">
-                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] mb-4 flex items-center gap-2 text-muted-foreground">
-                  <Shield className="w-4 h-4 text-primary" /> Security & Access
-                </h4>
-                <div className="flex flex-wrap gap-4">
-                  <Button variant="secondary" className="h-10 px-6 font-bold text-xs uppercase tracking-widest">Change Password</Button>
-                  <Button variant="secondary" className="h-10 px-6 font-bold text-xs uppercase tracking-widest">Enable 2FA</Button>
-                </div>
-              </div>
-              <Button 
-                className="font-bold px-10 h-12 rounded-xl cyan-box-glow hover:scale-[1.02] transition-all"
-                onClick={handleSave}
-                disabled={loading}
-              >
-                <Save className="w-4 h-4 mr-2" />
-                {loading ? 'Saving...' : 'Save Changes'}
-              </Button>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </main>
+    </div>
+  );
+}
+
+function PreferenceToggle({ icon, title, description, checked, onCheckedChange }: { icon: React.ReactNode, title: string, description: string, checked: boolean, onCheckedChange: (val: boolean) => void }) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start gap-3">
+        <div className="mt-1 p-2 rounded-lg bg-secondary text-muted-foreground group-hover:text-primary transition-colors">
+          {icon}
+        </div>
+        <div>
+          <p className="text-sm font-bold text-white">{title}</p>
+          <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
+        </div>
+      </div>
+      <Switch checked={checked} onCheckedChange={onCheckedChange} />
     </div>
   );
 }
