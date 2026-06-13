@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
@@ -9,9 +8,9 @@ import { auth } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { TrendingUp, ArrowRight, Loader2, Mail, ChevronLeft } from 'lucide-react';
+import { TrendingUp, Loader2, Mail, ChevronLeft, ShieldAlert } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
+import { sanitizeInput } from '@/lib/utils';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -20,21 +19,67 @@ export default function LoginPage() {
   const [resetLoading, setResetLoading] = useState(false);
   const [view, setView] = useState<'login' | 'forgot'>('login');
   
+  // Security: Failed attempt tracking
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [isLocked, setIsLocked] = useState(false);
+  const [lockRemaining, setLockRemaining] = useState(0);
+
   const router = useRouter();
   const { toast } = useToast();
 
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (isLocked && lockRemaining > 0) {
+      timer = setInterval(() => {
+        setLockRemaining((prev) => {
+          if (prev <= 1) {
+            setIsLocked(false);
+            setFailedAttempts(0);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [isLocked, lockRemaining]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-      router.push('/dashboard');
-    } catch (error: any) {
+    if (isLocked) {
       toast({
         variant: "destructive",
-        title: "Login Failed",
-        description: error.message || "Invalid credentials. Please try again.",
+        title: "Account Locked",
+        description: `Too many failed attempts. Try again in ${lockRemaining}s.`,
       });
+      return;
+    }
+
+    setLoading(true);
+    const sanitizedEmail = sanitizeInput(email);
+
+    try {
+      await signInWithEmailAndPassword(auth, sanitizedEmail, password);
+      router.push('/dashboard');
+    } catch (error: any) {
+      const newAttempts = failedAttempts + 1;
+      setFailedAttempts(newAttempts);
+      
+      if (newAttempts >= 5) {
+        setIsLocked(true);
+        setLockRemaining(30); // 30 second lockout
+        toast({
+          variant: "destructive",
+          title: "Security Lockout",
+          description: "Too many failed attempts. Login disabled for 30 seconds.",
+        });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Login Failed",
+          description: error.message || "Invalid credentials. Please try again.",
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -52,21 +97,17 @@ export default function LoginPage() {
     }
     setResetLoading(true);
     try {
-      await sendPasswordResetEmail(auth, email);
+      await sendPasswordResetEmail(auth, sanitizeInput(email));
       toast({
         title: "Reset Link Sent",
         description: "Password reset email sent! Check your inbox for instructions.",
       });
       setView('login');
     } catch (error: any) {
-      const message = error.code === 'auth/user-not-found' 
-        ? "No account found with this email." 
-        : error.message;
-      
       toast({
         variant: "destructive",
         title: "Reset Failed",
-        description: message,
+        description: error.message,
       });
     } finally {
       setResetLoading(false);
@@ -105,6 +146,15 @@ export default function LoginPage() {
                 : 'Enter your email to receive a recovery link'}
             </p>
           </div>
+
+          {isLocked && (
+            <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20 flex items-center gap-3 animate-pulse">
+              <ShieldAlert className="text-destructive w-5 h-5" />
+              <p className="text-xs font-bold text-destructive uppercase tracking-widest">
+                Security Lockout: {lockRemaining}s remaining
+              </p>
+            </div>
+          )}
           
           {view === 'login' ? (
             <form onSubmit={handleLogin} className="space-y-6">
@@ -117,6 +167,7 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  disabled={isLocked}
                   className="h-12 bg-secondary/50 border-border/50 focus:border-primary/50 text-white"
                 />
               </div>
@@ -137,10 +188,11 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  disabled={isLocked}
                   className="h-12 bg-secondary/50 border-border/50 focus:border-primary/50 text-white"
                 />
               </div>
-              <Button type="submit" className="w-full h-12 font-bold text-lg cyan-box-glow" disabled={loading}>
+              <Button type="submit" className="w-full h-12 font-bold text-lg cyan-box-glow" disabled={loading || isLocked}>
                 {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}
                 {loading ? 'Authenticating...' : 'Sign In'}
               </Button>

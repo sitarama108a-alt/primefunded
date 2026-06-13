@@ -1,12 +1,12 @@
 /**
  * Firebase configuration for the client SDK.
- * Using the specific credentials provided for the project.
+ * Using environment variables for enhanced security.
  */
 export const firebaseConfig = {
-  apiKey: "AIzaSyBPE16NXurynfkqSpytaeh1ba_3h7q6NMM",
-  authDomain: "studio-8383940162-6976e.firebaseapp.com",
-  projectId: "studio-8383940162-6976e",
-  storageBucket: "studio-8383940162-6976e.firebasestorage.app",
-  messagingSenderId: "667427838842",
-  appId: "1:667427838842:web:bc1a55f81c2f032cfc54c3"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
