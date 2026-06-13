@@ -33,6 +33,7 @@ import { useCollection, useFirestore } from '@/firebase';
 import { where, doc, updateDoc, query, collection, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '@/lib/utils';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,7 +43,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/dialog";
+} from "@/components/ui/alert-dialog";
 
 export default function ReferralPage() {
   const { user, userData } = useAuth();
