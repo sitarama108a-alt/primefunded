@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from 'next/link';
@@ -173,7 +174,7 @@ export const Navigation = memo(function Navigation() {
             <UserCircle className="text-primary w-6 h-6" />
           </div>
           <div className="overflow-hidden">
-            <p className="text-sm font-semibold truncate">{userData?.name || 'Trader'}</p>
+            <p className="text-sm font-semibold truncate text-white">{userData?.name || 'Trader'}</p>
             <p className="text-xs text-muted-foreground truncate">{userData?.tier || 'Bronze Tier'}</p>
           </div>
         </div>

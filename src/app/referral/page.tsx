@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useMemo, useState, useEffect, useCallback, memo } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -50,6 +51,34 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 
+const StatSmall = memo(function StatSmall({ title, value, icon, color = 'blue' }: { title: string, value: string | number, icon: any, color?: string }) {
+  const colorMap: any = {
+    blue: 'text-primary bg-primary/10 border-primary/20',
+    amber: 'text-amber-500 bg-amber-500/10 border-amber-500/20',
+    green: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
+  };
+  return (
+    <Card className="bg-secondary/30 border-border/50 p-6 group hover:border-primary/20 transition-colors">
+      <div className={`p-2 rounded-lg w-fit mb-3 border transition-transform group-hover:scale-110 ${colorMap[color]}`}>{icon}</div>
+      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{title}</p>
+      <p className="text-2xl font-bold font-headline tabular-nums text-white">{value}</p>
+    </Card>
+  );
+});
+
+const StepItem = memo(function StepItem({ step, icon, title, desc }: { step: string, icon: any, title: string, desc: string }) {
+  return (
+    <div className="p-8 rounded-2xl bg-secondary/20 border border-border flex flex-col items-center text-center group hover:border-primary/50 transition-all">
+      <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-6 border border-primary/20 group-hover:scale-110 transition-transform relative">
+        {icon}
+        <div className="absolute -top-2 -right-2 w-6 h-6 bg-primary text-primary-foreground rounded-full text-xs font-bold flex items-center justify-center border-2 border-background">{step}</div>
+      </div>
+      <h3 className="font-bold text-lg mb-2 text-white">{title}</h3>
+      <p className="text-sm text-muted-foreground leading-relaxed">{desc}</p>
+    </div>
+  );
+});
+
 export default function ReferralPage() {
   const { user, userData, loading: authLoading } = useAuth();
   const db = useFirestore();
@@ -77,9 +106,7 @@ export default function ReferralPage() {
 
   useEffect(() => {
     const initializeReferralData = async (userId: string) => {
-      // 1. Explicit check for Auth state
       if (!auth.currentUser) return;
-
       try {
         const userRef = doc(db, 'users', userId);
         const userSnap = await getDoc(userRef);
@@ -121,7 +148,6 @@ export default function ReferralPage() {
           }
         }
       } catch (err) {
-        console.error("Initialization error:", err);
       } finally {
         setInitializing(false);
       }
@@ -242,7 +268,7 @@ export default function ReferralPage() {
       setIsEditing(false);
       setIsSaving(false);
       setShowConfirmDialog(false);
-    }).catch((err) => {
+    }).catch(() => {
       setIsSaving(false);
       setShowConfirmDialog(false);
     });
@@ -322,7 +348,7 @@ export default function ReferralPage() {
           <Card className="lg:col-span-1 border-primary/20 bg-primary/5 relative overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 blur-3xl rounded-full -mr-16 -mt-16" />
             <CardHeader>
-              <CardTitle className="text-xl font-headline">My Referral Code</CardTitle>
+              <CardTitle className="text-xl font-headline text-white">My Referral Code</CardTitle>
               <CardDescription>Customize your code to share with your audience.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -342,7 +368,7 @@ export default function ReferralPage() {
                           onChange={(e) => setNewCode(e.target.value.toUpperCase())}
                           placeholder="ENTER NEW CODE"
                           className={cn(
-                            "flex h-16 w-full rounded-md border-2 bg-background px-3 py-2 text-2xl font-mono font-bold tracking-widest text-center uppercase ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+                            "flex h-16 w-full rounded-md border-2 bg-background px-3 py-2 text-2xl font-mono font-bold tracking-widest text-center uppercase ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-white",
                             availabilityStatus === 'available' && "border-accent bg-accent/5",
                             availabilityStatus === 'taken' && "border-destructive bg-destructive/5",
                             availabilityStatus === 'invalid' && "border-amber-500 bg-amber-500/5",
@@ -458,12 +484,12 @@ export default function ReferralPage() {
             <Card className="bg-secondary/20 border-border/50 overflow-hidden">
               <CardContent className="p-6">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-bold flex items-center gap-2">
+                  <span className="text-sm font-bold flex items-center gap-2 text-white">
                     Withdrawal Progress
                     {stats.pendingEarned < MIN_WITHDRAWAL && <AlertCircle className="w-4 h-4 text-amber-500" />}
                     {stats.pendingEarned >= MIN_WITHDRAWAL && !isKycVerified && <Lock className="w-4 h-4 text-destructive" />}
                   </span>
-                  <span className="text-xs font-mono">${stats.pendingEarned.toFixed(2)} / $100.00</span>
+                  <span className="text-xs font-mono text-white">${stats.pendingEarned.toFixed(2)} / $100.00</span>
                 </div>
                 <Progress value={progressPercent} className="h-2 mb-4" />
                 
@@ -513,7 +539,7 @@ export default function ReferralPage() {
         </div>
 
         <section className="mb-12">
-          <h2 className="text-2xl font-headline font-bold mb-6 flex items-center gap-2">
+          <h2 className="text-2xl font-headline font-bold mb-6 flex items-center gap-2 text-white">
             <TrendingUp className="text-primary w-6 h-6" /> How It Works
           </h2>
           <div className="grid md:grid-cols-3 gap-6">
@@ -525,7 +551,7 @@ export default function ReferralPage() {
 
         <Card className="border-border/50 bg-card/40 backdrop-blur-sm">
           <CardHeader>
-            <CardTitle>Referral History</CardTitle>
+            <CardTitle className="text-white">Referral History</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
@@ -545,17 +571,17 @@ export default function ReferralPage() {
                       <tr key={i}><td colSpan={5} className="py-4"><Skeleton className="h-10 w-full rounded-lg mx-6" /></td></tr>
                     ))
                   ) : (referrals && referrals.length > 0) ? referrals.map((r: any) => (
-                    <tr key={r.id} className="hover:bg-secondary/10">
+                    <tr key={r.id} className="hover:bg-secondary/10 transition-colors">
                       <td className="py-4 px-6 text-xs text-muted-foreground">
                         {r.createdAt?.seconds ? new Date(r.createdAt.seconds * 1000).toLocaleDateString() : 'Processing...'}
                       </td>
-                      <td className="py-4 px-6 font-bold truncate max-w-[150px]">
+                      <td className="py-4 px-6 font-bold truncate max-w-[150px] text-white">
                         {r.referredUserEmail ? `${r.referredUserEmail.split('@')[0].slice(0, 3)}***@${r.referredUserEmail.split('@')[1]}` : 'Anonymous'}
                       </td>
                       <td className="py-4 px-6 text-xs uppercase font-black text-muted-foreground/50">{r.plan || 'N/A'}</td>
                       <td className="py-4 px-6 font-bold text-accent">${(r.amount || 0).toFixed(2)}</td>
                       <td className="py-4 px-6 text-right">
-                        <Badge variant={r.status === 'paid' ? 'default' : 'outline'} className="uppercase text-[9px] font-black">
+                        <Badge variant={r.status === 'paid' ? 'default' : 'outline'} className="uppercase text-[9px] font-black text-white border-white/10">
                           {r.status || 'pending'}
                         </Badge>
                       </td>
@@ -579,7 +605,7 @@ export default function ReferralPage() {
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <AlertDialogContent className="bg-card border-primary/20">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
+            <AlertDialogTitle className="flex items-center gap-2 text-white">
               <AlertTriangle className="text-amber-500 w-5 h-5" /> Confirm Code Change
             </AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">
@@ -600,34 +626,6 @@ export default function ReferralPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
-  );
-}
-
-function StatSmall({ title, value, icon, color = 'blue' }: { title: string, value: string | number, icon: any, color?: string }) {
-  const colorMap: any = {
-    blue: 'text-primary bg-primary/10 border-primary/20',
-    amber: 'text-amber-500 bg-amber-500/10 border-amber-500/20',
-    green: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
-  };
-  return (
-    <Card className="bg-secondary/30 border-border/50 p-6 group hover:border-primary/20 transition-colors">
-      <div className={`p-2 rounded-lg w-fit mb-3 border transition-transform group-hover:scale-110 ${colorMap[color]}`}>{icon}</div>
-      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{title}</p>
-      <p className="text-2xl font-bold font-headline tabular-nums text-white">{value}</p>
-    </Card>
-  );
-}
-
-function StepItem({ step, icon, title, desc }: { step: string, icon: any, title: string, desc: string }) {
-  return (
-    <div className="p-8 rounded-2xl bg-secondary/20 border border-border flex flex-col items-center text-center group hover:border-primary/50 transition-all">
-      <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-6 border border-primary/20 group-hover:scale-110 transition-transform relative">
-        {icon}
-        <div className="absolute -top-2 -right-2 w-6 h-6 bg-primary text-primary-foreground rounded-full text-xs font-bold flex items-center justify-center border-2 border-background">{step}</div>
-      </div>
-      <h3 className="font-bold text-lg mb-2 text-white">{title}</h3>
-      <p className="text-sm text-muted-foreground leading-relaxed">{desc}</p>
     </div>
   );
 }

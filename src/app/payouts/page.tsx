@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, memo } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,21 @@ import Link from 'next/link';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { sendPayoutRequestedEmail } from '@/lib/email';
+import { Skeleton } from '@/components/ui/skeleton';
+
+const StatBox = memo(function StatSmall({ title, value, icon, color = 'primary' }: { title: string, value: string, icon: any, color?: string }) {
+  return (
+    <Card className={cn(color === 'accent' ? "bg-accent/5 border-accent/20" : "")}>
+      <CardContent className="pt-6">
+        <div className="flex justify-between items-start mb-4">
+          <p className={cn("text-xs font-bold uppercase tracking-widest", color === 'accent' ? "text-accent" : "text-muted-foreground")}>{title}</p>
+          <div className={color === 'accent' ? "text-accent" : "text-primary"}>{icon}</div>
+        </div>
+        <h3 className="text-4xl font-headline font-bold mb-2">{value}</h3>
+      </CardContent>
+    </Card>
+  );
+});
 
 export default function PayoutsPage() {
   const { user, userData } = useAuth();
@@ -39,35 +55,35 @@ export default function PayoutsPage() {
   const handleRequestPayout = async () => {
     if (!user || !isKycVerified) return;
     setLoading(true);
-    try {
-      const payoutData = {
-        userId: user.uid,
-        email: user.email,
-        amount: "0.00",
-        method: "USDT",
-        address: "Pending input...",
-        status: "pending",
-        date: new Date().toISOString(),
-        createdAt: serverTimestamp()
-      };
-      
-      addDoc(collection(db, 'payouts'), payoutData);
-      
-      addDoc(collection(db, 'users', user.uid, 'notifications'), {
-        title: "💸 Payout Requested",
-        message: "Your payout request has been submitted and is being processed by our finance team.",
-        type: 'payout_requested',
-        isRead: false,
-        createdAt: serverTimestamp()
+    const payoutData = {
+      userId: user.uid,
+      email: user.email,
+      amount: "0.00",
+      method: "USDT",
+      address: "Pending input...",
+      status: "pending",
+      date: new Date().toISOString(),
+      createdAt: serverTimestamp()
+    };
+    
+    addDoc(collection(db, 'payouts'), payoutData)
+      .then(() => {
+        addDoc(collection(db, 'users', user.uid, 'notifications'), {
+          title: "💸 Payout Requested",
+          message: "Your payout request has been submitted and is being processed by our finance team.",
+          type: 'payout_requested',
+          isRead: false,
+          createdAt: serverTimestamp()
+        });
+        sendPayoutRequestedEmail(user.email!, "0.00");
+        toast({ title: "Request Submitted", description: "Your payout is now under review." });
+      })
+      .catch(() => {
+        toast({ variant: "destructive", title: "Request Failed" });
+      })
+      .finally(() => {
+        setLoading(false);
       });
-
-      sendPayoutRequestedEmail(user.email!, "0.00");
-      toast({ title: "Request Submitted", description: "Your payout is now under review." });
-    } catch (err) {
-      toast({ variant: "destructive", title: "Request Failed" });
-    } finally {
-      setLoading(false);
-    }
   };
 
   const renderKycWarning = () => {
@@ -116,7 +132,7 @@ export default function PayoutsPage() {
   return (
     <div className="flex min-h-screen bg-background">
       <Navigation />
-      <main className="flex-1 p-8 overflow-y-auto">
+      <main className="flex-1 p-8 overflow-y-auto custom-scrollbar">
         <header className="mb-10">
           <h1 className="text-3xl font-headline font-bold mb-1 text-white">Payouts & Withdrawals</h1>
           <p className="text-muted-foreground">Monitor your earnings and request profit splits.</p>
@@ -157,29 +173,13 @@ export default function PayoutsPage() {
             </CardContent>
           </Card>
           
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex justify-between items-start mb-4">
-                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Total Paid Out</p>
-                <ArrowDownRight className="text-accent w-5 h-5" />
-              </div>
-              <h3 className="text-4xl font-headline font-bold mb-2">${stats.totalPaid.toLocaleString('en-US')}</h3>
-            </CardContent>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex justify-between items-start mb-4">
-                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Pending Payouts</p>
-                <Clock className="text-primary w-5 h-5" />
-              </div>
-              <h3 className="text-4xl font-headline font-bold mb-2">${stats.pending.toLocaleString('en-US')}</h3>
-            </CardContent>
-          </Card>
+          <StatBox title="Total Paid Out" value={`$${stats.totalPaid.toLocaleString('en-US')}`} icon={<ArrowDownRight className="w-5 h-5" />} color="accent" />
+          <StatBox title="Pending Payouts" value={`$${stats.pending.toLocaleString('en-US')}`} icon={<Clock className="w-5 h-5" />} />
         </div>
 
         <Card className="border-border/50 bg-card/40 backdrop-blur-sm">
           <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
+            <CardTitle className="text-lg flex items-center gap-2 text-white">
               <History className="w-5 h-5" /> Payout History
             </CardTitle>
           </CardHeader>
@@ -199,13 +199,13 @@ export default function PayoutsPage() {
                     [1, 2, 3].map(i => (
                       <tr key={i}><td colSpan={4} className="py-4"><Skeleton className="h-10 w-full rounded-lg" /></td></tr>
                     ))
-                  ) : payouts?.length > 0 ? payouts.map(p => (
+                  ) : payouts?.length > 0 ? payouts.map((p: any) => (
                     <tr key={p.id} className="hover:bg-secondary/20 transition-colors">
-                      <td className="py-4 px-2 font-medium">{new Date(p.date).toLocaleDateString()}</td>
+                      <td className="py-4 px-2 font-medium text-white">{new Date(p.date).toLocaleDateString()}</td>
                       <td className="py-4 px-2 text-muted-foreground">{p.method}</td>
                       <td className="py-4 px-2 font-bold text-accent text-right">${p.amount}</td>
                       <td className="py-4 px-2 text-right">
-                        <Badge variant="outline" className="text-[10px] uppercase font-bold">{p.status}</Badge>
+                        <Badge variant="outline" className="text-[10px] uppercase font-bold text-white border-white/10">{p.status}</Badge>
                       </td>
                     </tr>
                   )) : (
@@ -221,4 +221,8 @@ export default function PayoutsPage() {
       </main>
     </div>
   );
+}
+
+function cn(...inputs: any[]) {
+  return inputs.filter(Boolean).join(' ');
 }

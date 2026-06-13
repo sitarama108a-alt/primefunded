@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, memo } from 'react';
@@ -186,7 +187,7 @@ const ChallengeCard = memo(function ChallengeCard({ tier, planName, delay, disco
           
           <Collapsible open={isOpen} onOpenChange={setIsOpen} className="w-full">
             <CollapsibleTrigger asChild>
-              <Button variant="ghost" className="w-full flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-primary h-10 px-4 border border-primary/20 rounded-lg">
+              <Button variant="ghost" className="w-full flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-primary h-10 px-4 border border-primary/20 rounded-lg cursor-pointer">
                 View Stage Rules
                 {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               </Button>
@@ -220,7 +221,7 @@ const ChallengeCard = memo(function ChallengeCard({ tier, planName, delay, disco
         </CardContent>
 
         <CardFooter className="pt-4 pb-8 px-6">
-          <Button className="w-full h-12 font-bold rounded-xl cyan-box-glow" asChild>
+          <Button className="w-full h-12 font-bold rounded-xl cyan-box-glow cursor-pointer" asChild>
             <Link href={`/payment?plan=${planName}&size=${tier.size}&price=$${finalPrice}`}>
               Start Challenge
             </Link>
@@ -275,7 +276,7 @@ export default function ChallengesPage() {
           <motion.h1 
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-4xl font-headline font-bold mb-2"
+            className="text-4xl font-headline font-bold mb-2 text-white"
           >
             Select Your Challenge
           </motion.h1>
