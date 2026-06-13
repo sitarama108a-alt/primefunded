@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
@@ -11,8 +11,9 @@ import { Label } from '@/components/ui/label';
 import { TrendingUp, Loader2, Mail, ChevronLeft, ShieldAlert } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { sanitizeInput } from '@/lib/utils';
+import { useAuth } from '@/context/AuthContext';
 
-export default function LoginPage() {
+function LoginContent() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -25,7 +26,18 @@ export default function LoginPage() {
   const [lockRemaining, setLockRemaining] = useState(0);
 
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
+  const { user, loading: authLoading } = useAuth();
+
+  const redirectTo = searchParams.get('redirect') || '/dashboard';
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user && !authLoading) {
+      router.push(redirectTo);
+    }
+  }, [user, authLoading, router, redirectTo]);
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -60,7 +72,7 @@ export default function LoginPage() {
 
     try {
       await signInWithEmailAndPassword(auth, sanitizedEmail, password);
-      router.push('/dashboard');
+      router.push(redirectTo);
     } catch (error: any) {
       const newAttempts = failedAttempts + 1;
       setFailedAttempts(newAttempts);
@@ -231,10 +243,18 @@ export default function LoginPage() {
           )}
           
           <p className="text-center text-sm text-muted-foreground">
-            Don't have an account? <Link href="/signup" className="text-primary font-semibold hover:underline">Join PrimeFunded</Link>
+            Don't have an account? <Link href={redirectTo !== '/dashboard' ? `/signup?redirect=${encodeURIComponent(redirectTo)}` : '/signup'} className="text-primary font-semibold hover:underline">Join PrimeFunded</Link>
           </p>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center text-white">Loading Terminal...</div>}>
+      <LoginContent />
+    </Suspense>
   );
 }

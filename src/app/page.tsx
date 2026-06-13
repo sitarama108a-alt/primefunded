@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { TrendingUp, ShieldCheck, Zap, Globe, ArrowRight, BarChart3, CheckCircle2, Trophy, Wallet } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useAuth } from '@/context/AuthContext';
 
 const fadeInUp = {
   initial: { opacity: 0, y: 15 },
@@ -13,6 +14,8 @@ const fadeInUp = {
 };
 
 export default function Home() {
+  const { user } = useAuth();
+
   return (
     <div className="min-h-screen bg-background selection:bg-primary selection:text-primary-foreground overflow-x-hidden">
       {/* Navbar */}
@@ -31,12 +34,16 @@ export default function Home() {
           </motion.div>
           
           <div className="hidden md:flex items-center gap-8">
-            <Link href="/challenges" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Challenges</Link>
+            <Link href={user ? "/challenges" : "/login?redirect=/challenges"} className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Challenges</Link>
             <Link href="/rules" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Rules</Link>
             <Link href="/about" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">About Us</Link>
-            <Link href="/login" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Login</Link>
+            {user ? (
+              <Link href="/dashboard" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Dashboard</Link>
+            ) : (
+              <Link href="/login" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Login</Link>
+            )}
             <Button className="font-bold cyan-box-glow" asChild>
-              <Link href="/challenges">Get Funded</Link>
+              <Link href={user ? "/challenges" : "/signup"}>Get Funded</Link>
             </Button>
           </div>
         </div>
@@ -95,7 +102,7 @@ export default function Home() {
             className="flex flex-col sm:flex-row items-center justify-center gap-6"
           >
             <Button size="lg" className="h-16 px-10 text-lg rounded-2xl font-bold transition-all hover:scale-105 hover:shadow-[0_0_40px_rgba(17,179,245,0.4)] bg-primary text-primary-foreground group" asChild>
-              <Link href="/challenges">
+              <Link href={user ? "/challenges" : "/signup"}>
                 Start Challenge 
                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Link>

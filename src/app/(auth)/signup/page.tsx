@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, Suspense, useEffect } from 'react';
@@ -15,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 import { cn, sanitizeInput } from '@/lib/utils';
+import { useAuth } from '@/context/AuthContext';
 import { z } from 'zod';
 
 const SignupSchema = z.object({
@@ -37,8 +37,17 @@ function SignupContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const { user: existingUser, loading: authLoading } = useAuth();
 
   const referralCodeFromUrl = searchParams.get('ref');
+  const redirectTo = searchParams.get('redirect') || '/dashboard';
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (existingUser && !authLoading) {
+      router.push(redirectTo);
+    }
+  }, [existingUser, authLoading, router, redirectTo]);
 
   useEffect(() => {
     if (referralCodeFromUrl) {
@@ -156,7 +165,7 @@ function SignupContent() {
         createdAt: serverTimestamp()
       });
 
-      router.push('/dashboard');
+      router.push(redirectTo);
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -284,7 +293,7 @@ function SignupContent() {
           </form>
           
           <p className="text-center text-sm text-muted-foreground">
-            Already have an account? <Link href="/login" className="text-primary font-semibold hover:underline">Sign In</Link>
+            Already have an account? <Link href={redirectTo !== '/dashboard' ? `/login?redirect=${encodeURIComponent(redirectTo)}` : '/login'} className="text-primary font-semibold hover:underline">Sign In</Link>
           </p>
         </div>
       </div>
@@ -305,7 +314,7 @@ function FeatureItem({ text }: { text: string }) {
 
 export default function SignupPage() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center text-white">Loading Terminal...</div>}>
       <SignupContent />
     </Suspense>
   );

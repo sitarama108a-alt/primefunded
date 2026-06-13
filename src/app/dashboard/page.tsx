@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, Suspense, memo } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { useAuth } from '@/context/AuthContext';
+import { useRouter } from 'next/navigation';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -59,6 +60,7 @@ const MetricCard = memo(function MetricCard({ title, value, icon, footer }: { ti
 
 export default function DashboardPage({ adminViewMode = false, targetUid }: DashboardPageProps) {
   const { user, userData: loggedInUserData, loading: authLoading } = useAuth();
+  const router = useRouter();
   
   const effectiveUid = adminViewMode && targetUid ? targetUid : user?.uid;
   const { data: targetUserData, loading: targetUserLoading } = useDoc<any>(
@@ -77,6 +79,13 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   const [completingPhone, setCompletingPhone] = useState('');
   const [completingCountry, setCompletingCountry] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
+
+  // Auth Guard
+  useEffect(() => {
+    if (!authLoading && !user && !adminViewMode) {
+      router.push('/login?redirect=/dashboard');
+    }
+  }, [user, authLoading, router, adminViewMode]);
 
   useEffect(() => {
     if (userData && effectiveUid && !adminViewMode) {
@@ -133,7 +142,6 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     return [where('status', '==', 'active'), limit(1)];
   }, [effectiveUid]);
 
-  // Updated to scalable subcollection path
   const { data: accounts, loading: accountsLoading } = useCollection<any>(
     effectiveUid ? `users/${effectiveUid}/accounts` : null, 
     accountConstraints
@@ -195,6 +203,8 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     );
   }
 
+  if (!user && !adminViewMode) return null;
+
   return (
     <div className="flex min-h-screen bg-background">
       {!adminViewMode && <Navigation />}
@@ -240,7 +250,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                 <p className="text-sm text-muted-foreground">Please provide your contact details to enable full dashboard features.</p>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
+            <div className="flex flex-wrap items-center gap-4 w-full md:auto">
               <div className="flex-1 md:flex-none">
                 <Input 
                   placeholder="Phone Number" 

@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useState, memo } from 'react';
+import { useState, memo, useEffect } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,6 +9,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Check, ChevronDown, ChevronUp, TicketPercent, Skull, AlertTriangle, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
@@ -258,6 +259,16 @@ export default function ChallengesPage() {
   const [selectedPlan, setSelectedPlan] = useState('1-step');
   const [couponCode, setCouponCode] = useState('');
   const [discountApplied, setDiscountApplied] = useState(false);
+  
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  // Auth Guard
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/login?redirect=/challenges');
+    }
+  }, [user, loading, router]);
 
   const handleApplyCoupon = () => {
     if (couponCode.toLowerCase() === 'primefunded20') {
@@ -266,6 +277,19 @@ export default function ChallengesPage() {
       setDiscountApplied(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen bg-background">
+        <Navigation />
+        <main className="flex-1 p-8 flex items-center justify-center">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        </main>
+      </div>
+    );
+  }
+
+  if (!user) return null;
 
   return (
     <div className="flex min-h-screen bg-background">
