@@ -10,7 +10,6 @@ import { Progress } from '@/components/ui/progress';
 import { 
   Users, 
   Copy, 
-  Share2, 
   TrendingUp, 
   DollarSign, 
   CheckCircle2, 
@@ -27,13 +26,15 @@ import {
   Loader2,
   AlertTriangle,
   Lock,
-  XCircle
+  XCircle,
+  Info
 } from 'lucide-react';
 import { useCollection, useFirestore } from '@/firebase';
 import { where, doc, updateDoc, query, collection, getDocs, setDoc, serverTimestamp, limit, orderBy } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,9 +50,10 @@ import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
 export default function ReferralPage() {
-  const { user, userData } = useAuth();
+  const { user, userData, loading: authLoading } = useAuth();
   const db = useFirestore();
   const { toast } = useToast();
+  
   const [copied, setCopied] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [newCode, setNewCode] = useState('');
@@ -62,26 +64,31 @@ export default function ReferralPage() {
   const MIN_WITHDRAWAL = 100;
   const MAX_CHANGES = 3;
 
+  // Auto-generate code if missing
   useEffect(() => {
-    if (userData && user && !userData.referralCode) {
+    if (userData && user && !userData.referralCode && !authLoading) {
       const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
       let result = '';
       for (let i = 0; i < 8; i++) {
         result += chars.charAt(Math.floor(Math.random() * chars.length));
       }
-      const userRef = doc(db, 'users', user.uid);
-      updateDoc(userRef, { referralCode: result, codeChangesCount: 0 });
       
+      const userRef = doc(db, 'users', user.uid);
       const codeRegRef = doc(db, 'referralCodes', result);
+
+      updateDoc(userRef, { referralCode: result, codeChangesCount: 0 })
+        .catch(() => { /* Silent fail if doc doesn't exist yet */ });
+      
       setDoc(codeRegRef, {
         code: result,
         userId: user.uid,
         active: true,
         createdAt: serverTimestamp()
-      });
+      }).catch(() => {});
     }
-  }, [userData, user, db]);
+  }, [userData, user, db, authLoading]);
 
+  // Code availability check
   useEffect(() => {
     if (!isEditing || !newCode) {
       setAvailabilityStatus('idle');
@@ -129,18 +136,24 @@ export default function ReferralPage() {
     return [where('referrerId', '==', user.uid), orderBy('createdAt', 'desc'), limit(20)];
   }, [user?.uid]);
 
-  const { data: referrals, loading: referralsLoading } = useCollection<any>('referrals', referralConstraints);
+  const { data: referrals, loading: referralsLoading, error: referralsError } = useCollection<any>(
+    user?.uid ? 'referrals' : null, 
+    referralConstraints
+  );
 
-  const referralLink = useMemo(() => `https://primefunded.com/signup?ref=${userData?.referralCode || ''}`, [userData?.referralCode]);
+  const referralLink = useMemo(() => {
+    const code = userData?.referralCode || '';
+    return typeof window !== 'undefined' ? `${window.location.origin}/signup?ref=${code}` : `https://primefunded.com/signup?ref=${code}`;
+  }, [userData?.referralCode]);
 
   const stats = useMemo(() => {
-    if (!referrals) return { total: 0, successful: 0, totalEarned: 0, pendingEarned: 0, paidEarned: 0 };
+    const data = referrals || [];
     return {
-      total: referrals.length,
-      successful: referrals.filter((r: any) => r.amount > 0).length,
-      totalEarned: referrals.reduce((acc: number, r: any) => acc + (r.amount || 0), 0),
-      pendingEarned: referrals.filter((r: any) => r.status === 'pending').reduce((acc: number, r: any) => acc + (r.amount || 0), 0),
-      paidEarned: referrals.filter((r: any) => r.status === 'paid').reduce((acc: number, r: any) => acc + (r.amount || 0), 0),
+      total: data.length,
+      successful: data.filter((r: any) => (r.amount || 0) > 0).length,
+      totalEarned: data.reduce((acc: number, r: any) => acc + (r.amount || 0), 0),
+      pendingEarned: data.filter((r: any) => r.status === 'pending').reduce((acc: number, r: any) => acc + (r.amount || 0), 0),
+      paidEarned: data.filter((r: any) => r.status === 'paid').reduce((acc: number, r: any) => acc + (r.amount || 0), 0),
     };
   }, [referrals]);
 
@@ -148,38 +161,43 @@ export default function ReferralPage() {
   const canWithdraw = stats.pendingEarned >= MIN_WITHDRAWAL && isKycVerified;
   const progressPercent = Math.min((stats.pendingEarned / MIN_WITHDRAWAL) * 100, 100);
 
-  const handleSaveCode = () => {
+  const handleSaveCode = async () => {
     if (!user || availabilityStatus !== 'available' || newCode === userData?.referralCode) return;
     setIsSaving(true);
     
-    const oldCode = userData.referralCode;
-    const userRef = doc(db, 'users', user.uid);
-    const newCodeRef = doc(db, 'referralCodes', newCode);
-    const updates = {
-      referralCode: newCode,
-      codeChangesCount: (userData.codeChangesCount || 0) + 1,
-      lastCodeChange: serverTimestamp()
-    };
+    try {
+      const oldCode = userData.referralCode;
+      const userRef = doc(db, 'users', user.uid);
+      const newCodeRef = doc(db, 'referralCodes', newCode);
+      
+      const updates = {
+        referralCode: newCode,
+        codeChangesCount: (userData.codeChangesCount || 0) + 1,
+        lastCodeChange: serverTimestamp()
+      };
 
-    updateDoc(userRef, updates)
-      .catch(async (err) => errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: updates })));
+      await updateDoc(userRef, updates);
 
-    if (oldCode) {
-      const oldCodeRef = doc(db, 'referralCodes', oldCode);
-      updateDoc(oldCodeRef, { active: false });
+      if (oldCode) {
+        const oldCodeRef = doc(db, 'referralCodes', oldCode);
+        updateDoc(oldCodeRef, { active: false });
+      }
+
+      await setDoc(newCodeRef, {
+        code: newCode,
+        userId: user.uid,
+        active: true,
+        createdAt: serverTimestamp()
+      });
+
+      toast({ title: "Code Updated!", description: `Your referral code has been changed to ${newCode}` });
+      setIsEditing(false);
+    } catch (err: any) {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `users/${user.uid}`, operation: 'update' }));
+    } finally {
+      setIsSaving(false);
+      setShowConfirmDialog(false);
     }
-
-    setDoc(newCodeRef, {
-      code: newCode,
-      userId: user.uid,
-      active: true,
-      createdAt: serverTimestamp()
-    });
-
-    toast({ title: "Code Updated!", description: `Your referral code has been changed to ${newCode}` });
-    setIsEditing(false);
-    setIsSaving(false);
-    setShowConfirmDialog(false);
   };
 
   const copyToClipboard = (text: string) => {
@@ -204,6 +222,48 @@ export default function ReferralPage() {
   };
 
   const changesRemaining = MAX_CHANGES - (userData?.codeChangesCount || 0);
+
+  // Safety checks
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen bg-background">
+        <Navigation />
+        <main className="flex-1 p-8 flex items-center justify-center">
+          <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        </main>
+      </div>
+    );
+  }
+
+  if (!user || !userData) {
+    return (
+      <div className="flex min-h-screen bg-background">
+        <Navigation />
+        <main className="flex-1 p-8 flex flex-col items-center justify-center text-center">
+          <XCircle className="w-16 h-16 text-destructive mb-4" />
+          <h2 className="text-2xl font-bold">Unable to load profile</h2>
+          <p className="text-muted-foreground mt-2">Please check your internet connection and try again.</p>
+          <Button className="mt-6 font-bold" onClick={() => window.location.reload()}>Retry</Button>
+        </main>
+      </div>
+    );
+  }
+
+  if (referralsError) {
+    return (
+      <div className="flex min-h-screen bg-background">
+        <Navigation />
+        <main className="flex-1 p-8">
+          <div className="bg-destructive/10 border border-destructive/20 p-10 rounded-3xl text-center">
+            <AlertTriangle className="w-12 h-12 text-destructive mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-white">Database connection error</h2>
+            <p className="text-muted-foreground mt-2 max-w-sm mx-auto">We encountered an issue fetching your referral history. This may be due to missing database indexes.</p>
+            <Button className="mt-6" variant="outline" onClick={() => window.location.reload()}>Refresh Page</Button>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -437,7 +497,7 @@ export default function ReferralPage() {
                     [1, 2, 3].map(i => (
                       <tr key={i}><td colSpan={5} className="py-4"><Skeleton className="h-10 w-full rounded-lg mx-6" /></td></tr>
                     ))
-                  ) : referrals?.length > 0 ? referrals.map((r: any) => (
+                  ) : referrals && referrals.length > 0 ? referrals.map((r: any) => (
                     <tr key={r.id} className="hover:bg-secondary/10">
                       <td className="py-4 px-6 text-xs text-muted-foreground">
                         {r.createdAt?.seconds ? new Date(r.createdAt.seconds * 1000).toLocaleDateString() : 'Processing...'}
@@ -455,7 +515,10 @@ export default function ReferralPage() {
                     </tr>
                   )) : (
                     <tr>
-                      <td colSpan={5} className="py-12 text-center text-muted-foreground italic">No referrals found yet. Start sharing to earn!</td>
+                      <td colSpan={5} className="py-12 text-center text-muted-foreground flex flex-col items-center gap-2">
+                        <Info className="w-8 h-8 opacity-20" />
+                        <p className="italic">No referrals found yet. Start sharing to earn!</p>
+                      </td>
                     </tr>
                   )}
                 </tbody>
