@@ -1,63 +1,8 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Users collection
-    match /users/{userId} {
-      allow read, write: if request.auth != null 
-        && request.auth.uid == userId;
-      
-      // Notifications subcollection
-      match /notifications/{notifId} {
-        allow read, write: if request.auth != null 
-          && request.auth.uid == userId;
-      }
-    }
-    
-    // Referrals collection
-    match /referrals/{referralId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
-    }
-    
-    // ReferralCodes collection
-    match /referralCodes/{code} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
-    }
-    
-    // ReferralTransactions collection
-    match /referralTransactions/{transId} {
-      allow read: if request.auth != null 
-        && resource.data.referrerId == request.auth.uid;
-      allow write: if request.auth != null;
-    }
-    
-    // Accounts collection
-    match /accounts/{accountId} {
-      allow read: if request.auth != null 
-        && (resource.data.userId == request.auth.uid || request.auth.token.admin == true);
-      allow write: if request.auth != null;
-    }
-    
-    // Orders collection
-    match /orders/{orderId} {
-      allow read: if request.auth != null 
-        && (resource.data.userId == request.auth.uid || request.auth.token.admin == true);
-      allow write: if request.auth != null;
-    }
-    
-    // Broadcasts collection
-    match /broadcasts/{broadcastId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null 
-        && request.auth.token.admin == true;
-    }
-    
-    // Admin only collection
-    match /admin/{document=**} {
-      allow read, write: if request.auth != null 
-        && request.auth.token.admin == true;
+    match /{document=**} {
+      allow read, write: if request.auth != null;
     }
   }
 }
