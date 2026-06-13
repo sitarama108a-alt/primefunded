@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useMemo, Suspense, memo } from 'react';
@@ -29,7 +28,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { aiComplianceMonitorAlerts } from '@/ai/flows/ai-compliance-monitor-alerts';
 import { useFirestore, useCollection, useDoc } from '@/firebase';
-import { where, doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { where, doc, updateDoc, setDoc, serverTimestamp, limit } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { NotificationBell } from '@/components/NotificationBell';
