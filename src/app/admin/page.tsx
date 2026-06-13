@@ -1,19 +1,19 @@
 "use client";
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
-  Lock, Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Mail, Send, AlertTriangle, User, History, Trash2, Award, Terminal, ShieldAlert, BarChart3, Search, ExternalLink, Filter
+  Lock, Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Mail, Send, AlertTriangle, User, History, Trash2, Award, Terminal, ShieldAlert, BarChart3, Search, ExternalLink, Filter, Plus
 } from 'lucide-react';
 import { useFirestore, useCollection } from '@/firebase';
 import { doc, updateDoc, setDoc, serverTimestamp, getDoc, addDoc, collection, writeBatch, limit, orderBy } from 'firebase/firestore';
@@ -26,6 +26,7 @@ import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 
 const ADMIN_PASSWORD = "93463962569392846256";
+const PAGE_SIZE = 20;
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -33,6 +34,12 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('overview');
   const [searchTerm, setSearchTerm] = useState('');
   const [previewUserId, setPreviewUserId] = useState<string | null>(null);
+  
+  // Pagination State
+  const [ordersLimit, setOrdersLimit] = useState(PAGE_SIZE);
+  const [usersLimit, setUsersLimit] = useState(PAGE_SIZE);
+  const [payoutsLimit, setPayoutsLimit] = useState(PAGE_SIZE);
+  
   const { toast } = useToast();
   const db = useFirestore();
 
@@ -65,13 +72,14 @@ export default function AdminPage() {
     localStorage.setItem('admin_active_tab', val);
   };
 
-  // Optimized Data Fetching with Limits
-  const ordersConstraints = useMemo(() => [orderBy('date', 'desc'), limit(20)], []);
-  const usersConstraints = useMemo(() => [limit(20)], []);
-  const payoutsConstraints = useMemo(() => [orderBy('date', 'desc'), limit(20)], []);
-  const referralsConstraints = useMemo(() => [orderBy('createdAt', 'desc'), limit(20)], []);
+  // Memoized Constraints for parallel loading
+  const ordersConstraints = useMemo(() => [orderBy('date', 'desc'), limit(ordersLimit)], [ordersLimit]);
+  const usersConstraints = useMemo(() => [limit(usersLimit)], [usersLimit]);
+  const payoutsConstraints = useMemo(() => [orderBy('date', 'desc'), limit(payoutsLimit)], [payoutsLimit]);
+  const referralsConstraints = useMemo(() => [orderBy('createdAt', 'desc'), limit(PAGE_SIZE)], []);
   const broadcastsConstraints = useMemo(() => [orderBy('sentAt', 'desc'), limit(10)], []);
 
+  // Parallel Hook Initialization
   const { data: orders, loading: ordersLoading } = useCollection<any>('orders', ordersConstraints);
   const { data: traders, loading: tradersLoading } = useCollection<any>('users', usersConstraints);
   const { data: payouts, loading: payoutsLoading } = useCollection<any>('payouts', payoutsConstraints);
@@ -79,14 +87,16 @@ export default function AdminPage() {
   const { data: broadcasts, loading: broadcastsLoading } = useCollection<any>('broadcasts', broadcastsConstraints);
 
   const stats = useMemo(() => {
-    const totalRevenue = orders?.filter(o => o.status === 'verified').reduce((acc, o) => acc + parseFloat(o.price?.replace('$', '') || 0), 0) || 0;
-    const pendingKyc = traders?.filter(t => t.kycStatus === 'pending').length || 0;
-    const pendingPayouts = payouts?.filter(p => p.status === 'pending').length || 0;
-    const activeChallenges = orders?.filter(o => o.status === 'verified').length || 0;
+    if (!orders || !traders || !payouts) return null;
+    
+    const totalRevenue = orders.filter(o => o.status === 'verified').reduce((acc, o) => acc + parseFloat(o.price?.replace('$', '') || 0), 0) || 0;
+    const pendingKyc = traders.filter(t => t.kycStatus === 'pending').length || 0;
+    const pendingPayouts = payouts.filter(p => p.status === 'pending').length || 0;
+    const activeChallenges = orders.filter(o => o.status === 'verified').length || 0;
 
     return {
-      totalUsers: traders?.length || 0,
-      totalOrders: orders?.length || 0,
+      totalUsers: traders.length,
+      totalOrders: orders.length,
       revenue: totalRevenue,
       pendingKyc,
       pendingPayouts,
@@ -134,6 +144,7 @@ export default function AdminPage() {
         errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `accounts/${accountId}`, operation: 'create', requestResourceData: accountData }));
       });
 
+    // Referral commission logic
     try {
       const userSnap = await getDoc(doc(db, 'users', order.userId));
       const referredBy = userSnap.data()?.referredBy;
@@ -306,7 +317,7 @@ export default function AdminPage() {
             <LayoutDashboard className="w-4 h-4 text-primary-foreground" />
             <span className="text-xs font-black uppercase tracking-widest text-primary-foreground">Admin View Mode: Previewing {previewUserId}</span>
           </div>
-          <Button variant="secondary" size="sm" className="h-8 text-xs font-bold" onClick={() => setPreviewUserId(null)}>
+          <Button variant="secondary" size="sm" className="h-8 text-xs font-bold cursor-pointer" onClick={() => setPreviewUserId(null)}>
             <ChevronLeft className="w-3 h-3 mr-1" /> Back to Admin
           </Button>
         </div>
@@ -325,16 +336,16 @@ export default function AdminPage() {
             <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-primary/20">
               <Shield className="text-primary w-8 h-8" />
             </div>
-            <CardTitle className="text-2xl font-headline font-bold">Admin Portal</CardTitle>
+            <CardTitle className="text-2xl font-headline font-bold text-white">Admin Portal</CardTitle>
             <CardDescription>Enter master credentials to access the terminal.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-6">
               <div className="space-y-2">
-                <Label>Master Key</Label>
-                <Input type="password" placeholder="••••••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="h-12 bg-secondary/30" />
+                <Label className="text-white">Master Key</Label>
+                <Input type="password" placeholder="••••••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="h-12 bg-secondary/30 text-white" />
               </div>
-              <Button type="submit" className="w-full h-12 font-bold cyan-box-glow">Access Terminal</Button>
+              <Button type="submit" className="w-full h-12 font-bold cyan-box-glow cursor-pointer">Access Terminal</Button>
             </form>
           </CardContent>
         </Card>
@@ -343,41 +354,48 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen bg-background overflow-hidden">
       <Navigation />
-      <main className="flex-1 p-8 overflow-y-auto custom-scrollbar">
-        <div className="flex justify-between items-start mb-8">
-          <div>
-            <h1 className="text-4xl font-headline font-bold mb-1">Administrative Terminal</h1>
-            <p className="text-muted-foreground">Monitor performance, manage users, and process payouts.</p>
+      <main className="flex-1 flex flex-col min-h-0">
+        <div className="p-8 pb-4 shrink-0">
+          <div className="flex justify-between items-start mb-6">
+            <div>
+              <h1 className="text-4xl font-headline font-bold mb-1 text-white">Administrative Terminal</h1>
+              <p className="text-muted-foreground">Monitor performance, manage users, and process payouts.</p>
+            </div>
+            <div className="flex gap-4">
+               <div className="relative">
+                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                 <Input 
+                   placeholder="Quick search user/order..." 
+                   className="pl-10 w-64 h-10 bg-secondary/50 text-white" 
+                   value={searchTerm}
+                   onChange={e => setSearchTerm(e.target.value)}
+                 />
+               </div>
+            </div>
           </div>
-          <div className="flex gap-4">
-             <div className="relative">
-               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-               <Input 
-                 placeholder="Quick search user/order..." 
-                 className="pl-10 w-64 h-10 bg-secondary/50" 
-                 value={searchTerm}
-                 onChange={e => setSearchTerm(e.target.value)}
-               />
-             </div>
-          </div>
+
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
+            <TabsList className="bg-secondary/50 p-1 h-12 w-full justify-start rounded-xl overflow-x-auto border border-border/50 shrink-0">
+              <TabsTrigger value="overview" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg cursor-pointer"><Activity className="w-4 h-4 mr-2" /> Overview</TabsTrigger>
+              <TabsTrigger value="orders" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg cursor-pointer"><ShoppingCart className="w-4 h-4 mr-2" /> Orders</TabsTrigger>
+              <TabsTrigger value="users" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg cursor-pointer"><Users className="w-4 h-4 mr-2" /> Users</TabsTrigger>
+              <TabsTrigger value="kyc" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg cursor-pointer"><Fingerprint className="w-4 h-4 mr-2" /> KYC Hub</TabsTrigger>
+              <TabsTrigger value="referrals" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg cursor-pointer"><TrendingUp className="w-4 h-4 mr-2" /> Referrals</TabsTrigger>
+              <TabsTrigger value="payouts" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg cursor-pointer"><Wallet className="w-4 h-4 mr-2" /> Payouts</TabsTrigger>
+              <TabsTrigger value="notifications" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg cursor-pointer"><Bell className="w-4 h-4 mr-2" /> Broadcast</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
 
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-8">
-          <TabsList className="bg-secondary/50 p-1 h-12 w-full justify-start rounded-xl overflow-x-auto border border-border/50">
-            <TabsTrigger value="overview" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg cursor-pointer"><Activity className="w-4 h-4 mr-2" /> Overview</TabsTrigger>
-            <TabsTrigger value="orders" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg cursor-pointer"><ShoppingCart className="w-4 h-4 mr-2" /> Orders</TabsTrigger>
-            <TabsTrigger value="users" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg cursor-pointer"><Users className="w-4 h-4 mr-2" /> Users</TabsTrigger>
-            <TabsTrigger value="kyc" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg cursor-pointer"><Fingerprint className="w-4 h-4 mr-2" /> KYC Hub</TabsTrigger>
-            <TabsTrigger value="referrals" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg cursor-pointer"><TrendingUp className="w-4 h-4 mr-2" /> Referrals</TabsTrigger>
-            <TabsTrigger value="payouts" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg cursor-pointer"><Wallet className="w-4 h-4 mr-2" /> Payouts</TabsTrigger>
-            <TabsTrigger value="notifications" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg cursor-pointer"><Bell className="w-4 h-4 mr-2" /> Broadcast</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="overview">
-            {tradersLoading ? <LoadingGrid /> : (
-              <div className="space-y-8">
+        {/* CSS-based Visibility for Instant Switching */}
+        <div className="flex-1 overflow-y-auto p-8 pt-0 custom-scrollbar">
+          
+          {/* OVERVIEW SECTION */}
+          <div className={cn("space-y-8 animate-in fade-in duration-300", activeTab === 'overview' ? "block" : "hidden")}>
+            {!stats ? <LoadingGrid /> : (
+              <>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   <StatCard title="Total Revenue" value={`$${stats.revenue.toLocaleString()}`} icon={<Wallet />} color="blue" />
                   <StatCard title="Total Traders" value={stats.totalUsers} icon={<Users />} color="purple" />
@@ -388,7 +406,7 @@ export default function AdminPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                   <Card className="lg:col-span-2 border-border/50 bg-card/30">
                     <CardHeader>
-                      <CardTitle className="flex items-center gap-2"><BarChart3 className="w-5 h-5 text-primary" /> Growth Metrics</CardTitle>
+                      <CardTitle className="flex items-center gap-2 text-white"><BarChart3 className="w-5 h-5 text-primary" /> Growth Metrics</CardTitle>
                     </CardHeader>
                     <CardContent className="h-[300px] flex items-center justify-center border-t border-border/30">
                        <div className="text-center text-muted-foreground">
@@ -400,7 +418,7 @@ export default function AdminPage() {
                   
                   <Card className="border-border/50 bg-card/30">
                     <CardHeader>
-                      <CardTitle className="text-lg flex items-center gap-2"><History className="w-5 h-5 text-primary" /> Activity Feed</CardTitle>
+                      <CardTitle className="text-lg flex items-center gap-2 text-white"><History className="w-5 h-5 text-primary" /> Activity Feed</CardTitle>
                     </CardHeader>
                     <CardContent className="p-0">
                        <div className="divide-y divide-border/30">
@@ -420,20 +438,21 @@ export default function AdminPage() {
                     </CardContent>
                   </Card>
                 </div>
-              </div>
+              </>
             )}
-          </TabsContent>
+          </div>
 
-          <TabsContent value="orders">
+          {/* ORDERS SECTION */}
+          <div className={cn("animate-in fade-in duration-300", activeTab === 'orders' ? "block" : "hidden")}>
             <Card className="border-border/50 bg-card/30">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle>Challenge Purchases</CardTitle>
+                  <CardTitle className="text-white">Challenge Purchases</CardTitle>
                   <CardDescription>Verify and provision new trading accounts.</CardDescription>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                {ordersLoading ? <LoadingTable /> : (
+                {ordersLoading && orders?.length === 0 ? <LoadingTable /> : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
                       <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
@@ -450,7 +469,7 @@ export default function AdminPage() {
                       <tbody className="divide-y divide-border/30">
                         {orders?.map((o: any) => (
                           <tr key={o.id} className="hover:bg-primary/5 transition-colors">
-                            <td className="py-4 px-6 font-mono text-xs">{o.id.slice(0, 8)}</td>
+                            <td className="py-4 px-6 font-mono text-xs text-muted-foreground">{o.id.slice(0, 8)}</td>
                             <td className="py-4 px-6">
                               <div className="flex flex-col">
                                 <span className="font-bold text-white">{o.email}</span>
@@ -458,43 +477,49 @@ export default function AdminPage() {
                               </div>
                             </td>
                             <td className="py-4 px-6">
-                              <Badge variant="outline" className="text-[10px] uppercase font-bold">{o.plan} {o.size}</Badge>
+                              <Badge variant="outline" className="text-[10px] uppercase font-bold border-white/10 text-white">{o.plan} {o.size}</Badge>
                             </td>
                             <td className="py-4 px-6 font-bold text-primary">{o.price}</td>
                             <td className="py-4 px-6">
                                <div className="flex items-center gap-1 group">
                                  <span className="font-mono text-[10px] truncate max-w-[80px] text-muted-foreground">{o.txHash}</span>
-                                 <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" />
+                                 <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white" />
                                </div>
                             </td>
                             <td className="py-4 px-6">
-                              <Badge className={o.status === 'verified' ? "bg-accent" : "bg-amber-500"}>{o.status}</Badge>
+                              <Badge className={o.status === 'verified' ? "bg-accent text-accent-foreground" : "bg-amber-500 text-white"}>{o.status}</Badge>
                             </td>
                             <td className="py-4 px-6 text-right">
                               {o.status === 'pending' && (
-                                <Button size="sm" className="h-8 font-bold" onClick={() => handleVerifyOrder(o)}>Verify Payment</Button>
+                                <Button size="sm" className="h-8 font-bold cursor-pointer" onClick={() => handleVerifyOrder(o)}>Verify Payment</Button>
                               )}
                             </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
+                    <div className="p-4 border-t border-border/30 text-center">
+                      <Button variant="ghost" className="text-xs font-bold uppercase tracking-widest text-primary hover:text-white cursor-pointer" onClick={() => setOrdersLimit(l => l + PAGE_SIZE)}>
+                        <Plus className="w-3 h-3 mr-2" /> Load More Orders
+                      </Button>
+                    </div>
                   </div>
                 )}
               </CardContent>
             </Card>
-          </TabsContent>
+          </div>
 
-          <TabsContent value="users">
+          {/* USERS SECTION */}
+          <div className={cn("animate-in fade-in duration-300", activeTab === 'users' ? "block" : "hidden")}>
             <Card className="border-border/50 bg-card/30">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle>User Directory</CardTitle>
+                  <CardTitle className="text-white">User Directory</CardTitle>
                   <CardDescription>Manage trader profiles and access levels.</CardDescription>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                {tradersLoading ? <LoadingTable /> : (
+                {tradersLoading && traders?.length === 0 ? <LoadingTable /> : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
                       <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
@@ -519,7 +544,7 @@ export default function AdminPage() {
                             </td>
                             <td className="py-4 px-6">
                               <div className="flex flex-col">
-                                <span className="text-xs">{t.email}</span>
+                                <span className="text-xs text-white">{t.email}</span>
                                 <span className="text-[10px] text-muted-foreground">{t.phone || 'No phone'}</span>
                               </div>
                             </td>
@@ -533,7 +558,7 @@ export default function AdminPage() {
                             <td className="py-4 px-6 text-right">
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 cursor-pointer"><MoreVertical className="w-4 h-4" /></Button>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 cursor-pointer text-white"><MoreVertical className="w-4 h-4" /></Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-48 bg-card border-border/50">
                                   <DropdownMenuLabel>User Actions</DropdownMenuLabel>
@@ -550,120 +575,124 @@ export default function AdminPage() {
                         ))}
                       </tbody>
                     </table>
+                    <div className="p-4 border-t border-border/30 text-center">
+                      <Button variant="ghost" className="text-xs font-bold uppercase tracking-widest text-primary hover:text-white cursor-pointer" onClick={() => setUsersLimit(l => l + PAGE_SIZE)}>
+                        <Plus className="w-3 h-3 mr-2" /> Load More Users
+                      </Button>
+                    </div>
                   </div>
                 )}
               </CardContent>
             </Card>
-          </TabsContent>
+          </div>
 
-          <TabsContent value="kyc">
-             <div className="space-y-8">
-               <div className="grid grid-cols-3 gap-6">
-                 <StatCard title="Pending Review" value={stats.pendingKyc} icon={<Fingerprint />} color="amber" />
-                 <StatCard title="Verified Traders" value={traders?.filter(t => t.kycVerified).length || 0} icon={<CheckCircle2 />} color="green" />
-                 <StatCard title="Rejected Requests" value={traders?.filter(t => t.kycStatus === 'rejected').length || 0} icon={<XCircle />} color="red" />
-               </div>
+          {/* KYC HUB SECTION */}
+          <div className={cn("animate-in fade-in duration-300 space-y-8", activeTab === 'kyc' ? "block" : "hidden")}>
+            <div className="grid grid-cols-3 gap-6">
+              <StatCard title="Pending Review" value={traders?.filter(t => t.kycStatus === 'pending').length || 0} icon={<Fingerprint />} color="amber" />
+              <StatCard title="Verified Traders" value={traders?.filter(t => t.kycVerified).length || 0} icon={<CheckCircle2 />} color="green" />
+              <StatCard title="Rejected Requests" value={traders?.filter(t => t.kycStatus === 'rejected').length || 0} icon={<XCircle />} color="red" />
+            </div>
 
-               <Card className="border-border/50 bg-card/30">
-                 <CardHeader>
-                   <CardTitle>KYC Verification Queue</CardTitle>
-                 </CardHeader>
-                 <CardContent className="p-0">
-                   <div className="overflow-x-auto">
-                     <table className="w-full text-sm text-left">
-                       <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
-                         <tr>
-                           <th className="py-4 px-6">Submission Date</th>
-                           <th className="py-4 px-6">User</th>
-                           <th className="py-4 px-6">Email</th>
-                           <th className="py-4 px-6">Documents</th>
-                           <th className="py-4 px-6 text-right">Actions</th>
-                         </tr>
-                       </thead>
-                       <tbody className="divide-y divide-border/30">
-                         {traders?.filter(t => t.kycStatus === 'pending').map((t: any) => (
-                           <tr key={t.id} className="hover:bg-primary/5 transition-colors">
-                             <td className="py-4 px-6 text-xs text-muted-foreground">{t.kycSubmittedAt ? new Date(t.kycSubmittedAt).toLocaleDateString() : 'Unknown'}</td>
-                             <td className="py-4 px-6 font-bold">{t.name}</td>
-                             <td className="py-4 px-6 text-xs">{t.email}</td>
-                             <td className="py-4 px-6">
-                               <Button variant="outline" size="sm" className="h-7 text-[10px] font-black cursor-pointer" onClick={() => { setSelectedUser(t); setIsKycReviewOpen(true); }}>VIEW DOCUMENTS</Button>
-                             </td>
-                             <td className="py-4 px-6 text-right space-x-2">
-                               <Button size="sm" className="h-8 bg-accent font-bold cursor-pointer" onClick={() => handleKycAction(t, 'verified')}>Approve</Button>
-                               <Button size="sm" variant="destructive" className="h-8 font-bold cursor-pointer" onClick={() => { setSelectedUser(t); setIsKycReviewOpen(true); }}>Reject</Button>
-                             </td>
-                           </tr>
-                         ))}
-                         {traders?.filter(t => t.kycStatus === 'pending').length === 0 && (
-                           <tr><td colSpan={5} className="py-12 text-center text-muted-foreground italic">No pending KYC applications</td></tr>
-                         )}
-                       </tbody>
-                     </table>
-                   </div>
-                 </CardContent>
-               </Card>
-             </div>
-          </TabsContent>
-
-          <TabsContent value="referrals">
-             <div className="space-y-8">
-               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <StatCard title="Total Commissions" value={`$${referrals?.reduce((acc, r) => acc + (r.amount || 0), 0).toFixed(2)}`} icon={<TrendingUp />} color="blue" />
-                  <StatCard title="Paid Earnings" value={`$${referrals?.filter(r => r.status === 'paid').reduce((acc, r) => acc + (r.amount || 0), 0).toFixed(2)}`} icon={<CheckCircle2 />} color="green" />
-                  <StatCard title="Outstanding" value={`$${referrals?.filter(r => r.status === 'pending').reduce((acc, r) => acc + (r.amount || 0), 0).toFixed(2)}`} icon={<Clock />} color="amber" />
-               </div>
-
-               <Card className="border-border/50 bg-card/30">
-                 <CardHeader>
-                   <CardTitle>Commission Transactions</CardTitle>
-                 </CardHeader>
-                 <CardContent className="p-0">
-                   <div className="overflow-x-auto">
-                     <table className="w-full text-sm text-left">
-                       <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
-                         <tr>
-                           <th className="py-4 px-6">Referrer ID</th>
-                           <th className="py-4 px-6">Referred User</th>
-                           <th className="py-4 px-6">Challenge</th>
-                           <th className="py-4 px-6">Commission</th>
-                           <th className="py-4 px-6">Status</th>
-                           <th className="py-4 px-6 text-right">Action</th>
-                         </tr>
-                       </thead>
-                       <tbody className="divide-y divide-border/30">
-                         {referrals?.map((r: any) => (
-                           <tr key={r.id} className="hover:bg-primary/5">
-                             <td className="py-4 px-6 font-mono text-xs">{r.referrerId?.slice(0, 8)}</td>
-                             <td className="py-4 px-6 font-bold">{r.referredUserEmail}</td>
-                             <td className="py-4 px-6 text-xs uppercase">{r.plan}</td>
-                             <td className="py-4 px-6 font-bold text-accent">${r.amount?.toFixed(2)}</td>
-                             <td className="py-4 px-6">
-                               <Badge variant={r.status === 'paid' ? 'default' : 'outline'}>{r.status}</Badge>
-                             </td>
-                             <td className="py-4 px-6 text-right">
-                               {r.status === 'pending' && (
-                                 <Button size="sm" className="h-8 cursor-pointer" onClick={() => updateDoc(doc(db, 'referrals', r.id), { status: 'paid' })}>Mark Paid</Button>
-                               )}
-                             </td>
-                           </tr>
-                         ))}
-                       </tbody>
-                     </table>
-                   </div>
-                 </CardContent>
-               </Card>
-             </div>
-          </TabsContent>
-
-          <TabsContent value="payouts">
             <Card className="border-border/50 bg-card/30">
               <CardHeader>
-                <CardTitle>Payout Management</CardTitle>
+                <CardTitle className="text-white">KYC Verification Queue</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
+                      <tr>
+                        <th className="py-4 px-6">Submission Date</th>
+                        <th className="py-4 px-6">User</th>
+                        <th className="py-4 px-6">Email</th>
+                        <th className="py-4 px-6">Documents</th>
+                        <th className="py-4 px-6 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/30">
+                      {traders?.filter(t => t.kycStatus === 'pending').map((t: any) => (
+                        <tr key={t.id} className="hover:bg-primary/5 transition-colors">
+                          <td className="py-4 px-6 text-xs text-muted-foreground">{t.kycSubmittedAt ? new Date(t.kycSubmittedAt).toLocaleDateString() : 'Unknown'}</td>
+                          <td className="py-4 px-6 font-bold text-white">{t.name}</td>
+                          <td className="py-4 px-6 text-xs text-muted-foreground">{t.email}</td>
+                          <td className="py-4 px-6">
+                            <Button variant="outline" size="sm" className="h-7 text-[10px] font-black cursor-pointer border-white/10 text-white" onClick={() => { setSelectedUser(t); setIsKycReviewOpen(true); }}>VIEW DOCUMENTS</Button>
+                          </td>
+                          <td className="py-4 px-6 text-right space-x-2">
+                            <Button size="sm" className="h-8 bg-accent text-accent-foreground font-bold cursor-pointer" onClick={() => handleKycAction(t, 'verified')}>Approve</Button>
+                            <Button size="sm" variant="destructive" className="h-8 font-bold cursor-pointer" onClick={() => { setSelectedUser(t); setIsKycReviewOpen(true); }}>Reject</Button>
+                          </td>
+                        </tr>
+                      ))}
+                      {traders?.filter(t => t.kycStatus === 'pending').length === 0 && (
+                        <tr><td colSpan={5} className="py-12 text-center text-muted-foreground italic">No pending KYC applications</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* REFERRALS SECTION */}
+          <div className={cn("animate-in fade-in duration-300 space-y-8", activeTab === 'referrals' ? "block" : "hidden")}>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <StatCard title="Total Commissions" value={`$${referrals?.reduce((acc, r) => acc + (r.amount || 0), 0).toFixed(2)}`} icon={<TrendingUp />} color="blue" />
+              <StatCard title="Paid Earnings" value={`$${referrals?.filter(r => r.status === 'paid').reduce((acc, r) => acc + (r.amount || 0), 0).toFixed(2)}`} icon={<CheckCircle2 />} color="green" />
+              <StatCard title="Outstanding" value={`$${referrals?.filter(r => r.status === 'pending').reduce((acc, r) => acc + (r.amount || 0), 0).toFixed(2)}`} icon={<Clock />} color="amber" />
+            </div>
+
+            <Card className="border-border/50 bg-card/30">
+              <CardHeader>
+                <CardTitle className="text-white">Commission Transactions</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
+                      <tr>
+                        <th className="py-4 px-6">Referrer ID</th>
+                        <th className="py-4 px-6">Referred User</th>
+                        <th className="py-4 px-6">Challenge</th>
+                        <th className="py-4 px-6">Commission</th>
+                        <th className="py-4 px-6">Status</th>
+                        <th className="py-4 px-6 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/30">
+                      {referrals?.map((r: any) => (
+                        <tr key={r.id} className="hover:bg-primary/5">
+                          <td className="py-4 px-6 font-mono text-xs text-muted-foreground">{r.referrerId?.slice(0, 8)}</td>
+                          <td className="py-4 px-6 font-bold text-white">{r.referredUserEmail}</td>
+                          <td className="py-4 px-6 text-xs uppercase text-muted-foreground">{r.plan}</td>
+                          <td className="py-4 px-6 font-bold text-accent">${r.amount?.toFixed(2)}</td>
+                          <td className="py-4 px-6">
+                            <Badge variant={r.status === 'paid' ? 'default' : 'outline'} className="text-white border-white/10">{r.status}</Badge>
+                          </td>
+                          <td className="py-4 px-6 text-right">
+                            {r.status === 'pending' && (
+                              <Button size="sm" className="h-8 cursor-pointer font-bold" onClick={() => updateDoc(doc(db, 'referrals', r.id), { status: 'paid' })}>Mark Paid</Button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* PAYOUTS SECTION */}
+          <div className={cn("animate-in fade-in duration-300", activeTab === 'payouts' ? "block" : "hidden")}>
+            <Card className="border-border/50 bg-card/30">
+              <CardHeader>
+                <CardTitle className="text-white">Payout Management</CardTitle>
                 <CardDescription>Review and approve profit split requests.</CardDescription>
               </CardHeader>
               <CardContent className="p-0">
-                {payoutsLoading ? <LoadingTable /> : (
+                {payoutsLoading && payouts?.length === 0 ? <LoadingTable /> : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
                       <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
@@ -691,22 +720,22 @@ export default function AdminPage() {
                             <td className="py-4 px-6">
                               <KycBadge status={traders?.find(t => t.id === p.userId)?.kycStatus} />
                             </td>
-                            <td className="py-4 px-6 text-xs uppercase font-bold">{p.method}</td>
+                            <td className="py-4 px-6 text-xs uppercase font-bold text-muted-foreground">{p.method}</td>
                             <td className="py-4 px-6">
-                               <Badge variant={p.status === 'done' ? 'default' : 'outline'}>{p.status}</Badge>
+                               <Badge variant={p.status === 'done' ? 'default' : 'outline'} className="text-white border-white/10">{p.status}</Badge>
                             </td>
                             <td className="py-4 px-6 text-right space-x-2">
                               {p.status === 'pending' && (
                                 <>
-                                  <Button size="sm" className="h-8 cursor-pointer" onClick={() => {
+                                  <Button size="sm" className="h-8 cursor-pointer font-bold" onClick={() => {
                                     updateDoc(doc(db, 'payouts', p.id), { status: 'approved' });
                                     toast({ title: "Payout Approved" });
                                   }}>Approve</Button>
-                                  <Button size="sm" variant="destructive" className="h-8 cursor-pointer">Reject</Button>
+                                  <Button size="sm" variant="destructive" className="h-8 cursor-pointer font-bold">Reject</Button>
                                 </>
                               )}
                               {p.status === 'approved' && (
-                                <Button size="sm" className="h-8 bg-accent cursor-pointer" onClick={() => {
+                                <Button size="sm" className="h-8 bg-accent text-accent-foreground cursor-pointer font-bold" onClick={() => {
                                   updateDoc(doc(db, 'payouts', p.id), { status: 'done' });
                                   sendPayoutProcessedEmail(p.email, p.amount);
                                   toast({ title: "Payout marked as Complete" });
@@ -717,21 +746,27 @@ export default function AdminPage() {
                         ))}
                       </tbody>
                     </table>
+                    <div className="p-4 border-t border-border/30 text-center">
+                      <Button variant="ghost" className="text-xs font-bold uppercase tracking-widest text-primary hover:text-white cursor-pointer" onClick={() => setPayoutsLimit(l => l + PAGE_SIZE)}>
+                        <Plus className="w-3 h-3 mr-2" /> Load More Payouts
+                      </Button>
+                    </div>
                   </div>
                 )}
               </CardContent>
             </Card>
-          </TabsContent>
+          </div>
 
-          <TabsContent value="notifications">
+          {/* BROADCAST SECTION */}
+          <div className={cn("animate-in fade-in duration-300 space-y-8", activeTab === 'notifications' ? "block" : "hidden")}>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2 space-y-8">
                 <Card className="bg-card/40 border-border/50">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><Send className="w-5 h-5 text-primary" /> Send Global Message</CardTitle>
+                    <CardTitle className="flex items-center gap-2 text-white"><Send className="w-5 h-5 text-primary" /> Send Global Message</CardTitle>
                     <CardDescription>Dispatch alerts to users who have "Announcements" enabled.</CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-6">
+                  <CardContent className="space-y-6 text-white">
                     <div className="grid md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Target Audience</Label>
@@ -762,11 +797,11 @@ export default function AdminPage() {
                     </div>
                     <div className="space-y-2">
                       <Label>Notification Title</Label>
-                      <Input placeholder="e.g. System Update" value={notifTitle} onChange={e => setNotifTitle(e.target.value)} />
+                      <Input placeholder="e.g. System Update" value={notifTitle} onChange={e => setNotifTitle(e.target.value)} className="bg-background/50" />
                     </div>
                     <div className="space-y-2">
                       <Label>Message Body</Label>
-                      <Textarea placeholder="Type message..." className="min-h-[150px]" value={notifMessage} onChange={e => setNotifMessage(e.target.value)} />
+                      <Textarea placeholder="Type message..." className="min-h-[150px] bg-background/50" value={notifMessage} onChange={e => setNotifMessage(e.target.value)} />
                     </div>
                     <Button className="w-full font-bold h-12 cyan-box-glow cursor-pointer" disabled={isSendingNotif || !notifTitle || !notifMessage} onClick={handleSendBroadcast}>
                       {isSendingNotif ? 'Sending Broadcast...' : 'Send Global Broadcast'}
@@ -777,7 +812,7 @@ export default function AdminPage() {
               
               <div className="space-y-6">
                 <Card className="border-border/50 bg-card/30">
-                  <CardHeader><CardTitle className="text-lg">Recent Broadcasts</CardTitle></CardHeader>
+                  <CardHeader><CardTitle className="text-lg text-white">Recent Broadcasts</CardTitle></CardHeader>
                   <CardContent className="p-0">
                     <div className="divide-y divide-border/30">
                       {broadcasts?.map((b: any) => (
@@ -794,13 +829,13 @@ export default function AdminPage() {
                 </Card>
               </div>
             </div>
-          </TabsContent>
-        </Tabs>
+          </div>
+        </div>
       </main>
 
-      {/* Dialogs */}
+      {/* Persistent Dialogs */}
       <Dialog open={isFreeAccountOpen} onOpenChange={setIsFreeAccountOpen}>
-        <DialogContent className="bg-card border-primary/20">
+        <DialogContent className="bg-card border-primary/20 text-white">
           <DialogHeader>
             <DialogTitle>Grant Free Account Access</DialogTitle>
             <DialogDescription>Provision an MT5 account for {selectedUser?.email} without payment.</DialogDescription>
@@ -835,14 +870,14 @@ export default function AdminPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" className="cursor-pointer" onClick={() => setIsFreeAccountOpen(false)}>Cancel</Button>
-            <Button className="cursor-pointer" onClick={handleGrantFreeAccount}>Confirm Grant</Button>
+            <Button variant="outline" className="cursor-pointer font-bold" onClick={() => setIsFreeAccountOpen(false)}>Cancel</Button>
+            <Button className="cursor-pointer font-bold" onClick={handleGrantFreeAccount}>Confirm Grant</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isKycReviewOpen} onOpenChange={setIsKycReviewOpen}>
-        <DialogContent className="bg-card border-primary/20 max-w-2xl">
+        <DialogContent className="bg-card border-primary/20 max-w-2xl text-white">
           <DialogHeader>
             <DialogTitle>Review KYC Application</DialogTitle>
             <DialogDescription>Reviewing documents for {selectedUser?.name}</DialogDescription>
@@ -864,12 +899,13 @@ export default function AdminPage() {
                 placeholder="Explain why documents were rejected..." 
                 value={rejectionReason}
                 onChange={e => setRejectionReason(e.target.value)}
+                className="bg-background/50"
               />
             </div>
           </div>
           <DialogFooter className="gap-2">
              <Button variant="destructive" className="font-bold cursor-pointer" onClick={() => handleKycAction(selectedUser, 'rejected')} disabled={!rejectionReason}>Reject Documents</Button>
-             <Button className="bg-accent font-bold cursor-pointer" onClick={() => handleKycAction(selectedUser, 'verified')}>Approve & Verify</Button>
+             <Button className="bg-accent text-accent-foreground font-bold cursor-pointer" onClick={() => handleKycAction(selectedUser, 'verified')}>Approve & Verify</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -890,7 +926,7 @@ function StatCard({ title, value, icon, color }: { title: string, value: string 
       <CardContent className="p-6">
         <div className="flex items-center justify-between mb-4">
           <div className={cn("p-2 rounded-lg border", colors[color])}>{icon}</div>
-          <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">LIVE</Badge>
+          <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-white/10">LIVE</Badge>
         </div>
         <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">{title}</p>
         <h3 className="text-3xl font-headline font-bold text-white group-hover:text-primary transition-colors">{value}</h3>
@@ -904,14 +940,24 @@ function KycBadge({ status }: { status: string }) {
     case 'verified': return <Badge className="bg-accent text-accent-foreground font-black text-[10px] uppercase">VERIFIED ✅</Badge>;
     case 'pending': return <Badge className="bg-amber-500 text-white font-black text-[10px] uppercase">PENDING ⏳</Badge>;
     case 'rejected': return <Badge variant="destructive" className="font-black text-[10px] uppercase">REJECTED ❌</Badge>;
-    default: return <Badge variant="outline" className="text-muted-foreground font-black text-[10px] uppercase">NONE</Badge>;
+    default: return <Badge variant="outline" className="text-muted-foreground font-black text-[10px] uppercase border-white/10">NONE</Badge>;
   }
 }
 
 function LoadingGrid() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32 w-full rounded-xl bg-secondary/50" />)}
+      {[1, 2, 3, 4].map(i => (
+        <Card key={i} className="border-border/50 bg-card/30">
+          <div className="p-6 space-y-4">
+            <Skeleton className="h-10 w-10 rounded-lg bg-secondary/50" />
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-24 bg-secondary/30" />
+              <Skeleton className="h-8 w-32 bg-secondary/50" />
+            </div>
+          </div>
+        </Card>
+      ))}
     </div>
   );
 }
@@ -919,7 +965,11 @@ function LoadingGrid() {
 function LoadingTable() {
   return (
     <div className="space-y-4 p-8">
-      {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-12 w-full rounded-lg bg-secondary/30" />)}
+      {[1, 2, 3, 4, 5].map(i => (
+        <div key={i} className="flex gap-4 items-center">
+          <Skeleton className="h-12 w-full rounded-lg bg-secondary/30" />
+        </div>
+      ))}
     </div>
   );
 }
