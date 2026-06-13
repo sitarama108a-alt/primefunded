@@ -1,3 +1,4 @@
+
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
@@ -9,27 +10,32 @@ export function middleware(request: NextRequest) {
   const limit = 100;
   const windowMs = 60 * 1000;
 
+  // Define critical paths
+  const isApiRoute = request.nextUrl.pathname.startsWith('/api');
+  const isMaintenancePage = request.nextUrl.pathname === '/maintenance';
+  const isStaticAsset = request.nextUrl.pathname.startsWith('/_next') || request.nextUrl.pathname.startsWith('/favicon.ico');
+
   // Maintenance mode check via environment variable
   const isMaintenanceMode = process.env.MAINTENANCE_MODE === 'true';
-  const isMaintenancePage = request.nextUrl.pathname === '/maintenance';
-  const isStaticAsset = request.nextUrl.pathname.startsWith('/_next') || request.nextUrl.pathname.startsWith('/api');
 
-  if (isMaintenanceMode && !isMaintenancePage && !isStaticAsset) {
+  if (isMaintenanceMode && !isMaintenancePage && !isApiRoute && !isStaticAsset) {
     return NextResponse.redirect(new URL('/maintenance', request.url));
   }
 
-  // Rate Limiting
-  const currentLimit = rateLimitMap.get(ip) ?? { count: 0, lastReset: now };
-  if (now - currentLimit.lastReset > windowMs) {
-    currentLimit.count = 1;
-    currentLimit.lastReset = now;
-  } else {
-    currentLimit.count++;
-  }
-  rateLimitMap.set(ip, currentLimit);
+  // Rate Limiting (Skip for internal Next.js assets, but apply to API)
+  if (!isStaticAsset) {
+    const currentLimit = rateLimitMap.get(ip) ?? { count: 0, lastReset: now };
+    if (now - currentLimit.lastReset > windowMs) {
+      currentLimit.count = 1;
+      currentLimit.lastReset = now;
+    } else {
+      currentLimit.count++;
+    }
+    rateLimitMap.set(ip, currentLimit);
 
-  if (currentLimit.count > limit) {
-    return new NextResponse('Too Many Requests', { status: 429 });
+    if (currentLimit.count > limit) {
+      return new NextResponse('Too Many Requests', { status: 429 });
+    }
   }
 
   const response = NextResponse.next();
@@ -41,5 +47,14 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: '/((?!api|_next/static|_next/image|favicon.ico).*)',
+  // Use a cleaner matcher that handles API routes explicitly
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    '/((?!_next/static|_next/image|favicon.ico).*)',
+  ],
 };
