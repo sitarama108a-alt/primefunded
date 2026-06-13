@@ -34,6 +34,7 @@ import { useFirestore, useCollection, useDoc } from '@/firebase';
 import { where, doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
+import { NotificationBell } from '@/components/NotificationBell';
 
 interface DashboardPageProps {
   adminViewMode?: boolean;
@@ -43,7 +44,6 @@ interface DashboardPageProps {
 export default function DashboardPage({ adminViewMode = false, targetUid }: DashboardPageProps) {
   const { user, userData: loggedInUserData, loading: authLoading } = useAuth();
   
-  // Determine which user data to show
   const effectiveUid = adminViewMode && targetUid ? targetUid : user?.uid;
   const { data: targetUserData, loading: targetUserLoading } = useDoc<any>(
     effectiveUid ? `users/${effectiveUid}` : null
@@ -57,21 +57,17 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   const { toast } = useToast();
   const db = useFirestore();
 
-  // Profile completion state
   const [showProfilePrompt, setShowProfilePrompt] = useState(false);
   const [completingPhone, setCompletingPhone] = useState('');
   const [completingCountry, setCompletingCountry] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
 
-  // Auto-generate numeric ID and referral code if missing
   useEffect(() => {
     if (userData && effectiveUid && !adminViewMode) {
       const updates: any = {};
-      
       if (!userData.traderId) {
         updates.traderId = Math.floor(10000000 + Math.random() * 90000000).toString();
       }
-      
       if (!userData.referralCode) {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
         let result = '';
@@ -80,8 +76,6 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
         }
         updates.referralCode = result;
         updates.codeChangesCount = 0;
-
-        // Register initial code
         const codeRegRef = doc(db, 'referralCodes', result);
         setDoc(codeRegRef, {
           code: result,
@@ -90,10 +84,8 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
           createdAt: serverTimestamp()
         });
       }
-
       if (Object.keys(updates).length > 0) {
-        const userRef = doc(db, 'users', effectiveUid);
-        updateDoc(userRef, updates);
+        updateDoc(doc(db, 'users', effectiveUid), updates);
       }
     }
   }, [userData, effectiveUid, db, adminViewMode]);
@@ -110,8 +102,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     if (!effectiveUid) return;
     setSavingProfile(true);
     try {
-      const userRef = doc(db, 'users', effectiveUid);
-      await updateDoc(userRef, {
+      await updateDoc(doc(db, 'users', effectiveUid), {
         phone: completingPhone,
         country: completingCountry
       });
@@ -142,7 +133,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
       const fetchCompliance = async () => {
         try {
           const result = await aiComplianceMonitorAlerts({
-            plan: activeAccount.plan as any || "1-Step Pro",
+            plan: (activeAccount.plan as any) || "1-Step Pro",
             dailyLoss: 0,
             totalLoss: 0,
             profit: 0,
@@ -150,9 +141,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
             hasOpenTrades: false
           });
           if (isMounted) setCompliance(result);
-        } catch (err) {
-          // Centrally handled
-        }
+        } catch (err) {}
       };
       fetchCompliance();
       return () => { isMounted = false; };
@@ -161,17 +150,8 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
 
   const metrics = useMemo(() => {
     if (!activeAccount) {
-      return {
-        balance: 0,
-        equity: 0,
-        dailyPnL: 0,
-        winRate: 0,
-        tradesToday: 0,
-        profitTarget: 0,
-        currentProfitPercent: 0
-      };
+      return { balance: 0, equity: 0, dailyPnL: 0, winRate: 0, tradesToday: 0, profitTarget: 0, currentProfitPercent: 0 };
     }
-
     const balance = activeAccount?.balance || 0;
     return {
       balance,
@@ -218,7 +198,6 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
           </div>
         )}
 
-        {/* KYC Warning Banner */}
         {!adminViewMode && userData && !userData.kycVerified && (
           <div className="mb-6 p-4 rounded-xl bg-destructive/10 border border-destructive/20 flex items-center justify-between shadow-lg shadow-destructive/5">
             <div className="flex items-center gap-3">
@@ -276,7 +255,6 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
             <h1 className="text-3xl font-headline font-bold mb-1 text-white">Trader Terminal</h1>
             <div className="flex flex-col gap-2">
               <p className="text-muted-foreground">Welcome back, {userData?.name || 'Trader'}.</p>
-              
               <div className="flex items-center gap-2 mt-1">
                 <div 
                   className="flex items-center gap-2 px-3 py-1 bg-secondary border border-primary/20 rounded-lg group hover:border-primary/50 transition-colors cursor-pointer" 
@@ -293,6 +271,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
           </div>
           
           <div className="flex items-center gap-4">
+            {!adminViewMode && <NotificationBell />}
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary border border-border">
               <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-accent live-indicator' : 'bg-destructive'}`} />
               <span className="text-xs font-semibold uppercase tracking-wider text-white">{isConnected ? 'LIVE DATA' : 'DISCONNECTED'}</span>
@@ -314,14 +293,12 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
             title="Current Equity" 
             value={`$${metrics.equity.toLocaleString('en-US')}`} 
             icon={<Activity className="text-accent" />}
-            trend={0}
             footer={!activeAccount ? 'NO ACTIVE ACCOUNT' : undefined}
           />
           <MetricCard 
             title="Today's P&L" 
             value={`$${metrics.dailyPnL.toLocaleString('en-US')}`} 
             icon={metrics.dailyPnL >= 0 ? <TrendingUp className="text-accent" /> : <TrendingDown className="text-destructive" />}
-            trend={0}
             footer={!activeAccount ? 'NO ACTIVE ACCOUNT' : undefined}
           />
           <MetricCard 
@@ -438,7 +415,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   );
 }
 
-function MetricCard({ title, value, icon, trend, footer }: { title: string, value: string, icon: React.ReactNode, trend?: number, footer?: string }) {
+function MetricCard({ title, value, icon, footer }: { title: string, value: string, icon: React.ReactNode, footer?: string }) {
   return (
     <Card className="border-border/50 bg-card/40 hover:border-primary/30 transition-all duration-300 group">
       <CardContent className="p-6">
@@ -450,12 +427,6 @@ function MetricCard({ title, value, icon, trend, footer }: { title: string, valu
         </div>
         <div className="flex items-end gap-2 mb-4">
           <span className="text-3xl font-bold font-headline tabular-nums leading-none text-white">{value}</span>
-          {trend !== undefined && trend !== 0 && (
-            <span className={`text-[10px] font-black mb-1.5 flex items-center px-1.5 py-0.5 rounded-full ${trend >= 0 ? 'bg-accent/10 text-accent' : 'bg-destructive/10 text-destructive'}`}>
-              {trend >= 0 ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
-              {Math.abs(trend)}%
-            </span>
-          )}
         </div>
         {footer && <p className="text-[10px] text-muted-foreground flex items-center gap-1.5 font-bold uppercase tracking-wider"><Server className="w-3 h-3" /> {footer}</p>}
       </CardContent>

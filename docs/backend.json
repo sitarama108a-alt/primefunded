@@ -84,12 +84,51 @@
         "createdAt": {
           "type": "string",
           "format": "date-time"
+        },
+        "notificationPreferences": {
+          "type": "object",
+          "properties": {
+            "email": { "type": "boolean" },
+            "inApp": { "type": "boolean" },
+            "challenge": { "type": "boolean" },
+            "payout": { "type": "boolean" },
+            "referral": { "type": "boolean" },
+            "announcements": { "type": "boolean" }
+          }
         }
       },
       "required": [
         "name",
         "email"
       ]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "An in-app notification for the user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "priority": { "type": "string", "enum": ["normal", "important", "urgent"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "sentByAdmin": { "type": "boolean" }
+      }
+    },
+    "Broadcast": {
+      "title": "Broadcast",
+      "description": "An admin broadcast message log.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "sentBy": { "type": "string" },
+        "targetGroup": { "type": "string" },
+        "sentAt": { "type": "string", "format": "date-time" },
+        "totalRecipients": { "type": "number" }
+      }
     },
     "Order": {
       "title": "Order",
@@ -236,6 +275,18 @@
         "$ref": "#/backend/entities/UserProfile"
       },
       "description": "Stores trader profiles."
+    },
+    "/users/{userId}/notifications/{notificationId}": {
+      "schema": {
+        "$ref": "#/backend/entities/Notification"
+      },
+      "description": "Individual user notifications."
+    },
+    "/broadcasts/{broadcastId}": {
+      "schema": {
+        "$ref": "#/backend/entities/Broadcast"
+      },
+      "description": "Admin broadcast history."
     },
     "/orders/{orderId}": {
       "schema": {

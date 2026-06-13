@@ -1,20 +1,25 @@
+
 "use client";
 
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { TrendingUp, ArrowRight } from 'lucide-react';
+import { TrendingUp, ArrowRight, Loader2, Mail } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [view, setView] = useState<'login' | 'forgot'>('login');
+  
   const router = useRouter();
   const { toast } = useToast();
 
@@ -35,6 +40,31 @@ export default function LoginPage() {
     }
   };
 
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) {
+      toast({ variant: "destructive", title: "Email Required", description: "Please enter your email to reset password." });
+      return;
+    }
+    setResetLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, email);
+      toast({
+        title: "Reset Link Sent",
+        description: "Please check your inbox for instructions to reset your password.",
+      });
+      setView('login');
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Reset Failed",
+        description: error.message,
+      });
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
       <div className="hidden lg:flex flex-col justify-center p-20 bg-secondary relative overflow-hidden">
@@ -44,9 +74,13 @@ export default function LoginPage() {
             <TrendingUp className="text-primary w-10 h-10" />
             <span className="font-headline font-bold text-3xl tracking-tight">PrimeFunded</span>
           </div>
-          <h1 className="text-5xl font-headline font-bold mb-6 leading-tight">Welcome Back, <br />Trader.</h1>
+          <h1 className="text-5xl font-headline font-bold mb-6 leading-tight">
+            {view === 'login' ? "Welcome Back, \nTrader." : "Recover Your \nAccount."}
+          </h1>
           <p className="text-xl text-muted-foreground leading-relaxed">
-            The markets are moving. Log in to your dashboard to monitor your challenges and performance.
+            {view === 'login' 
+              ? "The markets are moving. Log in to your dashboard to monitor your challenges and performance."
+              : "Enter your email address and we'll send you a link to reset your password securely."}
           </p>
         </div>
       </div>
@@ -54,41 +88,85 @@ export default function LoginPage() {
       <div className="flex flex-col justify-center items-center p-8">
         <div className="w-full max-w-md space-y-8">
           <div className="text-center">
-            <h2 className="text-3xl font-headline font-bold">Sign In</h2>
-            <p className="text-muted-foreground mt-2">Enter your credentials to access your account</p>
+            <h2 className="text-3xl font-headline font-bold">
+              {view === 'login' ? 'Sign In' : 'Forgot Password'}
+            </h2>
+            <p className="text-muted-foreground mt-2">
+              {view === 'login' 
+                ? 'Enter your credentials to access your account' 
+                : 'Enter your email to receive a recovery link'}
+            </p>
           </div>
           
-          <form onSubmit={handleLogin} className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email Address</Label>
-              <Input 
-                id="email" 
-                type="email" 
-                placeholder="trader@example.com" 
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="h-12 bg-secondary/50"
-              />
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">Password</Label>
-                <Link href="#" className="text-xs text-primary hover:underline">Forgot password?</Link>
+          {view === 'login' ? (
+            <form onSubmit={handleLogin} className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email Address</Label>
+                <Input 
+                  id="email" 
+                  type="email" 
+                  placeholder="trader@example.com" 
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="h-12 bg-secondary/50 border-border/50"
+                />
               </div>
-              <Input 
-                id="password" 
-                type="password" 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="h-12 bg-secondary/50"
-              />
-            </div>
-            <Button type="submit" className="w-full h-12 font-bold text-lg" disabled={loading}>
-              {loading ? 'Authenticating...' : 'Sign In'}
-            </Button>
-          </form>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">Password</Label>
+                  <button 
+                    type="button"
+                    onClick={() => setView('forgot')}
+                    className="text-xs text-primary font-bold hover:underline uppercase tracking-widest"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+                <Input 
+                  id="password" 
+                  type="password" 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="h-12 bg-secondary/50 border-border/50"
+                />
+              </div>
+              <Button type="submit" className="w-full h-12 font-bold text-lg" disabled={loading}>
+                {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}
+                {loading ? 'Authenticating...' : 'Sign In'}
+              </Button>
+            </form>
+          ) : (
+            <form onSubmit={handleResetPassword} className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="reset-email">Email Address</Label>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input 
+                    id="reset-email" 
+                    type="email" 
+                    placeholder="trader@example.com" 
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="h-12 pl-12 bg-secondary/50 border-border/50"
+                  />
+                </div>
+              </div>
+              <Button type="submit" className="w-full h-12 font-bold text-lg" disabled={resetLoading}>
+                {resetLoading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}
+                {resetLoading ? 'Sending...' : 'Send Recovery Link'}
+              </Button>
+              <button 
+                type="button" 
+                onClick={() => setView('login')}
+                className="w-full text-center text-xs font-bold text-muted-foreground hover:text-primary uppercase tracking-[0.2em]"
+              >
+                Back to Login
+              </button>
+            </form>
+          )}
           
           <p className="text-center text-sm text-muted-foreground">
             Don't have an account? <Link href="/signup" className="text-primary font-semibold hover:underline">Join PrimeFunded</Link>
