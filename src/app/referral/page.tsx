@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMemo, useState, useEffect } from 'react';
@@ -8,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Input } from '@/components/ui/input';
 import { 
   Users, 
   Copy, 
@@ -47,6 +45,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 export default function ReferralPage() {
   const { user, userData } = useAuth();
@@ -62,7 +62,6 @@ export default function ReferralPage() {
   const MIN_WITHDRAWAL = 100;
   const MAX_CHANGES = 3;
 
-  // Auto-generate numeric ID and initial referral code if missing
   useEffect(() => {
     if (userData && user && !userData.referralCode) {
       const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -83,7 +82,6 @@ export default function ReferralPage() {
     }
   }, [userData, user, db]);
 
-  // Real-time availability check
   useEffect(() => {
     if (!isEditing || !newCode) {
       setAvailabilityStatus('idle');
@@ -150,43 +148,39 @@ export default function ReferralPage() {
   const canWithdraw = stats.pendingEarned >= MIN_WITHDRAWAL && isKycVerified;
   const progressPercent = Math.min((stats.pendingEarned / MIN_WITHDRAWAL) * 100, 100);
 
-  const handleSaveCode = async () => {
+  const handleSaveCode = () => {
     if (!user || availabilityStatus !== 'available' || newCode === userData?.referralCode) return;
     setIsSaving(true);
-    try {
-      const oldCode = userData.referralCode;
-      const userRef = doc(db, 'users', user.uid);
-      
-      // Update user doc
-      await updateDoc(userRef, {
-        referralCode: newCode,
-        codeChangesCount: (userData.codeChangesCount || 0) + 1,
-        lastCodeChange: serverTimestamp()
-      });
+    
+    const oldCode = userData.referralCode;
+    const userRef = doc(db, 'users', user.uid);
+    const newCodeRef = doc(db, 'referralCodes', newCode);
+    const updates = {
+      referralCode: newCode,
+      codeChangesCount: (userData.codeChangesCount || 0) + 1,
+      lastCodeChange: serverTimestamp()
+    };
 
-      // Deactivate old code
-      if (oldCode) {
-        const oldCodeRef = doc(db, 'referralCodes', oldCode);
-        await updateDoc(oldCodeRef, { active: false });
-      }
+    // Optimistic non-blocking updates
+    updateDoc(userRef, updates)
+      .catch(async (err) => errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: updates })));
 
-      // Register new code
-      const newCodeRef = doc(db, 'referralCodes', newCode);
-      await setDoc(newCodeRef, {
-        code: newCode,
-        userId: user.uid,
-        active: true,
-        createdAt: serverTimestamp()
-      });
-
-      toast({ title: "Code Updated!", description: `Your referral code has been changed to ${newCode}` });
-      setIsEditing(false);
-      setShowConfirmDialog(false);
-    } catch (err) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to update referral code." });
-    } finally {
-      setIsSaving(false);
+    if (oldCode) {
+      const oldCodeRef = doc(db, 'referralCodes', oldCode);
+      updateDoc(oldCodeRef, { active: false });
     }
+
+    setDoc(newCodeRef, {
+      code: newCode,
+      userId: user.uid,
+      active: true,
+      createdAt: serverTimestamp()
+    });
+
+    toast({ title: "Code Updated!", description: `Your referral code has been changed to ${newCode}` });
+    setIsEditing(false);
+    setIsSaving(false);
+    setShowConfirmDialog(false);
   };
 
   const copyToClipboard = (text: string) => {
@@ -215,7 +209,7 @@ export default function ReferralPage() {
   return (
     <div className="flex min-h-screen bg-background">
       <Navigation />
-      <main className="flex-1 p-8 overflow-y-auto">
+      <main className="flex-1 p-8 overflow-y-auto custom-scrollbar">
         <header className="mb-10">
           <h1 className="text-3xl font-headline font-bold mb-1 text-white">Referral Program</h1>
           <p className="text-muted-foreground">Invite friends and earn up to $50.00 on every challenge purchase they make.</p>
@@ -270,13 +264,13 @@ export default function ReferralPage() {
                       <div className="flex gap-2">
                         <Button 
                           variant="outline" 
-                          className="flex-1" 
+                          className="flex-1 cursor-pointer" 
                           onClick={() => { setIsEditing(false); setNewCode(''); }}
                         >
                           Cancel
                         </Button>
                         <Button 
-                          className="flex-1 font-bold bg-accent hover:bg-accent/90" 
+                          className="flex-1 font-bold bg-accent hover:bg-accent/90 cursor-pointer" 
                           disabled={availabilityStatus !== 'available' || newCode === userData?.referralCode}
                           onClick={() => setShowConfirmDialog(true)}
                         >
@@ -300,7 +294,7 @@ export default function ReferralPage() {
                           {changesRemaining > 0 && (
                             <button 
                               onClick={() => { setIsEditing(true); setNewCode(userData.referralCode); }}
-                              className="p-2 hover:bg-primary/20 rounded-lg text-primary transition-colors"
+                              className="p-2 hover:bg-primary/20 rounded-lg text-primary transition-colors cursor-pointer"
                             >
                               <Edit2 className="w-4 h-4" />
                             </button>
@@ -325,7 +319,7 @@ export default function ReferralPage() {
                   
                   <Button 
                     onClick={() => copyToClipboard(referralLink)} 
-                    className="w-full h-12 font-bold cyan-box-glow"
+                    className="w-full h-12 font-bold cyan-box-glow cursor-pointer"
                     disabled={!userData?.referralCode}
                   >
                     <Copy className="w-4 h-4 mr-2" />
@@ -333,9 +327,9 @@ export default function ReferralPage() {
                   </Button>
                   
                   <div className="grid grid-cols-3 gap-2">
-                    <Button variant="outline" size="icon" onClick={() => share('twitter')} className="h-12 w-full" disabled={!userData?.referralCode}><Twitter className="w-5 h-5" /></Button>
-                    <Button variant="outline" size="icon" onClick={() => share('telegram')} className="h-12 w-full" disabled={!userData?.referralCode}><Send className="w-5 h-5" /></Button>
-                    <Button variant="outline" size="icon" onClick={() => share('whatsapp')} className="h-12 w-full" disabled={!userData?.referralCode}><MessageCircle className="w-5 h-5" /></Button>
+                    <Button variant="outline" size="icon" onClick={() => share('twitter')} className="h-12 w-full cursor-pointer" disabled={!userData?.referralCode}><Twitter className="w-5 h-5" /></Button>
+                    <Button variant="outline" size="icon" onClick={() => share('telegram')} className="h-12 w-full cursor-pointer" disabled={!userData?.referralCode}><Send className="w-5 h-5" /></Button>
+                    <Button variant="outline" size="icon" onClick={() => share('whatsapp')} className="h-12 w-full cursor-pointer" disabled={!userData?.referralCode}><MessageCircle className="w-5 h-5" /></Button>
                   </div>
                 </div>
               )}
@@ -391,7 +385,7 @@ export default function ReferralPage() {
                           <Button 
                             disabled={!canWithdraw} 
                             size="sm" 
-                            className="font-bold px-8 w-full md:w-auto"
+                            className="font-bold px-8 w-full md:w-auto cursor-pointer"
                           >
                             Request Payout
                           </Button>
@@ -481,10 +475,10 @@ export default function ReferralPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="cursor-pointer">Cancel</AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleSaveCode}
-              className="bg-accent text-accent-foreground hover:bg-accent/90"
+              className="bg-accent text-accent-foreground hover:bg-accent/90 cursor-pointer"
               disabled={isSaving}
             >
               {isSaving ? "Updating..." : "Yes, Change Code"}

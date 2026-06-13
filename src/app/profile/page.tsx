@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -39,7 +38,7 @@ export default function ProfilePage() {
     }
   }, [userData]);
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!user) return;
     setLoading(true);
     
@@ -48,22 +47,21 @@ export default function ProfilePage() {
       ...formData
     };
 
-    try {
-      await updateDoc(userRef, updates);
-      toast({
-        title: "Profile Updated",
-        description: "Your personal details have been saved successfully.",
+    updateDoc(userRef, updates)
+      .catch(async (err) => {
+        const permissionError = new FirestorePermissionError({
+          path: userRef.path,
+          operation: 'update',
+          requestResourceData: updates
+        } satisfies SecurityRuleContext);
+        errorEmitter.emit('permission-error', permissionError);
       });
-    } catch (err: any) {
-      const permissionError = new FirestorePermissionError({
-        path: userRef.path,
-        operation: 'update',
-        requestResourceData: updates
-      } satisfies SecurityRuleContext);
-      errorEmitter.emit('permission-error', permissionError);
-    } finally {
-      setLoading(false);
-    }
+
+    toast({
+      title: "Profile Updated",
+      description: "Your personal details have been saved successfully.",
+    });
+    setLoading(false);
   };
 
   const copyTraderId = () => {
@@ -76,7 +74,7 @@ export default function ProfilePage() {
   return (
     <div className="flex min-h-screen bg-background">
       <Navigation />
-      <main className="flex-1 p-8 overflow-y-auto">
+      <main className="flex-1 p-8 overflow-y-auto custom-scrollbar">
         <header className="mb-10">
           <h1 className="text-3xl font-headline font-bold mb-1 text-white">Account Profile</h1>
           <p className="text-muted-foreground">Manage your personal information and account security.</p>
@@ -116,7 +114,7 @@ export default function ProfilePage() {
                     </Badge>
                   )}
                 </div>
-                <Button variant="outline" className="w-full border-border/50 hover:bg-secondary">Update Photo</Button>
+                <Button variant="outline" className="w-full border-border/50 hover:bg-secondary cursor-pointer">Update Photo</Button>
               </CardContent>
             </Card>
 
@@ -128,10 +126,10 @@ export default function ProfilePage() {
                 <CardDescription>Protect your trading account access.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Button variant="secondary" className="w-full justify-start h-11 px-4 font-bold text-xs uppercase tracking-widest">
+                <Button variant="secondary" className="w-full justify-start h-11 px-4 font-bold text-xs uppercase tracking-widest cursor-pointer">
                   Change Password
                 </Button>
-                <Button variant="secondary" className="w-full justify-start h-11 px-4 font-bold text-xs uppercase tracking-widest">
+                <Button variant="secondary" className="w-full justify-start h-11 px-4 font-bold text-xs uppercase tracking-widest cursor-pointer">
                   Enable 2FA Authentication
                 </Button>
               </CardContent>
@@ -188,7 +186,7 @@ export default function ProfilePage() {
 
                 <div className="pt-8 border-t border-border/50">
                   <Button 
-                    className="font-bold px-10 h-12 rounded-xl cyan-box-glow hover:scale-[1.02] transition-all"
+                    className="font-bold px-10 h-12 rounded-xl cyan-box-glow hover:scale-[1.02] transition-all cursor-pointer"
                     onClick={handleSave}
                     disabled={loading}
                   >

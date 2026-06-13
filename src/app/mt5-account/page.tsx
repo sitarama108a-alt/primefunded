@@ -33,16 +33,6 @@ export default function MT5AccountPage() {
   const { toast } = useToast();
   const [showPassword] = useState(false);
 
-  // Memoize the query for the user's active accounts
-  const accountsQuery = useMemo(() => {
-    if (!user) return null;
-    return query(
-      collection(db, 'accounts'),
-      where('userId', '==', user.uid),
-      where('status', '==', 'active')
-    );
-  }, [db, user]);
-
   const accountConstraints = useMemo(() => {
     if (!user?.uid) return [];
     return [where('userId', '==', user.uid), where('status', '==', 'active')];
@@ -96,7 +86,7 @@ export default function MT5AccountPage() {
           <p className="text-muted-foreground max-w-md mb-8">
             You don't have any verified trading accounts yet. Complete a challenge purchase and wait for admin verification.
           </p>
-          <Button asChild>
+          <Button className="cursor-pointer" asChild>
             <a href="/challenges">Browse Challenges</a>
           </Button>
         </main>
@@ -109,7 +99,7 @@ export default function MT5AccountPage() {
   return (
     <div className="flex min-h-screen bg-background">
       <Navigation />
-      <main className="flex-1 p-8 overflow-y-auto">
+      <main className="flex-1 p-8 overflow-y-auto custom-scrollbar">
         <motion.div 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -168,7 +158,7 @@ export default function MT5AccountPage() {
                         <span className="font-mono text-lg font-bold flex-1">
                           {activeAccount.mt5Password}
                         </span>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" onClick={() => copyToClipboard("Password", activeAccount.mt5Password)}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-primary cursor-pointer" onClick={() => copyToClipboard("Password", activeAccount.mt5Password)}>
                           <Copy className="w-4 h-4" />
                         </Button>
                       </div>
@@ -264,7 +254,7 @@ export default function MT5AccountPage() {
                 <p className="text-sm text-muted-foreground leading-relaxed">
                   If you have trouble logging in, please contact our 24/7 support team via live chat or the support portal.
                 </p>
-                <Button variant="outline" className="w-full" asChild>
+                <Button variant="outline" className="w-full cursor-pointer" asChild>
                   <a href="/support">Open Support Ticket</a>
                 </Button>
               </CardContent>
@@ -286,7 +276,7 @@ function CredentialField({ icon, label, value, onCopy }: { icon: React.ReactNode
       <div className="flex items-center justify-between">
         <span className="font-mono text-lg font-bold">{value}</span>
         {onCopy && (
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" onClick={onCopy}>
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-primary cursor-pointer" onClick={onCopy}>
             <Copy className="w-4 h-4" />
           </Button>
         )}
@@ -301,7 +291,7 @@ function DownloadBtn({ icon, label, href }: { icon: React.ReactNode, label: stri
       href={href} 
       target="_blank" 
       rel="noopener noreferrer"
-      className="flex flex-col items-center justify-center p-4 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 hover:border-primary/50 transition-all group"
+      className="flex flex-col items-center justify-center p-4 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 hover:border-primary/50 transition-all group cursor-pointer"
     >
       <div className="mb-2 text-muted-foreground group-hover:text-primary transition-colors">
         {icon}

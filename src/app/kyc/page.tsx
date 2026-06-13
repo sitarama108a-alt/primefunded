@@ -1,12 +1,9 @@
-
 "use client";
 
 import { useState } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { ShieldCheck, Upload, CheckCircle2, Clock, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -24,7 +21,7 @@ export default function KYCPage() {
 
   const handleNext = () => setStep(s => s + 1);
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!user) return;
     setLoading(true);
     
@@ -36,33 +33,25 @@ export default function KYCPage() {
       kycRejectionReason: null
     };
 
-    try {
-      await updateDoc(userRef, updates);
-      
-      // Automatic Notification
-      await addDoc(collection(db, 'users', user.uid, 'notifications'), {
-        title: "⏳ KYC Under Review",
-        message: "Your documents have been submitted successfully. We will notify you once review is complete.",
-        type: 'kyc_submitted',
-        isRead: false,
-        createdAt: serverTimestamp()
+    updateDoc(userRef, updates)
+      .catch(async (err) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: updates }));
       });
+    
+    addDoc(collection(db, 'users', user.uid, 'notifications'), {
+      title: "⏳ KYC Under Review",
+      message: "Your documents have been submitted successfully. We will notify you once review is complete.",
+      type: 'kyc_submitted',
+      isRead: false,
+      createdAt: serverTimestamp()
+    });
 
-      setStep(3);
-      toast({
-        title: "Documents Submitted",
-        description: "Your KYC application is now being reviewed.",
-      });
-    } catch (err: any) {
-      const permissionError = new FirestorePermissionError({
-        path: userRef.path,
-        operation: 'update',
-        requestResourceData: updates
-      } satisfies SecurityRuleContext);
-      errorEmitter.emit('permission-error', permissionError);
-    } finally {
-      setLoading(false);
-    }
+    setStep(3);
+    toast({
+      title: "Documents Submitted",
+      description: "Your KYC application is now being reviewed.",
+    });
+    setLoading(false);
   };
 
   return (
@@ -94,7 +83,7 @@ export default function KYCPage() {
                     <Upload className="w-12 h-12 text-muted-foreground mb-4 group-hover:text-primary transition-colors" />
                     <p className="text-sm font-bold text-white">Click to upload or drag & drop</p>
                   </div>
-                  <Button className="w-full font-bold h-12 rounded-xl bg-primary hover:bg-primary/90" onClick={handleNext}>Next Step</Button>
+                  <Button className="w-full font-bold h-12 rounded-xl bg-primary hover:bg-primary/90 cursor-pointer" onClick={handleNext}>Next Step</Button>
                 </CardContent>
               </>
             )}
@@ -111,8 +100,8 @@ export default function KYCPage() {
                     <p className="text-sm font-bold text-white">Upload proof of address</p>
                   </div>
                   <div className="flex gap-4">
-                    <Button variant="outline" className="flex-1 h-12 rounded-xl font-bold" onClick={() => setStep(1)}>Back</Button>
-                    <Button className="flex-1 font-bold h-12 rounded-xl bg-primary hover:bg-primary/90" onClick={handleSubmit} disabled={loading}>
+                    <Button variant="outline" className="flex-1 h-12 rounded-xl font-bold cursor-pointer" onClick={() => setStep(1)}>Back</Button>
+                    <Button className="flex-1 font-bold h-12 rounded-xl bg-primary hover:bg-primary/90 cursor-pointer" onClick={handleSubmit} disabled={loading}>
                       {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                       Submit for Review
                     </Button>
@@ -144,7 +133,7 @@ export default function KYCPage() {
                     </p>
                   </>
                 )}
-                <Button className="w-full h-14 rounded-xl font-bold text-lg" asChild>
+                <Button className="w-full h-14 rounded-xl font-bold text-lg cursor-pointer" asChild>
                   <a href="/dashboard">Return to Dashboard</a>
                 </Button>
               </CardContent>

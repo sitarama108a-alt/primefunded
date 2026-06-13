@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
@@ -17,12 +16,14 @@ import {
   Lock, Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Mail, Send, AlertTriangle, User, History, Trash2, Award, Terminal, ShieldAlert, BarChart3, Search, ExternalLink, Filter
 } from 'lucide-react';
 import { useFirestore, useCollection } from '@/firebase';
-import { doc, updateDoc, deleteDoc, setDoc, serverTimestamp, getDoc, addDoc, collection, writeBatch, query, where, getDocs, increment, orderBy } from 'firebase/firestore';
+import { doc, updateDoc, setDoc, serverTimestamp, getDoc, addDoc, collection, writeBatch } from 'firebase/firestore';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import DashboardPage from '@/app/dashboard/page';
 import { cn } from '@/lib/utils';
-import { sendKycApprovalEmail, sendKycRejectionEmail, sendBroadcastEmail, sendChallengePassEmail, sendChallengeFailEmail, sendFreeAccountGrantEmail, sendReferralCommissionEmail, sendPayoutProcessedEmail } from '@/lib/email';
+import { sendKycApprovalEmail, sendKycRejectionEmail, sendBroadcastEmail, sendFreeAccountGrantEmail, sendReferralCommissionEmail, sendPayoutProcessedEmail } from '@/lib/email';
 import { Textarea } from '@/components/ui/textarea';
+import DashboardPage from '@/app/dashboard/page';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 
 const ADMIN_PASSWORD = "93463962569392846256";
 
@@ -99,37 +100,44 @@ export default function AdminPage() {
   };
 
   const handleVerifyOrder = async (order: any) => {
-    try {
-      const orderRef = doc(db, 'orders', order.id);
-      await updateDoc(orderRef, { status: 'verified' });
-      
-      const accountId = Math.random().toString(36).substring(7).toUpperCase();
-      const login = Math.floor(1000000 + Math.random() * 9000000).toString();
-      const pass = Math.random().toString(36).substring(2, 12);
-      
-      const accountData = {
-        userId: order.userId,
-        email: order.email,
-        plan: order.plan,
-        size: order.size,
-        mt5Login: login,
-        mt5Password: pass,
-        mt5Server: "PrimeFunded-Live",
-        balance: parseFloat(order.size?.replace('$', '').replace(',', '').replace('k', '000') || 0),
-        status: "active",
-        startDate: new Date().toISOString(),
-        createdAt: serverTimestamp(),
-      };
+    const orderRef = doc(db, 'orders', order.id);
+    const accountId = Math.random().toString(36).substring(7).toUpperCase();
+    const login = Math.floor(1000000 + Math.random() * 9000000).toString();
+    const pass = Math.random().toString(36).substring(2, 12);
+    
+    const accountData = {
+      userId: order.userId,
+      email: order.email,
+      plan: order.plan,
+      size: order.size,
+      mt5Login: login,
+      mt5Password: pass,
+      mt5Server: "PrimeFunded-Live",
+      balance: parseFloat(order.size?.replace('$', '').replace(',', '').replace('k', '000') || 0),
+      status: "active",
+      startDate: new Date().toISOString(),
+      createdAt: serverTimestamp(),
+    };
 
-      await setDoc(doc(db, 'accounts', accountId), accountData);
+    // Non-blocking writes for instant feedback
+    updateDoc(orderRef, { status: 'verified' })
+      .catch(async (err) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: orderRef.path, operation: 'update', requestResourceData: { status: 'verified' } }));
+      });
       
-      // Referral Logic
+    setDoc(doc(db, 'accounts', accountId), accountData)
+      .catch(async (err) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `accounts/${accountId}`, operation: 'create', requestResourceData: accountData }));
+      });
+
+    // We still need to await read for referral logic
+    try {
       const userSnap = await getDoc(doc(db, 'users', order.userId));
       const referredBy = userSnap.data()?.referredBy;
       if (referredBy) {
         const amount = Math.min(parseFloat(order.price?.replace('$', '') || 0) * 0.10, 50);
         const referralId = Math.random().toString(36).substring(7);
-        await setDoc(doc(db, 'referrals', referralId), {
+        setDoc(doc(db, 'referrals', referralId), {
           referrerId: referredBy,
           referredUserId: order.userId,
           referredUserEmail: order.email,
@@ -140,13 +148,12 @@ export default function AdminPage() {
           createdAt: serverTimestamp()
         });
         
-        // Notify Referrer
         const referrerSnap = await getDoc(doc(db, 'users', referredBy));
         if (referrerSnap.exists()) {
           const rData = referrerSnap.data();
           const prefs = rData.notificationPreferences || { inApp: true, email: true, referral: true };
           if (prefs.inApp && prefs.referral) {
-            await addDoc(collection(db, 'users', referredBy, 'notifications'), {
+            addDoc(collection(db, 'users', referredBy, 'notifications'), {
               title: "👥 Referral Earned!",
               message: `Your referral just purchased a challenge. You earned $${amount.toFixed(2)} commission!`,
               type: 'referral_earned',
@@ -159,137 +166,133 @@ export default function AdminPage() {
           }
         }
       }
+    } catch (err) {}
 
-      toast({ title: "Order Verified", description: "Account created and user notified." });
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Verification Failed" });
-    }
+    toast({ title: "Order Verified", description: "Account created and user notified." });
   };
 
-  const handleKycAction = async (user: any, action: 'verified' | 'rejected') => {
-    try {
-      const userRef = doc(db, 'users', user.id);
-      const updates: any = { 
-        kycStatus: action,
-        kycVerified: action === 'verified',
-        kycRejectionReason: action === 'rejected' ? rejectionReason : null
-      };
-      await updateDoc(userRef, updates);
+  const handleKycAction = (user: any, action: 'verified' | 'rejected') => {
+    const userRef = doc(db, 'users', user.id);
+    const updates: any = { 
+      kycStatus: action,
+      kycVerified: action === 'verified',
+      kycRejectionReason: action === 'rejected' ? rejectionReason : null
+    };
 
-      const prefs = user.notificationPreferences || { inApp: true, email: true };
-      if (prefs.inApp) {
-        await addDoc(collection(db, 'users', user.id, 'notifications'), {
-          title: action === 'verified' ? "✅ KYC Approved" : "❌ KYC Rejected",
-          message: action === 'verified' ? "Your documents were verified! Payouts unlocked." : `Your KYC was rejected. Reason: ${rejectionReason}`,
-          type: action === 'verified' ? 'kyc_approved' : 'kyc_rejected',
-          isRead: false,
-          createdAt: serverTimestamp()
-        });
-      }
+    updateDoc(userRef, updates)
+      .catch(async (err) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: updates }));
+      });
 
-      if (action === 'verified') sendKycApprovalEmail(user.email);
-      else sendKycRejectionEmail(user.email, rejectionReason);
-
-      toast({ title: `KYC ${action.charAt(0).toUpperCase() + action.slice(1)}` });
-      setIsKycReviewOpen(false);
-      setRejectionReason('');
-    } catch (err) {
-      toast({ variant: "destructive", title: "Action failed" });
-    }
-  };
-
-  const handleGrantFreeAccount = async () => {
-    if (!selectedUser) return;
-    try {
-      const accountId = Math.random().toString(36).substring(7).toUpperCase();
-      const login = Math.floor(1000000 + Math.random() * 9000000).toString();
-      const pass = Math.random().toString(36).substring(2, 12);
-      
-      const accountData = {
-        userId: selectedUser.id,
-        email: selectedUser.email,
-        plan: provisionPlan,
-        size: provisionSize,
-        mt5Login: login,
-        mt5Password: pass,
-        mt5Server: "PrimeFunded-Live",
-        balance: parseFloat(provisionSize.replace('$', '').replace(',', '').replace('k', '000')),
-        status: "active",
-        startDate: new Date().toISOString(),
-        paymentStatus: "free_grant",
-        grantedBy: "admin",
-        createdAt: serverTimestamp(),
-      };
-
-      await setDoc(doc(db, 'accounts', accountId), accountData);
-      
-      await addDoc(collection(db, 'users', selectedUser.id, 'notifications'), {
-        title: "🎁 Free Account Granted",
-        message: `An admin has granted you a free ${provisionSize} ${provisionPlan} account.`,
-        type: 'admin_direct',
+    const prefs = user.notificationPreferences || { inApp: true, email: true };
+    if (prefs.inApp) {
+      addDoc(collection(db, 'users', user.id, 'notifications'), {
+        title: action === 'verified' ? "✅ KYC Approved" : "❌ KYC Rejected",
+        message: action === 'verified' ? "Your documents were verified! Payouts unlocked." : `Your KYC was rejected. Reason: ${rejectionReason}`,
+        type: action === 'verified' ? 'kyc_approved' : 'kyc_rejected',
         isRead: false,
         createdAt: serverTimestamp()
       });
-
-      sendFreeAccountGrantEmail(selectedUser.email, provisionPlan, provisionSize);
-      toast({ title: "Account Granted Successfully" });
-      setIsFreeAccountOpen(false);
-    } catch (err) {
-      toast({ variant: "destructive", title: "Failed to grant account" });
     }
+
+    if (action === 'verified') sendKycApprovalEmail(user.email);
+    else sendKycRejectionEmail(user.email, rejectionReason);
+
+    toast({ title: `KYC ${action.charAt(0).toUpperCase() + action.slice(1)}` });
+    setIsKycReviewOpen(false);
+    setRejectionReason('');
   };
 
-  const handleSendBroadcast = async () => {
+  const handleGrantFreeAccount = () => {
+    if (!selectedUser) return;
+    const accountId = Math.random().toString(36).substring(7).toUpperCase();
+    const login = Math.floor(1000000 + Math.random() * 9000000).toString();
+    const pass = Math.random().toString(36).substring(2, 12);
+    
+    const accountData = {
+      userId: selectedUser.id,
+      email: selectedUser.email,
+      plan: provisionPlan,
+      size: provisionSize,
+      mt5Login: login,
+      mt5Password: pass,
+      mt5Server: "PrimeFunded-Live",
+      balance: parseFloat(provisionSize.replace('$', '').replace(',', '').replace('k', '000')),
+      status: "active",
+      startDate: new Date().toISOString(),
+      paymentStatus: "free_grant",
+      grantedBy: "admin",
+      createdAt: serverTimestamp(),
+    };
+
+    setDoc(doc(db, 'accounts', accountId), accountData);
+    
+    addDoc(collection(db, 'users', selectedUser.id, 'notifications'), {
+      title: "🎁 Free Account Granted",
+      message: `An admin has granted you a free ${provisionSize} ${provisionPlan} account.`,
+      type: 'admin_direct',
+      isRead: false,
+      createdAt: serverTimestamp()
+    });
+
+    sendFreeAccountGrantEmail(selectedUser.email, provisionPlan, provisionSize);
+    toast({ title: "Account Granted Successfully" });
+    setIsFreeAccountOpen(false);
+  };
+
+  const handleSendBroadcast = () => {
     if (!notifTitle || !notifMessage) return;
     setIsSendingNotif(true);
-    try {
-      let targetUsers = traders;
-      if (notifTarget === 'kyc_pending') targetUsers = traders.filter(t => t.kycStatus === 'pending');
-      if (notifTarget === 'funded') targetUsers = traders.filter(t => t.kycVerified === true);
-      
-      const batch = writeBatch(db);
-      let sentCount = 0;
+    
+    let targetUsers = traders;
+    if (notifTarget === 'kyc_pending') targetUsers = traders.filter(t => t.kycStatus === 'pending');
+    if (notifTarget === 'funded') targetUsers = traders.filter(t => t.kycVerified === true);
+    
+    const batch = writeBatch(db);
+    let sentCount = 0;
 
-      targetUsers.forEach(u => {
-        const prefs = u.notificationPreferences || { inApp: true, email: true, announcements: true };
-        if (prefs.announcements) {
-          if (prefs.inApp) {
-            const notifRef = doc(collection(db, 'users', u.id, 'notifications'));
-            batch.set(notifRef, {
-              title: notifTitle,
-              message: notifMessage,
-              type: 'broadcast',
-              priority: notifPriority,
-              isRead: false,
-              sentByAdmin: true,
-              createdAt: serverTimestamp()
-            });
-          }
-          if (prefs.email) {
-            sendBroadcastEmail(u.email, notifTitle, notifMessage, u.name);
-          }
-          sentCount++;
+    targetUsers.forEach(u => {
+      const prefs = u.notificationPreferences || { inApp: true, email: true, announcements: true };
+      if (prefs.announcements) {
+        if (prefs.inApp) {
+          const notifRef = doc(collection(db, 'users', u.id, 'notifications'));
+          batch.set(notifRef, {
+            title: notifTitle,
+            message: notifMessage,
+            type: 'broadcast',
+            priority: notifPriority,
+            isRead: false,
+            sentByAdmin: true,
+            createdAt: serverTimestamp()
+          });
         }
-      });
+        if (prefs.email) {
+          sendBroadcastEmail(u.email, notifTitle, notifMessage, u.name);
+        }
+        sentCount++;
+      }
+    });
 
-      await addDoc(collection(db, 'broadcasts'), {
-        title: notifTitle,
-        message: notifMessage,
-        sentBy: "admin",
-        targetGroup: notifTarget,
-        sentAt: serverTimestamp(),
-        totalRecipients: sentCount
-      });
+    addDoc(collection(db, 'broadcasts'), {
+      title: notifTitle,
+      message: notifMessage,
+      sentBy: "admin",
+      targetGroup: notifTarget,
+      sentAt: serverTimestamp(),
+      totalRecipients: sentCount
+    });
 
-      await batch.commit();
-      toast({ title: "Broadcast Sent", description: `Delivered to ${sentCount} users.` });
-      setNotifTitle('');
-      setNotifMessage('');
-    } catch (err) {
-      toast({ variant: "destructive", title: "Broadcast Failed" });
-    } finally {
-      setIsSendingNotif(false);
-    }
+    batch.commit()
+      .then(() => {
+        toast({ title: "Broadcast Sent", description: `Delivered to ${sentCount} users.` });
+        setNotifTitle('');
+        setNotifMessage('');
+        setIsSendingNotif(false);
+      })
+      .catch(() => {
+        toast({ variant: "destructive", title: "Broadcast Failed" });
+        setIsSendingNotif(false);
+      });
   };
 
   if (previewUserId) {
@@ -360,13 +363,13 @@ export default function AdminPage() {
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-8">
           <TabsList className="bg-secondary/50 p-1 h-12 w-full justify-start rounded-xl overflow-x-auto border border-border/50">
-            <TabsTrigger value="overview" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg"><Activity className="w-4 h-4 mr-2" /> Overview</TabsTrigger>
-            <TabsTrigger value="orders" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg"><ShoppingCart className="w-4 h-4 mr-2" /> Orders</TabsTrigger>
-            <TabsTrigger value="users" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg"><Users className="w-4 h-4 mr-2" /> Users</TabsTrigger>
-            <TabsTrigger value="kyc" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg"><Fingerprint className="w-4 h-4 mr-2" /> KYC Hub</TabsTrigger>
-            <TabsTrigger value="referrals" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg"><TrendingUp className="w-4 h-4 mr-2" /> Referrals</TabsTrigger>
-            <TabsTrigger value="payouts" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg"><Wallet className="w-4 h-4 mr-2" /> Payouts</TabsTrigger>
-            <TabsTrigger value="notifications" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg"><Bell className="w-4 h-4 mr-2" /> Broadcast</TabsTrigger>
+            <TabsTrigger value="overview" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg cursor-pointer"><Activity className="w-4 h-4 mr-2" /> Overview</TabsTrigger>
+            <TabsTrigger value="orders" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg cursor-pointer"><ShoppingCart className="w-4 h-4 mr-2" /> Orders</TabsTrigger>
+            <TabsTrigger value="users" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg cursor-pointer"><Users className="w-4 h-4 mr-2" /> Users</TabsTrigger>
+            <TabsTrigger value="kyc" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg cursor-pointer"><Fingerprint className="w-4 h-4 mr-2" /> KYC Hub</TabsTrigger>
+            <TabsTrigger value="referrals" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg cursor-pointer"><TrendingUp className="w-4 h-4 mr-2" /> Referrals</TabsTrigger>
+            <TabsTrigger value="payouts" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg cursor-pointer"><Wallet className="w-4 h-4 mr-2" /> Payouts</TabsTrigger>
+            <TabsTrigger value="notifications" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground font-bold px-6 rounded-lg cursor-pointer"><Bell className="w-4 h-4 mr-2" /> Broadcast</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview">
@@ -527,16 +530,16 @@ export default function AdminPage() {
                             <td className="py-4 px-6 text-right">
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="w-4 h-4" /></Button>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 cursor-pointer"><MoreVertical className="w-4 h-4" /></Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-48 bg-card border-border/50">
                                   <DropdownMenuLabel>User Actions</DropdownMenuLabel>
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem onClick={() => setPreviewUserId(t.id)}><Eye className="w-4 h-4 mr-2" /> View Dashboard</DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => { setSelectedUser(t); setIsFreeAccountOpen(true); }}><Gift className="w-4 h-4 mr-2" /> Give Free Account</DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => { setSelectedUser(t); setIsManageAccountOpen(true); }}><User className="w-4 h-4 mr-2" /> Manage Profile</DropdownMenuItem>
+                                  <DropdownMenuItem className="cursor-pointer" onClick={() => setPreviewUserId(t.id)}><Eye className="w-4 h-4 mr-2" /> View Dashboard</DropdownMenuItem>
+                                  <DropdownMenuItem className="cursor-pointer" onClick={() => { setSelectedUser(t); setIsFreeAccountOpen(true); }}><Gift className="w-4 h-4 mr-2" /> Give Free Account</DropdownMenuItem>
+                                  <DropdownMenuItem className="cursor-pointer" onClick={() => { setSelectedUser(t); setIsManageAccountOpen(true); }}><User className="w-4 h-4 mr-2" /> Manage Profile</DropdownMenuItem>
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem className="text-destructive"><Ban className="w-4 h-4 mr-2" /> Suspend Account</DropdownMenuItem>
+                                  <DropdownMenuItem className="text-destructive cursor-pointer"><Ban className="w-4 h-4 mr-2" /> Suspend Account</DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </td>
@@ -581,11 +584,11 @@ export default function AdminPage() {
                              <td className="py-4 px-6 font-bold">{t.name}</td>
                              <td className="py-4 px-6 text-xs">{t.email}</td>
                              <td className="py-4 px-6">
-                               <Button variant="outline" size="sm" className="h-7 text-[10px] font-black" onClick={() => { setSelectedUser(t); setIsKycReviewOpen(true); }}>VIEW DOCUMENTS</Button>
+                               <Button variant="outline" size="sm" className="h-7 text-[10px] font-black cursor-pointer" onClick={() => { setSelectedUser(t); setIsKycReviewOpen(true); }}>VIEW DOCUMENTS</Button>
                              </td>
                              <td className="py-4 px-6 text-right space-x-2">
-                               <Button size="sm" className="h-8 bg-accent font-bold" onClick={() => handleKycAction(t, 'verified')}>Approve</Button>
-                               <Button size="sm" variant="destructive" className="h-8 font-bold" onClick={() => { setSelectedUser(t); setIsKycReviewOpen(true); }}>Reject</Button>
+                               <Button size="sm" className="h-8 bg-accent font-bold cursor-pointer" onClick={() => handleKycAction(t, 'verified')}>Approve</Button>
+                               <Button size="sm" variant="destructive" className="h-8 font-bold cursor-pointer" onClick={() => { setSelectedUser(t); setIsKycReviewOpen(true); }}>Reject</Button>
                              </td>
                            </tr>
                          ))}
@@ -637,7 +640,7 @@ export default function AdminPage() {
                              </td>
                              <td className="py-4 px-6 text-right">
                                {r.status === 'pending' && (
-                                 <Button size="sm" className="h-8" onClick={() => updateDoc(doc(db, 'referrals', r.id), { status: 'paid' })}>Mark Paid</Button>
+                                 <Button size="sm" className="h-8 cursor-pointer" onClick={() => updateDoc(doc(db, 'referrals', r.id), { status: 'paid' })}>Mark Paid</Button>
                                )}
                              </td>
                            </tr>
@@ -692,15 +695,15 @@ export default function AdminPage() {
                             <td className="py-4 px-6 text-right space-x-2">
                               {p.status === 'pending' && (
                                 <>
-                                  <Button size="sm" className="h-8" onClick={() => {
+                                  <Button size="sm" className="h-8 cursor-pointer" onClick={() => {
                                     updateDoc(doc(db, 'payouts', p.id), { status: 'approved' });
                                     toast({ title: "Payout Approved" });
                                   }}>Approve</Button>
-                                  <Button size="sm" variant="destructive" className="h-8">Reject</Button>
+                                  <Button size="sm" variant="destructive" className="h-8 cursor-pointer">Reject</Button>
                                 </>
                               )}
                               {p.status === 'approved' && (
-                                <Button size="sm" className="h-8 bg-accent" onClick={() => {
+                                <Button size="sm" className="h-8 bg-accent cursor-pointer" onClick={() => {
                                   updateDoc(doc(db, 'payouts', p.id), { status: 'done' });
                                   sendPayoutProcessedEmail(p.email, p.amount);
                                   toast({ title: "Payout marked as Complete" });
@@ -730,7 +733,7 @@ export default function AdminPage() {
                       <div className="space-y-2">
                         <Label>Target Audience</Label>
                         <Select value={notifTarget} onValueChange={setNotifTarget}>
-                          <SelectTrigger className="bg-background/50">
+                          <SelectTrigger className="bg-background/50 cursor-pointer">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -743,7 +746,7 @@ export default function AdminPage() {
                       <div className="space-y-2">
                         <Label>Priority</Label>
                         <Select value={notifPriority} onValueChange={setNotifPriority}>
-                          <SelectTrigger className="bg-background/50">
+                          <SelectTrigger className="bg-background/50 cursor-pointer">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -762,7 +765,7 @@ export default function AdminPage() {
                       <Label>Message Body</Label>
                       <Textarea placeholder="Type message..." className="min-h-[150px]" value={notifMessage} onChange={e => setNotifMessage(e.target.value)} />
                     </div>
-                    <Button className="w-full font-bold h-12 cyan-box-glow" disabled={isSendingNotif || !notifTitle || !notifMessage} onClick={handleSendBroadcast}>
+                    <Button className="w-full font-bold h-12 cyan-box-glow cursor-pointer" disabled={isSendingNotif || !notifTitle || !notifMessage} onClick={handleSendBroadcast}>
                       {isSendingNotif ? 'Sending Broadcast...' : 'Send Global Broadcast'}
                     </Button>
                   </CardContent>
@@ -803,7 +806,7 @@ export default function AdminPage() {
             <div className="space-y-2">
               <Label>Challenge Plan</Label>
               <Select value={provisionPlan} onValueChange={setProvisionPlan}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="cursor-pointer"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="1-Step Pro">1-Step Pro</SelectItem>
                   <SelectItem value="2-Step Classic">2-Step Classic</SelectItem>
@@ -815,7 +818,7 @@ export default function AdminPage() {
             <div className="space-y-2">
               <Label>Account Size</Label>
               <Select value={provisionSize} onValueChange={setProvisionSize}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="cursor-pointer"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="$5,000">$5,000</SelectItem>
                   <SelectItem value="$10,000">$10,000</SelectItem>
@@ -829,8 +832,8 @@ export default function AdminPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsFreeAccountOpen(false)}>Cancel</Button>
-            <Button onClick={handleGrantFreeAccount}>Confirm Grant</Button>
+            <Button variant="outline" className="cursor-pointer" onClick={() => setIsFreeAccountOpen(false)}>Cancel</Button>
+            <Button className="cursor-pointer" onClick={handleGrantFreeAccount}>Confirm Grant</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -862,8 +865,8 @@ export default function AdminPage() {
             </div>
           </div>
           <DialogFooter className="gap-2">
-             <Button variant="destructive" className="font-bold" onClick={() => handleKycAction(selectedUser, 'rejected')} disabled={!rejectionReason}>Reject Documents</Button>
-             <Button className="bg-accent font-bold" onClick={() => handleKycAction(selectedUser, 'verified')}>Approve & Verify</Button>
+             <Button variant="destructive" className="font-bold cursor-pointer" onClick={() => handleKycAction(selectedUser, 'rejected')} disabled={!rejectionReason}>Reject Documents</Button>
+             <Button className="bg-accent font-bold cursor-pointer" onClick={() => handleKycAction(selectedUser, 'verified')}>Approve & Verify</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

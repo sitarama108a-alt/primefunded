@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useMemo, Suspense } from 'react';
@@ -9,8 +8,6 @@ import {
   TrendingDown, 
   Wallet, 
   Activity, 
-  ArrowUpRight,
-  ArrowDownRight,
   RefreshCw,
   Server,
   ShieldCheck,
@@ -98,21 +95,18 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     }
   }, [userData, adminViewMode]);
 
-  const handleCompleteProfile = async () => {
+  const handleCompleteProfile = () => {
     if (!effectiveUid) return;
     setSavingProfile(true);
-    try {
-      await updateDoc(doc(db, 'users', effectiveUid), {
-        phone: completingPhone,
-        country: completingCountry
-      });
-      toast({ title: "Profile Completed", description: "Thank you for updating your information." });
-      setShowProfilePrompt(false);
-    } catch (err) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to update profile." });
-    } finally {
-      setSavingProfile(false);
-    }
+    
+    updateDoc(doc(db, 'users', effectiveUid), {
+      phone: completingPhone,
+      country: completingCountry
+    });
+    
+    toast({ title: "Profile Completed", description: "Thank you for updating your information." });
+    setShowProfilePrompt(false);
+    setSavingProfile(false);
   };
 
   const accountConstraints = useMemo(() => {
@@ -185,7 +179,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     <div className="flex min-h-screen bg-background">
       {!adminViewMode && <Navigation />}
       
-      <main className="flex-1 p-8 overflow-y-auto">
+      <main className="flex-1 p-8 overflow-y-auto custom-scrollbar">
         {adminViewMode && (
           <div className="mb-8 p-4 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -209,7 +203,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                 <p className="text-xs text-muted-foreground">Payouts and referral withdrawals are locked until you verify your identity.</p>
               </div>
             </div>
-            <Button size="sm" variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive hover:text-white font-bold" asChild>
+            <Button size="sm" variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive hover:text-white font-bold cursor-pointer" asChild>
               <Link href="/kyc">Verify Now <ExternalLink className="ml-2 w-3 h-3" /></Link>
             </Button>
           </div>
@@ -243,7 +237,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                   className="bg-background/50 border-primary/20 h-10 min-w-[150px]"
                 />
               </div>
-              <Button onClick={handleCompleteProfile} disabled={savingProfile || !completingPhone || !completingCountry} className="font-bold h-10 px-6">
+              <Button onClick={handleCompleteProfile} disabled={savingProfile || !completingPhone || !completingCountry} className="font-bold h-10 px-6 cursor-pointer">
                 Save & Continue
               </Button>
             </div>
@@ -262,7 +256,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                 >
                   <span className="text-[10px] font-black uppercase tracking-widest text-primary">UID:</span>
                   <span className="font-mono text-sm font-bold text-white">{userData?.traderId || '--------'}</span>
-                  <button className="text-muted-foreground group-hover:text-primary transition-colors">
+                  <button className="text-muted-foreground group-hover:text-primary transition-colors cursor-pointer">
                     {copied ? <Check className="w-3 h-3 text-accent" /> : <Copy className="w-3 h-3" />}
                   </button>
                 </div>
@@ -276,7 +270,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
               <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-accent live-indicator' : 'bg-destructive'}`} />
               <span className="text-xs font-semibold uppercase tracking-wider text-white">{isConnected ? 'LIVE DATA' : 'DISCONNECTED'}</span>
             </div>
-            <Button variant="outline" size="icon" onClick={() => setIsConnected(!isConnected)}>
+            <Button variant="outline" size="icon" className="cursor-pointer" onClick={() => setIsConnected(!isConnected)}>
               <RefreshCw className={`w-4 h-4 ${isConnected ? 'animate-spin-slow' : ''}`} />
             </Button>
           </div>
