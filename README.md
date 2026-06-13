@@ -2,11 +2,23 @@
 
 This is a professional Next.js 15 trading platform integrated with Firebase.
 
+## GitHub Setup
+
+To push this project to your repository, run the following commands in your local terminal:
+
+```bash
+git init
+git add .
+git commit -m "first commit"
+git branch -M main
+git remote add origin https://github.com/sitarama108a-alt/primefunded.git
+git push -u origin main
+```
+
 ## Deployment Instructions (Vercel)
 
-1. **Push to Git**: Push this source code to GitHub, GitLab, or Bitbucket.
-2. **Import to Vercel**: Connect your repository to a new project in the [Vercel Dashboard](https://vercel.com/dashboard).
-3. **Set Environment Variables**: Ensure the following variables are set in the Vercel Project Settings:
+1. **Import to Vercel**: Connect your repository to a new project in the [Vercel Dashboard](https://vercel.com/dashboard).
+2. **Set Environment Variables**: Ensure the following variables are set in the Vercel Project Settings:
    - `NEXT_PUBLIC_FIREBASE_API_KEY`
    - `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
    - `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
@@ -15,7 +27,7 @@ This is a professional Next.js 15 trading platform integrated with Firebase.
    - `NEXT_PUBLIC_FIREBASE_APP_ID`
    - `ADMIN_PASSWORD`: Your secret admin terminal key.
    - `MAINTENANCE_MODE`: Set to `true` to disable the terminal globally.
-4. **Custom Domain**: Add your domain under `Settings > Domains`.
+3. **Custom Domain**: Add your domain under `Settings > Domains`.
 
 ## Features
 - **MT5 Integration**: Automated balance and equity syncing via `/api/mt5-update`.
