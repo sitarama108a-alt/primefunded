@@ -14,7 +14,16 @@ import { TrendingUp, CheckCircle2, XCircle, AlertCircle, Loader2 } from 'lucide-
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
-import { cn } from '@/lib/utils';
+import { cn, sanitizeInput } from '@/lib/utils';
+import { z } from 'zod';
+
+const SignupSchema = z.object({
+  name: z.string().min(2, "Name is too short").max(100, "Name must be under 100 characters"),
+  email: z.string().email("Invalid email format"),
+  phone: z.string().min(5, "Phone number is too short").max(20, "Phone number is too long"),
+  country: z.string().min(2, "Country is required"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
 
 function SignupContent() {
   const [name, setName] = useState('');
@@ -31,7 +40,6 @@ function SignupContent() {
 
   const referralCodeFromUrl = searchParams.get('ref');
 
-  // Handle URL referral code
   useEffect(() => {
     if (referralCodeFromUrl) {
       setReferralInput(referralCodeFromUrl.toUpperCase());
@@ -39,7 +47,6 @@ function SignupContent() {
     }
   }, [referralCodeFromUrl]);
 
-  // Debounced real-time validation
   useEffect(() => {
     if (!referralInput || referralInput === referralCodeFromUrl?.toUpperCase()) return;
     
@@ -71,30 +78,33 @@ function SignupContent() {
     }
   };
 
-  const generateInitialReferralCode = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let result = '';
-    for (let i = 0; i < 8; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
-  };
-
-  const generateTraderId = () => {
-    return Math.floor(10000000 + Math.random() * 90000000).toString();
-  };
-
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validation
+    const validation = SignupSchema.safeParse({ name, email, phone, country, password });
+    if (!validation.success) {
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: validation.error.errors[0].message,
+      });
+      return;
+    }
+
     setLoading(true);
+    const sanitizedEmail = sanitizeInput(email);
+    const sanitizedName = sanitizeInput(name);
+    const sanitizedPhone = sanitizeInput(phone);
+    const sanitizedCountry = sanitizeInput(country);
+
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, sanitizedEmail, password);
       const user = userCredential.user;
       
-      const traderId = generateTraderId();
-      const referralCode = generateInitialReferralCode();
+      const traderId = Math.floor(10000000 + Math.random() * 90000000).toString();
+      const referralCode = Math.random().toString(36).substring(2, 10).toUpperCase();
 
-      // Find referring user UID if ref code exists and is valid
       let referredByUid = null;
       if (referralStatus === 'valid' && referralInput) {
         const usersRef = collection(db, 'users');
@@ -113,16 +123,17 @@ function SignupContent() {
         referredBy: referredByUid,
         referralCount: 0,
         referralEarnings: 0,
-        name,
-        email,
-        phone,
-        country,
+        name: sanitizedName,
+        email: sanitizedEmail,
+        phone: sanitizedPhone,
+        country: sanitizedCountry,
         tier: 'Bronze',
         joinDate: new Date().toISOString(),
         balance: 0,
         equity: 0,
         status: 'active',
         kycVerified: false,
+        kycStatus: 'none',
         createdAt: serverTimestamp()
       };
 
@@ -137,7 +148,6 @@ function SignupContent() {
           errorEmitter.emit('permission-error', permissionError);
         });
 
-      // Also register the code in the registry
       const codeRegRef = doc(db, 'referralCodes', referralCode);
       setDoc(codeRegRef, {
         code: referralCode,
@@ -151,7 +161,7 @@ function SignupContent() {
       toast({
         variant: "destructive",
         title: "Registration Failed",
-        description: error.message,
+        description: error.code === 'auth/email-already-in-use' ? "This email is already registered." : error.message,
       });
     } finally {
       setLoading(false);
@@ -180,7 +190,7 @@ function SignupContent() {
       <div className="flex flex-col justify-center items-center p-8">
         <div className="w-full max-w-md space-y-8">
           <div className="text-center">
-            <h2 className="text-3xl font-headline font-bold">Create Account</h2>
+            <h2 className="text-3xl font-headline font-bold text-white">Create Account</h2>
             <p className="text-muted-foreground mt-2">Join the world's most transparent funding firm</p>
           </div>
           
@@ -193,7 +203,7 @@ function SignupContent() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                className="h-11 bg-secondary/50"
+                className="h-11 bg-secondary/50 text-white"
               />
             </div>
             <div className="space-y-2">
@@ -201,11 +211,11 @@ function SignupContent() {
               <Input 
                 id="email" 
                 type="email" 
-                placeholder="trader@example.com" 
+                placeholder="trader@email.com" 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="h-11 bg-secondary/50"
+                className="h-11 bg-secondary/50 text-white"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -217,7 +227,7 @@ function SignupContent() {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   required
-                  className="h-11 bg-secondary/50"
+                  className="h-11 bg-secondary/50 text-white"
                 />
               </div>
               <div className="space-y-2">
@@ -228,7 +238,7 @@ function SignupContent() {
                   value={country}
                   onChange={(e) => setCountry(e.target.value)}
                   required
-                  className="h-11 bg-secondary/50"
+                  className="h-11 bg-secondary/50 text-white"
                 />
               </div>
             </div>
@@ -241,8 +251,9 @@ function SignupContent() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="h-11 bg-secondary/50"
+                className="h-11 bg-secondary/50 text-white"
               />
+              <p className="text-[10px] text-muted-foreground">Min. 8 characters</p>
             </div>
 
             <div className="space-y-2">
@@ -252,38 +263,22 @@ function SignupContent() {
                 {referralStatus === 'valid' && <CheckCircle2 className="w-3 h-3 text-accent" />}
                 {referralStatus === 'invalid' && <XCircle className="w-3 h-3 text-destructive" />}
               </Label>
-              <div className="relative">
-                <Input 
-                  id="referral" 
-                  placeholder="e.g. LAVANYA, NOMIS108" 
-                  value={referralInput}
-                  onChange={(e) => setReferralInput(e.target.value.toUpperCase())}
-                  readOnly={!!referralCodeFromUrl}
-                  className={cn(
-                    "h-11 bg-secondary/50 transition-all uppercase font-mono text-xs",
-                    referralStatus === 'valid' && "border-accent/50 focus-visible:ring-accent",
-                    referralStatus === 'invalid' && "border-destructive/50 focus-visible:ring-destructive"
-                  )}
-                />
-              </div>
-              <p className="text-[10px] text-muted-foreground px-1">
-                {referralStatus === 'valid' ? (
-                  <span className="text-accent flex items-center gap-1"><CheckCircle2 className="w-2.5 h-2.5" /> Referral code applied!</span>
-                ) : referralStatus === 'invalid' ? (
-                  <span className="text-destructive flex items-center gap-1"><AlertCircle className="w-2.5 h-2.5" /> Invalid referral code</span>
-                ) : (
-                  "Have a referral code? Enter it to support your referrer"
+              <Input 
+                id="referral" 
+                placeholder="e.g. LAVANYA" 
+                value={referralInput}
+                onChange={(e) => setReferralInput(e.target.value.toUpperCase())}
+                readOnly={!!referralCodeFromUrl}
+                className={cn(
+                  "h-11 bg-secondary/50 transition-all uppercase font-mono text-xs text-white",
+                  referralStatus === 'valid' && "border-accent/50",
+                  referralStatus === 'invalid' && "border-destructive/50"
                 )}
-              </p>
+              />
             </div>
 
-            <div className="flex items-center space-x-2 pt-2">
-              <input type="checkbox" id="terms" className="rounded border-border bg-secondary" required />
-              <label htmlFor="terms" className="text-[10px] text-muted-foreground">
-                I agree to the <Link href="#" className="text-primary underline">Terms of Service</Link> and <Link href="#" className="text-primary underline">Risk Disclosure</Link>.
-              </label>
-            </div>
-            <Button type="submit" className="w-full h-12 font-bold text-lg" disabled={loading}>
+            <Button type="submit" className="w-full h-12 font-bold text-lg cyan-box-glow" disabled={loading}>
+              {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}
               {loading ? 'Creating Account...' : 'Get Started'}
             </Button>
           </form>

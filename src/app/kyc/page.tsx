@@ -1,10 +1,11 @@
+
 "use client";
 
 import { useState } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ShieldCheck, Upload, CheckCircle2, Clock, Loader2 } from 'lucide-react';
+import { ShieldCheck, Upload, CheckCircle2, Clock, Loader2, FileText, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -17,12 +18,44 @@ export default function KYCPage() {
   const { user, userData } = useAuth();
   const [step, setStep] = useState(userData?.kycStatus === 'pending' || userData?.kycStatus === 'verified' ? 3 : 1);
   const [loading, setLoading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const { toast } = useToast();
 
-  const handleNext = () => setStep(s => s + 1);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validation
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+
+    if (file.size > maxSize) {
+      toast({
+        variant: "destructive",
+        title: "File Too Large",
+        description: "Max file size is 5MB.",
+      });
+      return;
+    }
+
+    if (!allowedTypes.includes(file.type)) {
+      toast({
+        variant: "destructive",
+        title: "Invalid File Type",
+        description: "Only PDF, JPG, and PNG are allowed.",
+      });
+      return;
+    }
+
+    setSelectedFile(file);
+    toast({ title: "File Selected", description: file.name });
+  };
 
   const handleSubmit = () => {
-    if (!user) return;
+    if (!user || !selectedFile) {
+      toast({ variant: "destructive", title: "Missing File", description: "Please upload your document first." });
+      return;
+    }
     setLoading(true);
     
     const userRef = doc(db, 'users', user.uid);
@@ -71,19 +104,35 @@ export default function KYCPage() {
             <StepIndicator currentStep={step} step={3} label="Confirmation" />
           </div>
 
-          <Card className="border-primary/20 bg-card/40 backdrop-blur-sm shadow-2xl">
+          <Card className="border-primary/20 bg-card/40 backdrop-blur-sm shadow-2xl overflow-hidden">
             {step === 1 && (
               <>
                 <CardHeader>
                   <CardTitle className="text-white text-xl">Step 1: Proof of Identity</CardTitle>
-                  <CardDescription>Upload a valid government-issued ID.</CardDescription>
+                  <CardDescription>Upload a valid government-issued ID (Passport or ID Card).</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="p-12 border-2 border-dashed border-border rounded-2xl flex flex-col items-center justify-center bg-background/30 hover:border-primary/50 transition-colors cursor-pointer group">
-                    <Upload className="w-12 h-12 text-muted-foreground mb-4 group-hover:text-primary transition-colors" />
-                    <p className="text-sm font-bold text-white">Click to upload or drag & drop</p>
+                  <div className="relative p-12 border-2 border-dashed border-border rounded-2xl flex flex-col items-center justify-center bg-background/30 hover:border-primary/50 transition-colors cursor-pointer group">
+                    <input 
+                      type="file" 
+                      accept=".pdf,.jpg,.jpeg,.png" 
+                      className="absolute inset-0 opacity-0 cursor-pointer" 
+                      onChange={handleFileChange}
+                    />
+                    {selectedFile ? (
+                      <div className="text-center">
+                        <FileText className="w-12 h-12 text-primary mb-4 mx-auto" />
+                        <p className="text-sm font-bold text-white truncate max-w-[200px]">{selectedFile.name}</p>
+                      </div>
+                    ) : (
+                      <>
+                        <Upload className="w-12 h-12 text-muted-foreground mb-4 group-hover:text-primary transition-colors" />
+                        <p className="text-sm font-bold text-white">Click to upload or drag & drop</p>
+                        <p className="text-xs text-muted-foreground mt-2">PDF, JPG, PNG (Max 5MB)</p>
+                      </>
+                    )}
                   </div>
-                  <Button className="w-full font-bold h-12 rounded-xl bg-primary hover:bg-primary/90 cursor-pointer" onClick={handleNext}>Next Step</Button>
+                  <Button className="w-full font-bold h-12 rounded-xl bg-primary hover:bg-primary/90 cursor-pointer" onClick={() => setStep(2)}>Next Step</Button>
                 </CardContent>
               </>
             )}
@@ -95,13 +144,28 @@ export default function KYCPage() {
                   <CardDescription>A utility bill or bank statement (last 3 months).</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="p-12 border-2 border-dashed border-border rounded-2xl flex flex-col items-center justify-center bg-background/30 hover:border-primary/50 transition-colors cursor-pointer group">
-                    <Upload className="w-12 h-12 text-muted-foreground mb-4 group-hover:text-primary transition-colors" />
-                    <p className="text-sm font-bold text-white">Upload proof of address</p>
+                  <div className="relative p-12 border-2 border-dashed border-border rounded-2xl flex flex-col items-center justify-center bg-background/30 hover:border-primary/50 transition-colors cursor-pointer group">
+                    <input 
+                      type="file" 
+                      accept=".pdf,.jpg,.jpeg,.png" 
+                      className="absolute inset-0 opacity-0 cursor-pointer" 
+                      onChange={handleFileChange}
+                    />
+                    {selectedFile ? (
+                      <div className="text-center">
+                        <FileText className="w-12 h-12 text-primary mb-4 mx-auto" />
+                        <p className="text-sm font-bold text-white truncate max-w-[200px]">{selectedFile.name}</p>
+                      </div>
+                    ) : (
+                      <>
+                        <Upload className="w-12 h-12 text-muted-foreground mb-4 group-hover:text-primary transition-colors" />
+                        <p className="text-sm font-bold text-white">Upload proof of address</p>
+                      </>
+                    )}
                   </div>
                   <div className="flex gap-4">
                     <Button variant="outline" className="flex-1 h-12 rounded-xl font-bold cursor-pointer" onClick={() => setStep(1)}>Back</Button>
-                    <Button className="flex-1 font-bold h-12 rounded-xl bg-primary hover:bg-primary/90 cursor-pointer" onClick={handleSubmit} disabled={loading}>
+                    <Button className="flex-1 font-bold h-12 rounded-xl bg-primary hover:bg-primary/90 cursor-pointer" onClick={handleSubmit} disabled={loading || !selectedFile}>
                       {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                       Submit for Review
                     </Button>
@@ -134,7 +198,7 @@ export default function KYCPage() {
                   </>
                 )}
                 <Button className="w-full h-14 rounded-xl font-bold text-lg cursor-pointer" asChild>
-                  <a href="/dashboard">Return to Dashboard</a>
+                  <Link href="/dashboard">Return to Dashboard</Link>
                 </Button>
               </CardContent>
             )}

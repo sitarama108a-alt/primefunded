@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Suspense, useState, useEffect } from 'react';
@@ -12,11 +13,18 @@ import { useAuth } from '@/context/AuthContext';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { Copy, CheckCircle2, AlertTriangle, QrCode, Wallet, Mail, Hash } from 'lucide-react';
+import { Copy, CheckCircle2, AlertTriangle, QrCode, Wallet, Mail, Hash, Loader2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { motion } from 'framer-motion';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
+import { sanitizeInput } from '@/lib/utils';
+import { z } from 'zod';
+
+const PaymentSchema = z.object({
+  email: z.string().email("Invalid email format"),
+  txHash: z.string().min(10, "Transaction hash is too short").max(100, "Transaction hash is too long"),
+});
 
 const cryptoWallets = [
   {
@@ -43,7 +51,7 @@ const cryptoWallets = [
 
 function PaymentContent() {
   const searchParams = useSearchParams();
-  const { user, userData } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
   
@@ -73,15 +81,29 @@ function PaymentContent() {
       toast({ variant: "destructive", title: "Authentication Required", description: "Please log in to purchase a challenge." });
       return;
     }
+
+    // Validation
+    const validation = PaymentSchema.safeParse({ email, txHash });
+    if (!validation.success) {
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: validation.error.errors[0].message,
+      });
+      return;
+    }
     
     setLoading(true);
+    const sanitizedEmail = sanitizeInput(email);
+    const sanitizedHash = sanitizeInput(txHash);
+
     const orderData = {
       userId: user.uid,
-      email: email,
+      email: sanitizedEmail,
       plan: getDisplayName(plan),
       size,
       price,
-      txHash,
+      txHash: sanitizedHash,
       status: 'pending',
       date: new Date().toISOString(),
       createdAt: serverTimestamp(),
@@ -127,16 +149,16 @@ function PaymentContent() {
         <div className="w-24 h-24 rounded-full bg-accent/20 flex items-center justify-center mb-8 cyan-box-glow">
           <CheckCircle2 className="text-accent w-12 h-12" />
         </div>
-        <h2 className="text-4xl font-headline font-bold mb-4">Verification Pending</h2>
+        <h2 className="text-4xl font-headline font-bold mb-4 text-white">Verification Pending</h2>
         <p className="text-muted-foreground text-lg mb-10 leading-relaxed">
           Thank you! We've received your transaction details. Our compliance team will verify your payment within 1-4 hours. 
           Your MT5 credentials will be emailed to <span className="text-primary font-bold">{email}</span> as soon as verification is complete.
         </p>
         <div className="flex gap-4">
-          <Button size="lg" className="h-14 px-8 rounded-xl font-bold" onClick={() => router.push('/dashboard')}>
+          <Button size="lg" className="h-14 px-8 rounded-xl font-bold cursor-pointer" onClick={() => router.push('/dashboard')}>
             Go to Dashboard
           </Button>
-          <Button variant="outline" size="lg" className="h-14 px-8 rounded-xl font-bold" onClick={() => router.push('/accounts')}>
+          <Button variant="outline" size="lg" className="h-14 px-8 rounded-xl font-bold cursor-pointer" onClick={() => router.push('/accounts')}>
             View Accounts
           </Button>
         </div>
@@ -148,11 +170,10 @@ function PaymentContent() {
     <div className="max-w-5xl mx-auto pb-20">
       <header className="mb-12 text-center">
         <Badge variant="outline" className="mb-4 border-primary/30 text-primary px-4 py-1">SECURE CHECKOUT</Badge>
-        <h1 className="text-4xl font-headline font-bold mb-2">Complete Your Purchase</h1>
+        <h1 className="text-4xl font-headline font-bold mb-2 text-white">Complete Your Purchase</h1>
         <p className="text-muted-foreground">You are purchasing a <span className="text-white font-bold">{size} {getDisplayName(plan)}</span> challenge for <span className="text-primary font-bold">{price}</span>.</p>
       </header>
 
-      {/* Warning Banner */}
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -162,20 +183,19 @@ function PaymentContent() {
         <div>
           <h4 className="text-destructive font-bold text-lg mb-1">WARNING: NETWORK ACCURACY REQUIRED</h4>
           <p className="text-destructive/80 text-sm leading-relaxed font-medium">
-            Send only to the correct network. Sending to the wrong network (e.g. USDT-ERC20 to a TRC20 address) will result in <span className="underline font-bold">PERMANENT LOSS</span> of funds. Always double-check both the address and the network before confirming your transfer.
+            Send only to the correct network. Sending to the wrong network will result in <span className="underline font-bold">PERMANENT LOSS</span> of funds.
           </p>
         </div>
       </motion.div>
 
       <div className="grid lg:grid-cols-3 gap-8">
-        {/* Payment Options */}
         <div className="lg:col-span-2 space-y-6">
           <div className="grid md:grid-cols-2 gap-6">
             {cryptoWallets.map((wallet) => (
               <Card key={wallet.network} className="bg-secondary/20 border-border/50 hover:border-primary/30 transition-all">
                 <CardHeader className="pb-4">
                   <div className="flex justify-between items-center">
-                    <CardTitle className="text-lg font-bold">{wallet.network}</CardTitle>
+                    <CardTitle className="text-lg font-bold text-white">{wallet.network}</CardTitle>
                     <Badge className="bg-primary/10 text-primary border-primary/20">{wallet.token}</Badge>
                   </div>
                 </CardHeader>
@@ -186,8 +206,8 @@ function PaymentContent() {
                   <div className="space-y-2">
                     <Label className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground">Wallet Address</Label>
                     <div className="flex gap-2">
-                      <Input readOnly value={wallet.address} className="bg-background/50 font-mono text-[10px] h-10 border-border" />
-                      <Button variant="secondary" size="icon" className="h-10 w-10 flex-shrink-0" onClick={() => copyToClipboard(wallet.address)}>
+                      <Input readOnly value={wallet.address} className="bg-background/50 font-mono text-[10px] h-10 border-border text-white" />
+                      <Button variant="secondary" size="icon" className="h-10 w-10 flex-shrink-0 cursor-pointer" onClick={() => copyToClipboard(wallet.address)}>
                         <Copy className="w-4 h-4" />
                       </Button>
                     </div>
@@ -198,20 +218,16 @@ function PaymentContent() {
           </div>
         </div>
 
-        {/* Verification Form */}
         <div className="space-y-6">
           <Card className="bg-card border-primary/20 shadow-2xl sticky top-24">
             <CardHeader>
-              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
-                <CheckCircle2 className="text-primary w-6 h-6" />
-              </div>
-              <CardTitle className="text-xl font-headline">Verify Payment</CardTitle>
-              <CardDescription>Submit your transaction details for instant approval.</CardDescription>
+              <CardTitle className="text-xl font-headline text-white">Verify Payment</CardTitle>
+              <CardDescription>Submit your transaction details for approval.</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="flex items-center gap-2">
+                  <Label htmlFor="email" className="flex items-center gap-2 text-white">
                     <Mail className="w-3 h-3 text-primary" /> Notification Email
                   </Label>
                   <Input 
@@ -221,51 +237,30 @@ function PaymentContent() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="bg-secondary/30 h-12 rounded-xl"
+                    className="bg-secondary/30 h-12 rounded-xl text-white"
                   />
-                  <p className="text-[10px] text-muted-foreground px-1">Credentials will be sent to this address.</p>
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="txHash" className="flex items-center gap-2">
+                  <Label htmlFor="txHash" className="flex items-center gap-2 text-white">
                     <Hash className="w-3 h-3 text-primary" /> Transaction Hash (TXID)
                   </Label>
                   <Input 
                     id="txHash" 
-                    placeholder="Paste your 64-character hash here..." 
+                    placeholder="Paste TXID here..." 
                     value={txHash}
                     onChange={(e) => setTxHash(e.target.value)}
                     required
-                    className="bg-secondary/30 h-12 rounded-xl font-mono text-xs"
+                    className="bg-secondary/30 h-12 rounded-xl font-mono text-xs text-white"
                   />
-                </div>
-
-                <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 space-y-3">
-                  <div className="flex items-start gap-3">
-                    <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-[10px] font-bold text-primary">1</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed">Admin verification usually takes 1-4 hours.</p>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-[10px] font-bold text-primary">2</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed">MT5 credentials will be generated and sent via email.</p>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-[10px] font-bold text-primary">3</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed">Access your trading terminal instantly upon approval.</p>
-                  </div>
                 </div>
 
                 <Button 
                   type="submit" 
-                  className="w-full h-14 font-bold text-lg rounded-xl cyan-box-glow hover:scale-[1.02] transition-all" 
+                  className="w-full h-14 font-bold text-lg rounded-xl cyan-box-glow cursor-pointer" 
                   disabled={loading || !txHash || !email}
                 >
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}
                   {loading ? 'Processing...' : 'Submit for Verification'}
                 </Button>
               </form>
@@ -282,12 +277,7 @@ export default function PaymentPage() {
     <div className="flex min-h-screen bg-background">
       <Navigation />
       <main className="flex-1 p-8">
-        <Suspense fallback={
-          <div className="flex flex-col items-center justify-center h-full gap-4">
-            <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-            <p className="text-muted-foreground font-medium">Securing payment gateway...</p>
-          </div>
-        }>
+        <Suspense fallback={<div className="flex items-center justify-center h-full"><Loader2 className="animate-spin" /></div>}>
           <PaymentContent />
         </Suspense>
       </main>

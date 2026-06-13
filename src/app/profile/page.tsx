@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -9,13 +10,20 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { User, Mail, Shield, CheckCircle2, Phone, Globe, Save, Copy } from 'lucide-react';
+import { User, Mail, Shield, CheckCircle2, Phone, Globe, Save, Copy, Loader2 } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
-import { cn } from '@/lib/utils';
+import { cn, sanitizeInput } from '@/lib/utils';
+import { z } from 'zod';
+
+const ProfileSchema = z.object({
+  name: z.string().min(2, "Name is too short").max(100, "Name must be under 100 characters"),
+  phone: z.string().min(5, "Phone number is too short").max(20, "Phone number is too long"),
+  country: z.string().min(2, "Country is required"),
+});
 
 export default function ProfilePage() {
   const { user, userData } = useAuth();
@@ -40,14 +48,34 @@ export default function ProfilePage() {
 
   const handleSave = () => {
     if (!user) return;
+    
+    // Validation
+    const validation = ProfileSchema.safeParse(formData);
+    if (!validation.success) {
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: validation.error.errors[0].message,
+      });
+      return;
+    }
+
     setLoading(true);
     
-    const userRef = doc(db, 'users', user.uid);
     const updates = {
-      ...formData
+      name: sanitizeInput(formData.name),
+      phone: sanitizeInput(formData.phone),
+      country: sanitizeInput(formData.country),
     };
 
+    const userRef = doc(db, 'users', user.uid);
     updateDoc(userRef, updates)
+      .then(() => {
+        toast({
+          title: "Profile Updated",
+          description: "Your personal details have been saved successfully.",
+        });
+      })
       .catch(async (err) => {
         const permissionError = new FirestorePermissionError({
           path: userRef.path,
@@ -55,13 +83,10 @@ export default function ProfilePage() {
           requestResourceData: updates
         } satisfies SecurityRuleContext);
         errorEmitter.emit('permission-error', permissionError);
+      })
+      .finally(() => {
+        setLoading(false);
       });
-
-    toast({
-      title: "Profile Updated",
-      description: "Your personal details have been saved successfully.",
-    });
-    setLoading(false);
   };
 
   const copyTraderId = () => {
@@ -86,7 +111,7 @@ export default function ProfilePage() {
               <CardContent className="pt-10 flex flex-col items-center text-center">
                 <Avatar className="w-32 h-32 mb-6 border-4 border-primary/20 shadow-[0_0_30px_rgba(17,179,245,0.15)]">
                   <AvatarImage src={`https://picsum.photos/seed/${user?.uid}/200`} />
-                  <AvatarFallback className="text-4xl bg-secondary">{userData?.name?.[0] || 'T'}</AvatarFallback>
+                  <AvatarFallback className="text-4xl bg-secondary text-white">{userData?.name?.[0] || 'T'}</AvatarFallback>
                 </Avatar>
                 <h2 className="text-2xl font-headline font-bold mb-1 text-white">{userData?.name || 'Trader'}</h2>
                 <p className="text-sm text-muted-foreground mb-4">{userData?.email}</p>
@@ -114,7 +139,6 @@ export default function ProfilePage() {
                     </Badge>
                   )}
                 </div>
-                <Button variant="outline" className="w-full border-border/50 hover:bg-secondary cursor-pointer">Update Photo</Button>
               </CardContent>
             </Card>
 
@@ -151,14 +175,15 @@ export default function ProfilePage() {
                     <Input 
                       value={formData.name} 
                       onChange={(e) => setFormData({...formData, name: e.target.value})}
-                      className="bg-secondary/30 h-11 text-white"
+                      className="bg-secondary/30 h-11 text-white border-border/50"
+                      maxLength={100}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
                       <Mail className="w-3.5 h-3.5 text-primary" /> Email Address
                     </Label>
-                    <Input value={userData?.email || ''} disabled className="bg-secondary/10 text-muted-foreground cursor-not-allowed" />
+                    <Input value={userData?.email || ''} disabled className="bg-secondary/10 text-muted-foreground cursor-not-allowed border-border/50" />
                   </div>
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
@@ -168,7 +193,8 @@ export default function ProfilePage() {
                       placeholder="+1 (555) 000-0000" 
                       value={formData.phone}
                       onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                      className="bg-secondary/30 h-11 text-white"
+                      className="bg-secondary/30 h-11 text-white border-border/50"
+                      maxLength={20}
                     />
                   </div>
                   <div className="space-y-2">
@@ -179,18 +205,18 @@ export default function ProfilePage() {
                       placeholder="United Kingdom" 
                       value={formData.country}
                       onChange={(e) => setFormData({...formData, country: e.target.value})}
-                      className="bg-secondary/30 h-11 text-white"
+                      className="bg-secondary/30 h-11 text-white border-border/50"
                     />
                   </div>
                 </div>
 
                 <div className="pt-8 border-t border-border/50">
                   <Button 
-                    className="font-bold px-10 h-12 rounded-xl cyan-box-glow hover:scale-[1.02] transition-all cursor-pointer"
+                    className="font-bold px-10 h-12 rounded-xl cyan-box-glow transition-all cursor-pointer"
                     onClick={handleSave}
                     disabled={loading}
                   >
-                    <Save className="w-4 h-4 mr-2" />
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
                     {loading ? 'Saving Changes...' : 'Save All Changes'}
                   </Button>
                 </div>

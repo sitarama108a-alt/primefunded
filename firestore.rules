@@ -17,9 +17,17 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Input validation function: ensures incoming data is not empty
-    function validateInput(data) {
-      return data != null && data.size() > 0;
+    // Input validation: ensures incoming data is non-null and meets basic schema requirements
+    function validateUser(data) {
+      return data.name.size() <= 100 
+        && data.email.matches('^.+@.+\\..+$')
+        && (data.phone == null || data.phone.size() <= 20);
+    }
+
+    function validateOrder(data) {
+      return data.userId == request.auth.uid 
+        && data.txHash.size() >= 10
+        && data.email.matches('^.+@.+\\..+$');
     }
 
     // --- Collection Rules ---
@@ -27,7 +35,7 @@ service cloud.firestore {
     // Users: Users can only read/write their own profile and sub-collections
     match /users/{userId} {
       allow read: if isOwner(userId);
-      allow write: if isOwner(userId) && validateInput(request.resource.data);
+      allow write: if isOwner(userId) && validateUser(request.resource.data);
       
       match /notifications/{notifId} {
         allow read, write: if isOwner(userId);
@@ -47,14 +55,14 @@ service cloud.firestore {
     // Orders: Users can read their own orders and create new ones; only admins can verify/update
     match /orders/{orderId} {
       allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid);
-      allow create: if isSignedIn() && validateInput(request.resource.data);
+      allow create: if isSignedIn() && validateOrder(request.resource.data);
       allow update, delete: if isAdmin();
     }
 
     // Payouts: Users can read/write their own withdrawal requests
     match /payouts/{payoutId} {
       allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid);
-      allow write: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid) && (request.resource == null || request.resource.data.userId == request.auth.uid);
+      allow write: if isSignedIn() && (request.resource.data.userId == request.auth.uid);
     }
 
     // Admin: Entirely restricted to administrative users
@@ -76,7 +84,7 @@ service cloud.firestore {
 
     match /referralCodes/{codeId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && validateInput(request.resource.data);
+      allow write: if isSignedIn();
     }
 
     // --- Global Deny ---
