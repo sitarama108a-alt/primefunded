@@ -38,10 +38,19 @@ import {
   AlertTriangle,
   Fingerprint,
   TrendingUp,
-  Edit2
+  Edit2,
+  MoreVertical,
+  Gift,
+  Ban,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  LayoutDashboard
 } from 'lucide-react';
 import { useFirestore, useCollection } from '@/firebase';
 import { doc, updateDoc, deleteDoc, setDoc, serverTimestamp, getDoc, addDoc, collection } from 'firebase/firestore';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import DashboardPage from '@/app/dashboard/page';
 
 const ADMIN_PASSWORD = "93463962569392846256";
 
@@ -50,14 +59,17 @@ export default function AdminPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [previewUserId, setPreviewUserId] = useState<string | null>(null);
   const { toast } = useToast();
   const db = useFirestore();
 
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [isManageAccountOpen, setIsManageAccountOpen] = useState(false);
+  const [isGrantFreeOpen, setIsGrantFreeOpen] = useState(false);
+  
   const [provisionPlan, setProvisionPlan] = useState('1-Step Pro');
   const [provisionSize, setProvisionSize] = useState('$100,000');
-  const [isProvisioning, setIsProvisioning] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   const emptyConstraints = useMemo(() => [], []);
   const { data: orders } = useCollection<any>('orders', emptyConstraints);
@@ -76,6 +88,13 @@ export default function AdminPage() {
       t.referralCode?.toLowerCase().includes(lower)
     );
   }, [traders, searchTerm]);
+
+  const kycStats = useMemo(() => {
+    const pending = traders.filter(t => t.kycStatus === 'pending').length;
+    const verified = traders.filter(t => t.kycVerified === true).length;
+    const rejected = traders.filter(t => t.kycStatus === 'rejected').length;
+    return { pending, verified, rejected };
+  }, [traders]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,7 +122,7 @@ export default function AdminPage() {
         size: order.size,
         mt5Login: login,
         mt5Password: password,
-        mt5Server: "PrimeFunded-Demo",
+        mt5Server: "PrimeFunded-Live",
         balance: parseFloat(order.size.replace('$', '').replace(',', '').replace('k', '000')),
         status: "active",
         startDate: new Date().toISOString(),
@@ -113,9 +132,6 @@ export default function AdminPage() {
       await setDoc(doc(db, 'accounts', accountId), accountData);
       
       const userRef = doc(db, 'users', order.userId);
-      const userSnap = await getDoc(userRef);
-      const userData = userSnap.data();
-
       await updateDoc(userRef, {
         plan: order.plan,
         accountSize: order.size,
@@ -123,9 +139,10 @@ export default function AdminPage() {
       });
 
       // Handle Referral Commission
+      const userSnap = await getDoc(userRef);
+      const userData = userSnap.data();
       if (userData?.referredBy) {
         const priceNum = parseFloat(order.price.replace('$', '').replace(',', ''));
-        // 10% commission capped at $50
         const commission = Math.min(priceNum * 0.10, 50);
         
         await addDoc(collection(db, 'referrals'), {
@@ -138,7 +155,6 @@ export default function AdminPage() {
           status: 'pending',
           createdAt: serverTimestamp()
         });
-        toast({ title: "Referral Commission Generated", description: `$${commission.toFixed(2)} added to referrer (Capped at $50).` });
       }
 
       toast({ title: "Order Verified", description: `Account created for ${order.email}` });
@@ -147,13 +163,57 @@ export default function AdminPage() {
     }
   };
 
-  const handleResetLimit = async (userId: string) => {
+  const handleGrantFreeAccess = async () => {
+    if (!selectedUser) return;
     try {
-      await updateDoc(doc(db, 'users', userId), { codeChangesCount: 0 });
-      toast({ title: "Limit Reset", description: "Referral code change limit reset to 0." });
+      const accountId = Math.random().toString(36).substring(7).toUpperCase();
+      const login = Math.floor(1000000 + Math.random() * 9000000).toString();
+      const password = Math.random().toString(36).substring(2, 12);
+      
+      const accountData = {
+        userId: selectedUser.id,
+        email: selectedUser.email,
+        plan: provisionPlan,
+        size: provisionSize,
+        mt5Login: login,
+        mt5Password: password,
+        mt5Server: "PrimeFunded-Live",
+        balance: parseFloat(provisionSize.replace('$', '').replace(',', '').replace('k', '000')),
+        status: "active",
+        startDate: new Date().toISOString(),
+        paymentStatus: "free_grant",
+        grantedBy: "admin",
+        createdAt: serverTimestamp(),
+      };
+
+      await setDoc(doc(db, 'accounts', accountId), accountData);
+      toast({ title: "Free Challenge Granted", description: `Account ${login} provisioned for ${selectedUser.email}` });
+      setIsGrantFreeOpen(false);
     } catch (err) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to reset limit." });
+      toast({ variant: "destructive", title: "Error", description: "Failed to grant access." });
     }
+  };
+
+  const handleUpdateKyc = async (userId: string, status: 'verified' | 'rejected', reason?: string) => {
+    try {
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, {
+        kycVerified: status === 'verified',
+        kycStatus: status,
+        kycRejectionReason: reason || null,
+        kycVerifiedAt: status === 'verified' ? serverTimestamp() : null
+      });
+      toast({ title: `KYC ${status === 'verified' ? 'Approved' : 'Rejected'}` });
+      setIsManageAccountOpen(false);
+    } catch (err) {
+      toast({ variant: "destructive", title: "Update Failed" });
+    }
+  };
+
+  const handleToggleUserStatus = async (userId: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'suspended' ? 'active' : 'suspended';
+    await updateDoc(doc(db, 'users', userId), { status: newStatus });
+    toast({ title: `User ${newStatus}` });
   };
 
   const handleUpdateReferral = async (id: string, status: string) => {
@@ -161,6 +221,30 @@ export default function AdminPage() {
     await updateDoc(refDoc, { status });
     toast({ title: `Referral marked as ${status}` });
   };
+
+  if (previewUserId) {
+    return (
+      <div className="min-h-screen bg-background relative">
+        <div className="fixed top-0 left-0 w-full z-[100] bg-primary h-12 flex items-center justify-between px-6 shadow-lg">
+          <div className="flex items-center gap-2">
+            <LayoutDashboard className="w-4 h-4 text-primary-foreground" />
+            <span className="text-xs font-black uppercase tracking-widest text-primary-foreground">Admin View Mode: Previewing {previewUserId}</span>
+          </div>
+          <Button 
+            variant="secondary" 
+            size="sm" 
+            className="h-8 text-xs font-bold" 
+            onClick={() => setPreviewUserId(null)}
+          >
+            <ChevronLeft className="w-3 h-3 mr-1" /> Back to Admin
+          </Button>
+        </div>
+        <div className="pt-12">
+          <DashboardPage adminViewMode={true} targetUid={previewUserId} />
+        </div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
@@ -189,12 +273,13 @@ export default function AdminPage() {
   return (
     <div className="flex min-h-screen bg-background">
       <Navigation />
-      <main className="flex-1 p-8">
+      <main className="flex-1 p-8 overflow-y-auto">
         <Tabs defaultValue="overview" className="space-y-8">
-          <TabsList className="bg-secondary/50 p-1 h-12 w-full justify-start rounded-xl">
+          <TabsList className="bg-secondary/50 p-1 h-12 w-full justify-start rounded-xl overflow-x-auto">
             <TabsTrigger value="overview"><Activity className="w-4 h-4 mr-2" /> Overview</TabsTrigger>
             <TabsTrigger value="orders"><ShoppingCart className="w-4 h-4 mr-2" /> Orders</TabsTrigger>
             <TabsTrigger value="users"><Users className="w-4 h-4 mr-2" /> Users</TabsTrigger>
+            <TabsTrigger value="kyc"><Fingerprint className="w-4 h-4 mr-2" /> KYC</TabsTrigger>
             <TabsTrigger value="referrals"><TrendingUp className="w-4 h-4 mr-2" /> Referrals</TabsTrigger>
             <TabsTrigger value="payouts"><Wallet className="w-4 h-4 mr-2" /> Payouts</TabsTrigger>
           </TabsList>
@@ -202,7 +287,7 @@ export default function AdminPage() {
           <TabsContent value="overview">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <StatCard title="Traders" value={traders.length} icon={<Users />} />
-              <StatCard title="Verified Orders" value={orders.filter(o => o.status === 'verified').length} icon={<ShoppingCart />} />
+              <StatCard title="Pending KYC" value={kycStats.pending} icon={<Fingerprint className="text-amber-500" />} />
               <StatCard title="Pending Payouts" value={payouts?.filter(p => p.status === 'pending').length} icon={<Wallet />} />
               <StatCard title="Total Referral Owed" value={`$${referrals?.filter(r => r.status === 'pending').reduce((acc, r) => acc + (r.amount || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`} icon={<TrendingUp />} />
             </div>
@@ -236,56 +321,20 @@ export default function AdminPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-secondary/30">
-                      <th className="py-4 px-4 text-left">Customer</th>
-                      <th className="py-4 px-4 text-left">Plan</th>
-                      <th className="py-4 px-4 text-left">Status</th>
-                      <th className="py-4 px-4 text-right">Actions</th>
+                      <th className="py-4 px-4 text-left uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Customer</th>
+                      <th className="py-4 px-4 text-left uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Plan</th>
+                      <th className="py-4 px-4 text-left uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Status</th>
+                      <th className="py-4 px-4 text-right uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {orders.map((o) => (
                       <tr key={o.id} className="border-b hover:bg-secondary/10">
                         <td className="py-4 px-4">{o.email}</td>
-                        <td className="py-4 px-4">{o.plan} - {o.size}</td>
-                        <td className="py-4 px-4"><Badge>{o.status}</Badge></td>
+                        <td className="py-4 px-4 font-bold">{o.plan} - {o.size}</td>
+                        <td className="py-4 px-4"><Badge variant={o.status === 'verified' ? 'default' : 'outline'}>{o.status}</Badge></td>
                         <td className="py-4 px-4 text-right">
                           {o.status === 'pending' && <Button size="sm" onClick={() => handleVerifyOrder(o)}>Verify</Button>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="referrals">
-            <Card className="bg-card/40">
-              <CardHeader>
-                <CardTitle>Referral Commissions</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-secondary/30">
-                      <th className="py-4 px-4 text-left">Referrer UID</th>
-                      <th className="py-4 px-4 text-left">Referred User</th>
-                      <th className="py-4 px-4 text-left">Commission</th>
-                      <th className="py-4 px-4 text-left">Status</th>
-                      <th className="py-4 px-4 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {referrals.map((r) => (
-                      <tr key={r.id} className="border-b hover:bg-secondary/10">
-                        <td className="py-4 px-4 font-mono">{r.referrerId.substring(0, 8)}...</td>
-                        <td className="py-4 px-4">{r.referredUserEmail}</td>
-                        <td className="py-4 px-4 text-accent font-bold">${r.amount.toFixed(2)}</td>
-                        <td className="py-4 px-4"><Badge variant="outline">{r.status}</Badge></td>
-                        <td className="py-4 px-4 text-right">
-                          {r.status === 'pending' && (
-                            <Button size="sm" className="bg-accent" onClick={() => handleUpdateReferral(r.id, 'paid')}>Mark Paid</Button>
-                          )}
                         </td>
                       </tr>
                     ))}
@@ -303,39 +352,159 @@ export default function AdminPage() {
                 </div>
               </CardHeader>
               <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-secondary/30">
+                        <th className="py-4 px-4 text-left uppercase text-[10px] font-bold tracking-widest text-muted-foreground">ID / Code</th>
+                        <th className="py-4 px-4 text-left uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Name</th>
+                        <th className="py-4 px-4 text-left uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Email / Phone</th>
+                        <th className="py-4 px-4 text-left uppercase text-[10px] font-bold tracking-widest text-muted-foreground">KYC / Account</th>
+                        <th className="py-4 px-4 text-left uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Changes</th>
+                        <th className="py-4 px-4 text-right uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredTraders.map((t) => (
+                        <tr key={t.id} className="border-b hover:bg-secondary/10 transition-colors">
+                          <td className="py-4 px-4">
+                            <div className="flex flex-col">
+                              <span className="font-mono text-xs font-bold">{t.traderId}</span>
+                              <span className="text-[10px] text-primary font-bold">{t.referralCode}</span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4 font-bold">{t.name}</td>
+                          <td className="py-4 px-4">
+                            <div className="flex flex-col">
+                              <span>{t.email}</span>
+                              <span className="text-xs text-muted-foreground">{t.phone || 'No phone'}</span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4">
+                            <div className="flex gap-1.5">
+                              {t.kycVerified ? (
+                                <Badge className="bg-accent text-[9px] h-5">KYC ✅</Badge>
+                              ) : t.kycStatus === 'pending' ? (
+                                <Badge variant="outline" className="border-amber-500 text-amber-500 text-[9px] h-5">KYC ⏳</Badge>
+                              ) : (
+                                <Badge variant="secondary" className="text-[9px] h-5">KYC ❌</Badge>
+                              )}
+                              <Badge variant={t.status === 'suspended' ? 'destructive' : 'outline'} className="text-[9px] h-5">
+                                {t.status === 'suspended' ? 'SUSPENDED' : 'ACTIVE'}
+                              </Badge>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4">
+                            <Badge variant="secondary">{t.codeChangesCount || 0} / 3</Badge>
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-56">
+                                <DropdownMenuLabel>User Actions</DropdownMenuLabel>
+                                <DropdownMenuItem onClick={() => { setSelectedUser(t); setIsManageAccountOpen(true); }}>
+                                  <User className="w-4 h-4 mr-2" /> Manage Account
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setPreviewUserId(t.id)}>
+                                  <LayoutDashboard className="w-4 h-4 mr-2" /> View Dashboard
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => { setSelectedUser(t); setIsGrantFreeOpen(true); }}>
+                                  <Gift className="w-4 h-4 mr-2" /> Give Free Account
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="text-destructive" onClick={() => handleToggleUserStatus(t.id, t.status)}>
+                                  <Ban className="w-4 h-4 mr-2" /> {t.status === 'suspended' ? 'Reactivate' : 'Suspend Account'}
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="kyc">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <StatCard title="Pending Review" value={kycStats.pending} icon={<Clock className="text-amber-500" />} />
+              <StatCard title="Verified Users" value={kycStats.verified} icon={<CheckCircle2 className="text-accent" />} />
+              <StatCard title="Rejected" value={kycStats.rejected} icon={<XCircle className="text-destructive" />} />
+            </div>
+
+            <Card className="bg-card/40">
+              <CardHeader>
+                <CardTitle>KYC Submissions</CardTitle>
+                <CardDescription>Review and verify user identity documents.</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-secondary/30">
-                      <th className="py-4 px-4 text-left">ID / Code</th>
-                      <th className="py-4 px-4 text-left">Name</th>
-                      <th className="py-4 px-4 text-left">Email</th>
-                      <th className="py-4 px-4 text-left">Changes</th>
-                      <th className="py-4 px-4 text-right">Actions</th>
+                      <th className="py-4 px-4 text-left uppercase text-[10px] font-bold tracking-widest text-muted-foreground">User</th>
+                      <th className="py-4 px-4 text-left uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Status</th>
+                      <th className="py-4 px-4 text-left uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Submitted</th>
+                      <th className="py-4 px-4 text-right uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredTraders.map((t) => (
-                      <tr key={t.id} className="border-b">
+                    {traders.filter(t => t.kycStatus === 'pending').map((t) => (
+                      <tr key={t.id} className="border-b hover:bg-secondary/10">
                         <td className="py-4 px-4">
                           <div className="flex flex-col">
-                            <span className="font-mono text-xs font-bold">{t.traderId}</span>
-                            <span className="text-[10px] text-primary font-bold">{t.referralCode}</span>
+                            <span className="font-bold">{t.name}</span>
+                            <span className="text-xs text-muted-foreground">{t.email}</span>
                           </div>
                         </td>
-                        <td className="py-4 px-4 font-bold">{t.name}</td>
-                        <td className="py-4 px-4">{t.email}</td>
-                        <td className="py-4 px-4">
-                          <Badge variant="secondary">{t.codeChangesCount || 0} / 3</Badge>
-                        </td>
+                        <td className="py-4 px-4"><Badge variant="outline" className="border-amber-500 text-amber-500">PENDING</Badge></td>
+                        <td className="py-4 px-4 text-xs text-muted-foreground">{t.kycSubmittedAt ? new Date(t.kycSubmittedAt).toLocaleDateString() : 'N/A'}</td>
                         <td className="py-4 px-4 text-right">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => handleResetLimit(t.id)}
-                            title="Reset Code Change Limit"
-                          >
-                            <RefreshCw className="w-4 h-4" />
-                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => { setSelectedUser(t); setIsManageAccountOpen(true); }}>View & Verify</Button>
+                        </td>
+                      </tr>
+                    ))}
+                    {traders.filter(t => t.kycStatus === 'pending').length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="py-20 text-center text-muted-foreground italic">No pending KYC submissions.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="referrals">
+            <Card className="bg-card/40">
+              <CardHeader>
+                <CardTitle>Referral Commissions</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-secondary/30">
+                      <th className="py-4 px-4 text-left uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Referrer UID</th>
+                      <th className="py-4 px-4 text-left uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Referred User</th>
+                      <th className="py-4 px-4 text-left uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Commission</th>
+                      <th className="py-4 px-4 text-left uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Status</th>
+                      <th className="py-4 px-4 text-right uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {referrals.map((r) => (
+                      <tr key={r.id} className="border-b hover:bg-secondary/10">
+                        <td className="py-4 px-4 font-mono">{r.referrerId.substring(0, 8)}...</td>
+                        <td className="py-4 px-4">{r.referredUserEmail}</td>
+                        <td className="py-4 px-4 text-accent font-bold">${r.amount.toFixed(2)}</td>
+                        <td className="py-4 px-4"><Badge variant={r.status === 'paid' ? 'default' : 'outline'}>{r.status}</Badge></td>
+                        <td className="py-4 px-4 text-right">
+                          {r.status === 'pending' && (
+                            <Button size="sm" className="bg-accent" onClick={() => handleUpdateReferral(r.id, 'paid')}>Mark Paid</Button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -351,18 +520,18 @@ export default function AdminPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-secondary/30">
-                      <th className="py-4 px-4 text-left">Trader</th>
-                      <th className="py-4 px-4 text-left">Amount</th>
-                      <th className="py-4 px-4 text-left">Status</th>
-                      <th className="py-4 px-4 text-right">Action</th>
+                      <th className="py-4 px-4 text-left uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Trader</th>
+                      <th className="py-4 px-4 text-left uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Amount</th>
+                      <th className="py-4 px-4 text-left uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Status</th>
+                      <th className="py-4 px-4 text-right uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {payouts?.map((p) => (
-                      <tr key={p.id} className="border-b">
+                      <tr key={p.id} className="border-b hover:bg-secondary/10">
                         <td className="py-4 px-4">{p.email}</td>
                         <td className="py-4 px-4 font-bold">${p.amount}</td>
-                        <td className="py-4 px-4"><Badge>{p.status}</Badge></td>
+                        <td className="py-4 px-4"><Badge variant={p.status === 'done' ? 'default' : 'outline'}>{p.status}</Badge></td>
                         <td className="py-4 px-4 text-right">
                           {p.status === 'pending' && (
                             <Button size="sm" onClick={() => updateDoc(doc(db, 'payouts', p.id), { status: 'approved' })}>Approve</Button>
@@ -376,6 +545,169 @@ export default function AdminPage() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Manage Account Dialog */}
+        <Dialog open={isManageAccountOpen} onOpenChange={setIsManageAccountOpen}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-card border-primary/20">
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-headline flex items-center gap-2">
+                <User className="w-6 h-6 text-primary" /> Manage User Account
+              </DialogTitle>
+              <DialogDescription>
+                Detailed overview and administrative controls for {selectedUser?.name}.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid md:grid-cols-2 gap-8 py-4">
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                    <User className="w-3.5 h-3.5" /> Personal Info
+                  </h4>
+                  <div className="grid grid-cols-2 gap-4 p-4 rounded-xl bg-secondary/30 border border-white/5">
+                    <DetailBox label="Full Name" value={selectedUser?.name} />
+                    <DetailBox label="Email" value={selectedUser?.email} />
+                    <DetailBox label="Phone" value={selectedUser?.phone || 'N/A'} />
+                    <DetailBox label="Country" value={selectedUser?.country || 'N/A'} />
+                    <DetailBox label="UID" value={selectedUser?.traderId} />
+                    <DetailBox label="Referral Code" value={selectedUser?.referralCode} />
+                    <DetailBox label="Joined" value={selectedUser?.joinDate ? new Date(selectedUser.joinDate).toLocaleDateString() : 'N/A'} />
+                    <DetailBox label="Account Status" value={selectedUser?.status?.toUpperCase()} color={selectedUser?.status === 'suspended' ? 'text-destructive' : 'text-accent'} />
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                    <Fingerprint className="w-3.5 h-3.5" /> KYC Status
+                  </h4>
+                  <div className="p-4 rounded-xl bg-secondary/30 border border-white/5 space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Current Status:</span>
+                      <Badge variant={selectedUser?.kycVerified ? 'default' : 'outline'} className={selectedUser?.kycVerified ? 'bg-accent text-accent-foreground' : 'text-amber-500 border-amber-500'}>
+                        {selectedUser?.kycVerified ? 'VERIFIED' : selectedUser?.kycStatus?.toUpperCase() || 'NOT SUBMITTED'}
+                      </Badge>
+                    </div>
+                    {selectedUser?.kycStatus === 'pending' && (
+                      <div className="pt-4 border-t border-white/5 space-y-4">
+                        <div className="space-y-2">
+                          <Label>Rejection Reason (Optional)</Label>
+                          <Input 
+                            placeholder="e.g. ID blurry, wrong document type..." 
+                            value={rejectionReason}
+                            onChange={(e) => setRejectionReason(e.target.value)}
+                            className="bg-background/50"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button className="flex-1 bg-accent text-accent-foreground" onClick={() => handleUpdateKyc(selectedUser.id, 'verified')}>Approve KYC</Button>
+                          <Button variant="destructive" className="flex-1" onClick={() => handleUpdateKyc(selectedUser.id, 'rejected', rejectionReason)}>Reject KYC</Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                    <Activity className="w-3.5 h-3.5" /> Account Access & Trading
+                  </h4>
+                  <div className="p-4 rounded-xl bg-secondary/30 border border-white/5 space-y-4">
+                    <div className="flex flex-col gap-2">
+                      <Button 
+                        variant="secondary" 
+                        className="w-full justify-start" 
+                        onClick={() => setPreviewUserId(selectedUser.id)}
+                      >
+                        <LayoutDashboard className="w-4 h-4 mr-2" /> View Dashboard (Admin View)
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        className="w-full justify-start text-destructive hover:text-destructive"
+                        onClick={() => handleToggleUserStatus(selectedUser.id, selectedUser.status)}
+                      >
+                        <Ban className="w-4 h-4 mr-2" /> {selectedUser?.status === 'suspended' ? 'Reactivate Account' : 'Suspend Account'}
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        className="w-full justify-start"
+                        onClick={() => { setIsManageAccountOpen(false); setIsGrantFreeOpen(true); }}
+                      >
+                        <Gift className="w-4 h-4 mr-2" /> Give Free Challenge Access
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                    <TrendingUp className="w-3.5 h-3.5" /> Referral Info
+                  </h4>
+                  <div className="p-4 rounded-xl bg-secondary/30 border border-white/5 grid grid-cols-2 gap-4">
+                    <DetailBox label="Referred By" value={selectedUser?.referredBy || 'Organic'} />
+                    <DetailBox label="Referral Count" value={referrals?.filter(r => r.referrerId === selectedUser?.id).length || 0} />
+                    <DetailBox label="Total Earnings" value={`$${referrals?.filter(r => r.referrerId === selectedUser?.id).reduce((acc, r) => acc + (r.amount || 0), 0).toFixed(2)}`} />
+                    <DetailBox label="Code Changes" value={`${selectedUser?.codeChangesCount || 0} / 3`} />
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <DialogFooter>
+              <Button variant="secondary" onClick={() => setIsManageAccountOpen(false)}>Close Manager</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Grant Free Account Dialog */}
+        <Dialog open={isGrantFreeOpen} onOpenChange={setIsGrantFreeOpen}>
+          <DialogContent className="bg-card border-primary/20">
+            <DialogHeader>
+              <DialogTitle>Grant Free Challenge Access</DialogTitle>
+              <DialogDescription>
+                Provision a free trading challenge for {selectedUser?.name}. This will bypass payment verification.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Challenge Plan</Label>
+                <Select value={provisionPlan} onValueChange={setProvisionPlan}>
+                  <SelectTrigger className="bg-background/50">
+                    <SelectValue placeholder="Select Plan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1-Step Pro">1-Step Pro</SelectItem>
+                    <SelectItem value="2-Step Classic">2-Step Classic</SelectItem>
+                    <SelectItem value="3-Step Classic">3-Step Classic</SelectItem>
+                    <SelectItem value="Instant Funding">Instant Funding</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Account Size</Label>
+                <Select value={provisionSize} onValueChange={setProvisionSize}>
+                  <SelectTrigger className="bg-background/50">
+                    <SelectValue placeholder="Select Size" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="$5,000">$5,000</SelectItem>
+                    <SelectItem value="$10,000">$10,000</SelectItem>
+                    <SelectItem value="$25,000">$25,000</SelectItem>
+                    <SelectItem value="$50,000">$50,000</SelectItem>
+                    <SelectItem value="$100,000">$100,000</SelectItem>
+                    <SelectItem value="$200,000">$200,000</SelectItem>
+                    <SelectItem value="$300,000">$300,000</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsGrantFreeOpen(false)}>Cancel</Button>
+              <Button onClick={handleGrantFreeAccess}>Grant Free Access</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );
@@ -383,12 +715,40 @@ export default function AdminPage() {
 
 function StatCard({ title, value, icon }: { title: string, value: any, icon: any }) {
   return (
-    <Card className="p-6 bg-secondary/30">
+    <Card className="p-6 bg-secondary/30 group hover:border-primary/50 transition-colors">
       <div className="flex justify-between items-center mb-4">
-        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{title}</p>
-        <div className="text-primary">{icon}</div>
+        <p className="text-xs font-black uppercase tracking-widest text-muted-foreground group-hover:text-primary transition-colors">{title}</p>
+        <div className="text-primary group-hover:scale-110 transition-transform">{icon}</div>
       </div>
-      <p className="text-3xl font-bold">{value}</p>
+      <p className="text-3xl font-bold font-headline tabular-nums">{value}</p>
     </Card>
   );
+}
+
+function DetailBox({ label, value, color }: { label: string, value: any, color?: string }) {
+  return (
+    <div className="space-y-1">
+      <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">{label}</p>
+      <p className={cn("text-sm font-bold truncate", color || "text-foreground")}>{value || 'N/A'}</p>
+    </div>
+  );
+}
+
+function ChevronLeft(props: any) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m15 18-6-6 6-6" />
+    </svg>
+  )
 }

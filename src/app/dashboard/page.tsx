@@ -19,7 +19,8 @@ import {
   BarChart3,
   User,
   Copy,
-  Check
+  Check,
+  ShieldAlert
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -27,12 +28,26 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { aiComplianceMonitorAlerts } from '@/ai/flows/ai-compliance-monitor-alerts';
-import { useFirestore, useCollection } from '@/firebase';
+import { useFirestore, useCollection, useDoc } from '@/firebase';
 import { where, doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 
-export default function DashboardPage() {
-  const { user, userData, loading: authLoading } = useAuth();
+interface DashboardPageProps {
+  adminViewMode?: boolean;
+  targetUid?: string;
+}
+
+export default function DashboardPage({ adminViewMode = false, targetUid }: DashboardPageProps) {
+  const { user, userData: loggedInUserData, loading: authLoading } = useAuth();
+  
+  // Determine which user data to show
+  const effectiveUid = adminViewMode && targetUid ? targetUid : user?.uid;
+  const { data: targetUserData, loading: targetUserLoading } = useDoc<any>(
+    effectiveUid ? `users/${effectiveUid}` : null
+  );
+  
+  const userData = adminViewMode ? targetUserData : loggedInUserData;
+  
   const [isConnected, setIsConnected] = useState(true);
   const [compliance, setCompliance] = useState<any>(null);
   const [copied, setCopied] = useState(false);
@@ -47,7 +62,7 @@ export default function DashboardPage() {
 
   // Auto-generate numeric ID and referral code if missing
   useEffect(() => {
-    if (userData && user) {
+    if (userData && effectiveUid && !adminViewMode) {
       const updates: any = {};
       
       if (!userData.traderId) {
@@ -67,32 +82,32 @@ export default function DashboardPage() {
         const codeRegRef = doc(db, 'referralCodes', result);
         setDoc(codeRegRef, {
           code: result,
-          userId: user.uid,
+          userId: effectiveUid,
           active: true,
           createdAt: serverTimestamp()
         });
       }
 
       if (Object.keys(updates).length > 0) {
-        const userRef = doc(db, 'users', user.uid);
+        const userRef = doc(db, 'users', effectiveUid);
         updateDoc(userRef, updates);
       }
     }
-  }, [userData, user, db]);
+  }, [userData, effectiveUid, db, adminViewMode]);
 
   useEffect(() => {
-    if (userData && (!userData.phone || !userData.country)) {
+    if (!adminViewMode && userData && (!userData.phone || !userData.country)) {
       setShowProfilePrompt(true);
     } else {
       setShowProfilePrompt(false);
     }
-  }, [userData]);
+  }, [userData, adminViewMode]);
 
   const handleCompleteProfile = async () => {
-    if (!user) return;
+    if (!effectiveUid) return;
     setSavingProfile(true);
     try {
-      const userRef = doc(db, 'users', user.uid);
+      const userRef = doc(db, 'users', effectiveUid);
       await updateDoc(userRef, {
         phone: completingPhone,
         country: completingCountry
@@ -107,12 +122,12 @@ export default function DashboardPage() {
   };
 
   const accountConstraints = useMemo(() => {
-    if (!user?.uid) return [];
-    return [where('userId', '==', user.uid), where('status', '==', 'active')];
-  }, [user?.uid]);
+    if (!effectiveUid) return [];
+    return [where('userId', '==', effectiveUid), where('status', '==', 'active')];
+  }, [effectiveUid]);
 
   const { data: accounts, loading: accountsLoading } = useCollection<any>(
-    user ? 'accounts' : null, 
+    effectiveUid ? 'accounts' : null, 
     accountConstraints
   );
 
@@ -157,7 +172,7 @@ export default function DashboardPage() {
     const balance = activeAccount?.balance || 0;
     return {
       balance,
-      equity: balance, // Standardized display
+      equity: balance, 
       dailyPnL: 0,
       winRate: 0,
       tradesToday: 0,
@@ -175,7 +190,7 @@ export default function DashboardPage() {
     }
   };
 
-  if (authLoading || accountsLoading) {
+  if (authLoading || accountsLoading || targetUserLoading) {
     return (
       <div className="flex min-h-screen bg-background items-center justify-center">
         <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
@@ -185,10 +200,22 @@ export default function DashboardPage() {
 
   return (
     <div className="flex min-h-screen bg-background">
-      <Navigation />
+      {!adminViewMode && <Navigation />}
       
       <main className="flex-1 p-8 overflow-y-auto">
-        {showProfilePrompt && (
+        {adminViewMode && (
+          <div className="mb-8 p-4 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <ShieldAlert className="w-5 h-5 text-primary" />
+              <div>
+                <p className="text-sm font-bold">Admin Read-Only View</p>
+                <p className="text-xs text-muted-foreground">You are viewing the dashboard for user: {userData?.email}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showProfilePrompt && !adminViewMode && (
           <div className="mb-8 p-6 rounded-2xl bg-primary/10 border border-primary/30 flex flex-col md:flex-row items-center justify-between gap-6 shadow-[0_0_20px_rgba(17,179,245,0.1)]">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center text-primary">
@@ -423,3 +450,4 @@ function DetailItem({ label, value }: { label: string, value: string }) {
     </div>
   );
 }
+
