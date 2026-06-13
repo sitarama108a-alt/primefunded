@@ -91,6 +91,19 @@
         "email"
       ]
     },
+    "Mt5Account": {
+      "title": "MT5 Account Sync",
+      "description": "Real-time metrics from the trading terminal.",
+      "type": "object",
+      "properties": {
+        "login": { "type": "string" },
+        "balance": { "type": "number" },
+        "equity": { "type": "number" },
+        "margin": { "type": "number" },
+        "profit": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
     "ErrorLog": {
       "title": "Error Log",
       "description": "A record of an application error.",
@@ -127,6 +140,12 @@
         "$ref": "#/backend/entities/UserProfile"
       },
       "description": "Stores trader profiles."
+    },
+    "/mt5_accounts/{accountId}": {
+      "schema": {
+        "$ref": "#/backend/entities/Mt5Account"
+      },
+      "description": "Stores real-time terminal metrics synced via external terminals."
     },
     "/error_logs/{logId}": {
       "schema": {
