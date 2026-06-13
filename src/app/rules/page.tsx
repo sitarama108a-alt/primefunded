@@ -98,7 +98,7 @@ const PLAN_RULES = {
   },
   'instant': {
     funded: [
-      { text: "80% profit split", check: true },
+      { text: "70% profit split", check: true },
       { text: "Trading Leverage: 1:30", check: true },
       { text: "Instruments: Fx, Commodities, Indices, Stock, Crypto", check: true },
       { text: "Daily payouts available", check: true },
