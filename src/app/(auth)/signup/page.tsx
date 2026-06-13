@@ -190,7 +190,9 @@ function SignupContent() {
           <div className="space-y-6">
             <FeatureItem text="Up to $200k in institutional capital" />
             <FeatureItem text="No hidden rules or time limits" />
-            <FeatureItem text="Fast payouts and bi-weekly withdrawals" />
+            <FeatureItem text="No Consistency Rules" />
+            <FeatureItem text="News Trading Allowed" />
+            <FeatureItem text="Daily Payouts (Instant)" />
             <FeatureItem text="80% Profit Split" />
           </div>
         </div>
