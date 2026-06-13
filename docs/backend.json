@@ -13,6 +13,14 @@
           "type": "string",
           "description": "Unique 8-digit numeric identifier for the trader."
         },
+        "referralCode": {
+          "type": "string",
+          "description": "Unique alphanumeric referral code (e.g., PRIME-AB1234)."
+        },
+        "referredBy": {
+          "type": "string",
+          "description": "The UID of the user who referred this trader."
+        },
         "name": {
           "type": "string"
         },
@@ -102,6 +110,21 @@
           "type": "string",
           "format": "date-time"
         }
+      }
+    },
+    "Referral": {
+      "title": "Referral Commission",
+      "description": "A record of commission earned via referral.",
+      "type": "object",
+      "properties": {
+        "referrerId": { "type": "string" },
+        "referredUserId": { "type": "string" },
+        "referredUserEmail": { "type": "string" },
+        "orderId": { "type": "string" },
+        "plan": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "paid"] },
+        "createdAt": { "type": "string", "format": "date-time" }
       }
     },
     "TradingAccount": {
@@ -212,6 +235,12 @@
         "$ref": "#/backend/entities/PayoutRequest"
       },
       "description": "Stores profit withdrawal requests."
+    },
+    "/referrals/{referralId}": {
+      "schema": {
+        "$ref": "#/backend/entities/Referral"
+      },
+      "description": "Stores referral commissions."
     }
   }
 }

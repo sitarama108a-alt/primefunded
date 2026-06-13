@@ -1,11 +1,11 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, getDocs, collection, query, where } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 
-export default function SignupPage() {
+function SignupContent() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -23,7 +23,19 @@ export default function SignupPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
+
+  const referralCodeFromUrl = searchParams.get('ref');
+
+  const generateReferralCode = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = 'PRIME-';
+    for (let i = 0; i < 6; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,12 +44,25 @@ export default function SignupPage() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       
-      // Generate unique 8-digit numeric ID
       const traderId = Math.floor(10000000 + Math.random() * 90000000).toString();
+      const referralCode = generateReferralCode();
+
+      // Find referring user UID if ref code exists
+      let referredByUid = null;
+      if (referralCodeFromUrl) {
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('referralCode', '==', referralCodeFromUrl));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+          referredByUid = querySnapshot.docs[0].id;
+        }
+      }
 
       const userData = {
         uid: user.uid,
         traderId,
+        referralCode,
+        referredBy: referredByUid,
         name,
         email,
         phone,
@@ -52,7 +77,7 @@ export default function SignupPage() {
       };
 
       const userRef = doc(db, `users`, user.uid);
-      setDoc(userRef, userData)
+      await setDoc(userRef, userData)
         .catch(async (serverError) => {
           const permissionError = new FirestorePermissionError({
             path: userRef.path,
@@ -98,6 +123,11 @@ export default function SignupPage() {
           <div className="text-center">
             <h2 className="text-3xl font-headline font-bold">Create Account</h2>
             <p className="text-muted-foreground mt-2">Join the world's most transparent funding firm</p>
+            {referralCodeFromUrl && (
+              <p className="text-xs text-primary font-bold mt-2 uppercase tracking-widest">
+                Referral Code Active: {referralCodeFromUrl}
+              </p>
+            )}
           </div>
           
           <form onSubmit={handleSignup} className="space-y-4">
@@ -188,5 +218,13 @@ function FeatureItem({ text }: { text: string }) {
       </div>
       <span className="text-lg text-foreground font-medium">{text}</span>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <SignupContent />
+    </Suspense>
   );
 }

@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from 'next/link';
@@ -9,18 +10,16 @@ import {
   Wallet, 
   History, 
   UserCircle, 
-  Settings, 
   HelpCircle,
   LogOut,
   ChevronRight,
   TrendingUp,
   Award,
-  Calendar,
-  Fingerprint,
   Terminal,
   Shield,
   BookOpen,
-  Gift
+  Gift,
+  Users
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -29,11 +28,11 @@ import { Button } from '@/components/ui/button';
 const navItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Challenges', href: '/challenges', icon: Trophy },
+  { name: 'Referral', href: '/referral', icon: Users },
   { name: 'Giveaway', href: '/giveaway', icon: Gift },
   { name: 'Accounts', href: '/accounts', icon: ShieldCheck },
   { name: 'MT5 Credentials', href: '/mt5-account', icon: Terminal },
   { name: 'Payouts', href: '/payouts', icon: Wallet },
-  { name: 'Calendar', href: '/calendar', icon: Calendar },
   { name: 'Certificates', href: '/certificates', icon: Award },
   { name: 'History', href: '/history', icon: History },
 ];
@@ -44,6 +43,34 @@ const secondaryItems = [
   { name: 'Profile', href: '/profile', icon: UserCircle },
   { name: 'Support', href: '/support', icon: HelpCircle },
 ];
+
+function Fingerprint(props: any) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.02-.3 3" />
+      <path d="M7 10.78c0-1.2.2-2.4.6-3.5" />
+      <path d="M11 5.48a6.39 6.39 0 0 1 5 1.5" />
+      <path d="M5.22 14.82a10 10 0 0 0 1.18-4.04" />
+      <path d="M14 2.15a13.3 13.3 0 0 1 3.56 1.85" />
+      <path d="M2 13.5a10 10 0 0 0 5 8.66" />
+      <path d="M18 10.25a6.39 6.39 0 0 0-2-3.25" />
+      <path d="M6 18c.35 1.1.84 2.14 1.45 3.1" />
+      <path d="M20 13.5a10 10 0 0 1-5 8.66" />
+      <path d="M12 22s-4-2-4-10a4 4 0 1 1 8 0c0 8-4 10-4 10Z" />
+    </svg>
+  )
+}
 
 export function Navigation() {
   const pathname = usePathname();
@@ -94,7 +121,6 @@ export function Navigation() {
           </Link>
         ))}
         
-        {/* Conditional Admin Link */}
         {user && (
           <Link
             href="/admin"
