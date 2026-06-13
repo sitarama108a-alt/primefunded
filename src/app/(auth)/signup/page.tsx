@@ -37,7 +37,7 @@ export default function SignupPage() {
 
       const userData = {
         uid: user.uid,
-        traderId, // New 8-digit numeric ID
+        traderId,
         name,
         email,
         phone,

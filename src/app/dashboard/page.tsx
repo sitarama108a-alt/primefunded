@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, useMemo, Suspense } from 'react';
@@ -43,6 +44,15 @@ export default function DashboardPage() {
   const [completingPhone, setCompletingPhone] = useState('');
   const [completingCountry, setCompletingCountry] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
+
+  // Auto-generate numeric ID if missing
+  useEffect(() => {
+    if (userData && !userData.traderId && user) {
+      const traderId = Math.floor(10000000 + Math.random() * 90000000).toString();
+      const userRef = doc(db, 'users', user.uid);
+      updateDoc(userRef, { traderId });
+    }
+  }, [userData, user, db]);
 
   useEffect(() => {
     if (userData && (!userData.phone || !userData.country)) {

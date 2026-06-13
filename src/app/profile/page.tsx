@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -26,6 +27,15 @@ export default function ProfilePage() {
     phone: '',
     country: ''
   });
+
+  // Auto-generate numeric ID if missing
+  useEffect(() => {
+    if (userData && !userData.traderId && user) {
+      const traderId = Math.floor(10000000 + Math.random() * 90000000).toString();
+      const userRef = doc(db, 'users', user.uid);
+      updateDoc(userRef, { traderId });
+    }
+  }, [userData, user]);
 
   useEffect(() => {
     if (userData) {
