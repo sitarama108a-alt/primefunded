@@ -45,12 +45,28 @@ export default function DashboardPage() {
   const [completingCountry, setCompletingCountry] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
 
-  // Auto-generate numeric ID if missing
+  // Auto-generate numeric ID and referral code if missing
   useEffect(() => {
-    if (userData && !userData.traderId && user) {
-      const traderId = Math.floor(10000000 + Math.random() * 90000000).toString();
-      const userRef = doc(db, 'users', user.uid);
-      updateDoc(userRef, { traderId });
+    if (userData && user) {
+      const updates: any = {};
+      
+      if (!userData.traderId) {
+        updates.traderId = Math.floor(10000000 + Math.random() * 90000000).toString();
+      }
+      
+      if (!userData.referralCode) {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let result = 'PRIME-';
+        for (let i = 0; i < 6; i++) {
+          result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        updates.referralCode = result;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        const userRef = doc(db, 'users', user.uid);
+        updateDoc(userRef, updates);
+      }
     }
   }, [userData, user, db]);
 
@@ -131,7 +147,7 @@ export default function DashboardPage() {
     const balance = activeAccount?.balance || 0;
     return {
       balance,
-      equity: balance * 1.02, 
+      equity: balance, // Standardized display
       dailyPnL: 0,
       winRate: 0,
       tradesToday: 0,

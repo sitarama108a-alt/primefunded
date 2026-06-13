@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -18,17 +18,45 @@ import {
   Link as LinkIcon,
   Twitter,
   Send,
-  MessageCircle
+  MessageCircle,
+  RefreshCw
 } from 'lucide-react';
-import { useCollection } from '@/firebase';
-import { where } from 'firebase/firestore';
+import { useCollection, useFirestore } from '@/firebase';
+import { where, doc, updateDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { motion } from 'framer-motion';
 
 export default function ReferralPage() {
   const { user, userData } = useAuth();
+  const db = useFirestore();
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  // Self-healing referral code generation
+  useEffect(() => {
+    if (userData && user && !userData.referralCode && !isGenerating) {
+      setIsGenerating(true);
+      const generateCode = () => {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let result = 'PRIME-';
+        for (let i = 0; i < 6; i++) {
+          result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
+      };
+
+      const newCode = generateCode();
+      const userRef = doc(db, 'users', user.uid);
+      updateDoc(userRef, { referralCode: newCode })
+        .then(() => {
+          setIsGenerating(false);
+        })
+        .catch(() => {
+          setIsGenerating(false);
+        });
+    }
+  }, [userData, user, db, isGenerating]);
 
   const referralConstraints = useMemo(() => {
     if (!user?.uid) return [];
@@ -43,14 +71,15 @@ export default function ReferralPage() {
     if (!referrals) return { total: 0, successful: 0, totalEarned: 0, pendingEarned: 0, paidEarned: 0 };
     return {
       total: referrals.length,
-      successful: referrals.filter(r => r.amount > 0).length,
-      totalEarned: referrals.reduce((acc, r) => acc + (r.amount || 0), 0),
-      pendingEarned: referrals.filter(r => r.status === 'pending').reduce((acc, r) => acc + (r.amount || 0), 0),
-      paidEarned: referrals.filter(r => r.status === 'paid').reduce((acc, r) => acc + (r.amount || 0), 0),
+      successful: referrals.filter((r: any) => r.amount > 0).length,
+      totalEarned: referrals.reduce((acc: number, r: any) => acc + (r.amount || 0), 0),
+      pendingEarned: referrals.filter((r: any) => r.status === 'pending').reduce((acc: number, r: any) => acc + (r.amount || 0), 0),
+      paidEarned: referrals.filter((r: any) => r.status === 'paid').reduce((acc: number, r: any) => acc + (r.amount || 0), 0),
     };
   }, [referrals]);
 
   const copyToClipboard = (text: string) => {
+    if (!userData?.referralCode) return;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -58,6 +87,7 @@ export default function ReferralPage() {
   };
 
   const share = (platform: 'twitter' | 'telegram' | 'whatsapp') => {
+    if (!userData?.referralCode) return;
     const text = `Join PrimeFunded and get funded up to $200k! Use my referral link: `;
     const url = referralLink;
     let shareUrl = '';
@@ -86,25 +116,30 @@ export default function ReferralPage() {
               <CardDescription>Share your unique code or link to earn.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="p-4 rounded-xl bg-background/50 border border-primary/20 text-center">
-                <span className="text-2xl font-mono font-bold tracking-widest text-primary uppercase">
-                  {userData?.referralCode || 'PRIME-XXXXXX'}
-                </span>
+              <div className="p-4 rounded-xl bg-background/50 border border-primary/20 text-center min-h-[64px] flex items-center justify-center">
+                {userData?.referralCode ? (
+                  <span className="text-2xl font-mono font-bold tracking-widest text-primary uppercase">
+                    {userData.referralCode}
+                  </span>
+                ) : (
+                  <RefreshCw className="w-6 h-6 animate-spin text-primary/50" />
+                )}
               </div>
               
               <div className="space-y-2">
                 <Button 
                   onClick={() => copyToClipboard(referralLink)} 
                   className="w-full h-12 font-bold cyan-box-glow"
+                  disabled={!userData?.referralCode}
                 >
                   <Copy className="w-4 h-4 mr-2" />
                   {copied ? 'Copied Link!' : 'Copy Referral Link'}
                 </Button>
                 
                 <div className="grid grid-cols-3 gap-2">
-                  <Button variant="outline" size="icon" onClick={() => share('twitter')} className="h-12 w-full"><Twitter className="w-5 h-5" /></Button>
-                  <Button variant="outline" size="icon" onClick={() => share('telegram')} className="h-12 w-full"><Send className="w-5 h-5" /></Button>
-                  <Button variant="outline" size="icon" onClick={() => share('whatsapp')} className="h-12 w-full"><MessageCircle className="w-5 h-5" /></Button>
+                  <Button variant="outline" size="icon" onClick={() => share('twitter')} className="h-12 w-full" disabled={!userData?.referralCode}><Twitter className="w-5 h-5" /></Button>
+                  <Button variant="outline" size="icon" onClick={() => share('telegram')} className="h-12 w-full" disabled={!userData?.referralCode}><Send className="w-5 h-5" /></Button>
+                  <Button variant="outline" size="icon" onClick={() => share('whatsapp')} className="h-12 w-full" disabled={!userData?.referralCode}><MessageCircle className="w-5 h-5" /></Button>
                 </div>
               </div>
             </CardContent>
@@ -154,16 +189,16 @@ export default function ReferralPage() {
                   {referrals?.length > 0 ? referrals.map((r: any) => (
                     <tr key={r.id} className="hover:bg-secondary/10">
                       <td className="py-4 px-6 text-xs text-muted-foreground">
-                        {new Date(r.createdAt?.seconds * 1000).toLocaleDateString()}
+                        {r.createdAt?.seconds ? new Date(r.createdAt.seconds * 1000).toLocaleDateString() : 'Pending...'}
                       </td>
                       <td className="py-4 px-6 font-bold truncate max-w-[150px]">
-                        {r.referredUserEmail.split('@')[0].slice(0, 3)}***@{r.referredUserEmail.split('@')[1]}
+                        {r.referredUserEmail ? `${r.referredUserEmail.split('@')[0].slice(0, 3)}***@${r.referredUserEmail.split('@')[1]}` : 'Anonymous'}
                       </td>
                       <td className="py-4 px-6 text-xs">{r.plan || 'N/A'}</td>
-                      <td className="py-4 px-6 font-bold text-accent">${r.amount.toFixed(2)}</td>
+                      <td className="py-4 px-6 font-bold text-accent">${(r.amount || 0).toFixed(2)}</td>
                       <td className="py-4 px-6 text-right">
                         <Badge variant={r.status === 'paid' ? 'default' : 'outline'} className="uppercase text-[9px]">
-                          {r.status}
+                          {r.status || 'pending'}
                         </Badge>
                       </td>
                     </tr>

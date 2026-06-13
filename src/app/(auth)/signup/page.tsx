@@ -37,6 +37,10 @@ function SignupContent() {
     return result;
   };
 
+  const generateTraderId = () => {
+    return Math.floor(10000000 + Math.random() * 90000000).toString();
+  };
+
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -44,7 +48,7 @@ function SignupContent() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       
-      const traderId = Math.floor(10000000 + Math.random() * 90000000).toString();
+      const traderId = generateTraderId();
       const referralCode = generateReferralCode();
 
       // Find referring user UID if ref code exists
@@ -63,6 +67,8 @@ function SignupContent() {
         traderId,
         referralCode,
         referredBy: referredByUid,
+        referralCount: 0,
+        referralEarnings: 0,
         name,
         email,
         phone,
