@@ -5,7 +5,7 @@ import { getFirestore, doc, setDoc, serverTimestamp } from 'firebase/firestore';
  * @fileOverview MT5 Update API Endpoint
  * 
  * Optimized for terminal compatibility and pure server-side execution.
- * Avoids any shared client-side modules that might trigger Next.js UI error boundaries.
+ * Returns raw text "OK" as expected by MetaTrader 5 Expert Advisors.
  */
 
 const firebaseConfig = {
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // 2. Parse payload with support for JSON (EA default)
+    // 2. Parse payload with support for JSON and Form-Encoded (Terminal Defaults)
     let data: any = {};
     const contentType = request.headers.get('content-type') || '';
 
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
       });
     }
 
-    // 4. Data Sync
+    // 4. Data Sync (Must AWAIT in Route Handlers)
     const docRef = doc(db, 'mt5_accounts', String(accountId));
     const updatePayload = {
       login: login ? String(login) : null,
@@ -65,11 +65,6 @@ export async function POST(request: Request) {
       updatedAt: serverTimestamp()
     };
 
-    /**
-     * NOTE: In a Server Route (Next.js API), we MUST await the write.
-     * Unlike client-side background syncing, serverless execution will terminate 
-     * immediately upon response return.
-     */
     await setDoc(docRef, updatePayload, { merge: true });
 
     // 5. Return raw text OK for terminal compatibility
@@ -87,7 +82,9 @@ export async function POST(request: Request) {
   }
 }
 
-// Support GET for browser connectivity verification
+/**
+ * GET Handler for connectivity verification via browser
+ */
 export async function GET() {
   return new Response('API_ACTIVE', { 
     status: 200, 

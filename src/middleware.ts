@@ -14,12 +14,12 @@ export function middleware(request: NextRequest) {
   const isMaintenancePage = request.nextUrl.pathname === '/maintenance';
   const isStaticAsset = request.nextUrl.pathname.startsWith('/_next') || request.nextUrl.pathname.startsWith('/favicon.ico');
 
-  // CRITICAL: Bypassing middleware logic for API routes to ensure terminal compatibility
-  // This prevents redirects, rate limiting, and other checks from returning HTML to terminals.
+  /**
+   * CRITICAL: Bypassing middleware logic for API routes to ensure terminal compatibility.
+   * This prevents redirects, rate limiting, and other checks from returning HTML to terminals.
+   */
   if (isApiRoute) {
-    const response = NextResponse.next();
-    // Ensure API responses are not redirected
-    return response;
+    return NextResponse.next();
   }
 
   // Maintenance mode check via environment variable
