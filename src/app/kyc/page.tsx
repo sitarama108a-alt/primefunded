@@ -11,7 +11,7 @@ import { ShieldCheck, Upload, CheckCircle2, Clock, Loader2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, addDoc, collection } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
@@ -38,6 +38,16 @@ export default function KYCPage() {
 
     try {
       await updateDoc(userRef, updates);
+      
+      // Automatic Notification
+      await addDoc(collection(db, 'users', user.uid, 'notifications'), {
+        title: "⏳ KYC Under Review",
+        message: "Your documents have been submitted successfully. We will notify you once review is complete.",
+        type: 'kyc_submitted',
+        isRead: false,
+        createdAt: serverTimestamp()
+      });
+
       setStep(3);
       toast({
         title: "Documents Submitted",
@@ -59,9 +69,9 @@ export default function KYCPage() {
     <div className="flex min-h-screen bg-background">
       <Navigation />
       <main className="flex-1 p-8">
-        <header className="mb-10">
-          <h1 className="text-3xl font-headline font-bold mb-1 text-white text-center">Verify Your Identity</h1>
-          <p className="text-muted-foreground text-center">KYC verification is required for all withdrawals and funded accounts.</p>
+        <header className="mb-10 text-center">
+          <h1 className="text-3xl font-headline font-bold mb-1 text-white">Verify Your Identity</h1>
+          <p className="text-muted-foreground">KYC verification is required for all withdrawals.</p>
         </header>
 
         <div className="max-w-2xl mx-auto">
@@ -77,15 +87,12 @@ export default function KYCPage() {
               <>
                 <CardHeader>
                   <CardTitle className="text-white text-xl">Step 1: Proof of Identity</CardTitle>
-                  <CardDescription>Upload a valid government-issued ID (Passport, ID Card, or Driver's License).</CardDescription>
+                  <CardDescription>Upload a valid government-issued ID.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="grid gap-4">
-                    <div className="p-12 border-2 border-dashed border-border rounded-2xl flex flex-col items-center justify-center bg-background/30 hover:border-primary/50 transition-colors cursor-pointer group">
-                      <Upload className="w-12 h-12 text-muted-foreground mb-4 group-hover:text-primary transition-colors" />
-                      <p className="text-sm font-bold text-white">Click to upload or drag & drop</p>
-                      <p className="text-xs text-muted-foreground mt-2">PNG, JPG or PDF up to 10MB</p>
-                    </div>
+                  <div className="p-12 border-2 border-dashed border-border rounded-2xl flex flex-col items-center justify-center bg-background/30 hover:border-primary/50 transition-colors cursor-pointer group">
+                    <Upload className="w-12 h-12 text-muted-foreground mb-4 group-hover:text-primary transition-colors" />
+                    <p className="text-sm font-bold text-white">Click to upload or drag & drop</p>
                   </div>
                   <Button className="w-full font-bold h-12 rounded-xl bg-primary hover:bg-primary/90" onClick={handleNext}>Next Step</Button>
                 </CardContent>
@@ -96,18 +103,15 @@ export default function KYCPage() {
               <>
                 <CardHeader>
                   <CardTitle className="text-white text-xl">Step 2: Proof of Address</CardTitle>
-                  <CardDescription>A utility bill or bank statement issued in the last 3 months.</CardDescription>
+                  <CardDescription>A utility bill or bank statement (last 3 months).</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="grid gap-4">
-                    <div className="p-12 border-2 border-dashed border-border rounded-2xl flex flex-col items-center justify-center bg-background/30 hover:border-primary/50 transition-colors cursor-pointer group">
-                      <Upload className="w-12 h-12 text-muted-foreground mb-4 group-hover:text-primary transition-colors" />
-                      <p className="text-sm font-bold text-white">Upload proof of address</p>
-                      <p className="text-xs text-muted-foreground mt-2">Document must clearly show your full name and address.</p>
-                    </div>
+                  <div className="p-12 border-2 border-dashed border-border rounded-2xl flex flex-col items-center justify-center bg-background/30 hover:border-primary/50 transition-colors cursor-pointer group">
+                    <Upload className="w-12 h-12 text-muted-foreground mb-4 group-hover:text-primary transition-colors" />
+                    <p className="text-sm font-bold text-white">Upload proof of address</p>
                   </div>
                   <div className="flex gap-4">
-                    <Button variant="outline" className="flex-1 h-12 rounded-xl font-bold border-border" onClick={() => setStep(1)}>Back</Button>
+                    <Button variant="outline" className="flex-1 h-12 rounded-xl font-bold" onClick={() => setStep(1)}>Back</Button>
                     <Button className="flex-1 font-bold h-12 rounded-xl bg-primary hover:bg-primary/90" onClick={handleSubmit} disabled={loading}>
                       {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                       Submit for Review
@@ -126,7 +130,7 @@ export default function KYCPage() {
                     </div>
                     <h3 className="text-3xl font-headline font-bold mb-3 text-white">Identity Verified!</h3>
                     <p className="text-muted-foreground max-w-sm mb-10 leading-relaxed">
-                      Your identity has been successfully verified. Payouts and referral withdrawals are now unlocked for your account.
+                      Your identity has been successfully verified. Payouts are now unlocked.
                     </p>
                   </>
                 ) : (
@@ -136,7 +140,7 @@ export default function KYCPage() {
                     </div>
                     <h3 className="text-3xl font-headline font-bold mb-3 text-white">Application Received</h3>
                     <p className="text-muted-foreground max-w-sm mb-10 leading-relaxed">
-                      Our compliance team is currently reviewing your documents. Verification typically takes 12-24 hours. We'll email you once processed.
+                      Verification typically takes 12-24 hours. We'll alert you once processed.
                     </p>
                   </>
                 )}
@@ -146,13 +150,6 @@ export default function KYCPage() {
               </CardContent>
             )}
           </Card>
-
-          <div className="mt-8 flex items-start gap-4 p-6 bg-secondary/30 rounded-2xl border border-border">
-            <ShieldCheck className="text-primary w-6 h-6 flex-shrink-0" />
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Your documents are encrypted using AES-256 and stored in a PCI-compliant environment. We never share your sensitive personal data with third parties.
-            </p>
-          </div>
         </div>
       </main>
     </div>

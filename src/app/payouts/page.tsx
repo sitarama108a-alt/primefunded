@@ -1,20 +1,25 @@
 
 "use client";
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Wallet, ArrowDownRight, History, Clock, AlertTriangle, ShieldCheck, XCircle, Info } from 'lucide-react';
+import { Wallet, ArrowDownRight, History, Clock, AlertTriangle, ShieldCheck, XCircle, Info, Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { useCollection } from '@/firebase';
-import { where } from 'firebase/firestore';
+import { useCollection, useFirestore } from '@/firebase';
+import { where, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import Link from 'next/link';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useToast } from '@/hooks/use-toast';
+import { sendPayoutRequestedEmail } from '@/lib/email';
 
 export default function PayoutsPage() {
   const { user, userData } = useAuth();
+  const db = useFirestore();
+  const { toast } = useToast();
+  const [requesting, setLoading] = useState(false);
   
   const payoutConstraints = useMemo(() => {
     if (!user?.uid) return [];
@@ -32,6 +37,40 @@ export default function PayoutsPage() {
   const kycStatus = userData?.kycStatus || 'none';
   const isKycVerified = userData?.kycVerified === true;
 
+  const handleRequestPayout = async () => {
+    if (!user || !isKycVerified) return;
+    setLoading(true);
+    try {
+      const payoutData = {
+        userId: user.uid,
+        email: user.email,
+        amount: "0.00",
+        method: "USDT",
+        address: "Pending input...",
+        status: "pending",
+        date: new Date().toISOString(),
+        createdAt: serverTimestamp()
+      };
+      
+      await addDoc(collection(db, 'payouts'), payoutData);
+      
+      await addDoc(collection(db, 'users', user.uid, 'notifications'), {
+        title: "💸 Payout Requested",
+        message: "Your payout request has been submitted and is being processed by our finance team.",
+        type: 'payout_requested',
+        isRead: false,
+        createdAt: serverTimestamp()
+      });
+
+      sendPayoutRequestedEmail(user.email!, "0.00");
+      toast({ title: "Request Submitted", description: "Your payout is now under review." });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Request Failed" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const renderKycWarning = () => {
     if (isKycVerified) return (
       <div className="mb-8 p-4 rounded-xl bg-accent/10 border border-accent/30 flex items-center justify-between">
@@ -39,7 +78,7 @@ export default function PayoutsPage() {
           <ShieldCheck className="text-accent w-5 h-5" />
           <div>
             <p className="text-sm font-bold text-accent">KYC Verified - Payouts Unlocked</p>
-            <p className="text-xs text-muted-foreground">Your account is fully eligible for profit withdrawals.</p>
+            <p className="text-xs text-muted-foreground">Account eligible for profit withdrawals.</p>
           </div>
         </div>
         <Badge className="bg-accent text-accent-foreground">VERIFIED</Badge>
@@ -53,26 +92,9 @@ export default function PayoutsPage() {
           <h3 className="font-bold text-lg">KYC Under Review</h3>
         </div>
         <p className="text-sm text-muted-foreground leading-relaxed">
-          Your KYC documents are currently being reviewed by our compliance team. Payouts will be unlocked once approved. 
-          Verification usually takes 24-48 hours.
+          Your documents are being reviewed. Payouts will be unlocked once approved (24-48 hours).
         </p>
         <Badge variant="outline" className="border-amber-500 text-amber-500">PENDING REVIEW</Badge>
-      </div>
-    );
-
-    if (kycStatus === 'rejected') return (
-      <div className="mb-8 p-6 rounded-2xl bg-destructive/10 border border-destructive/30 space-y-4">
-        <div className="flex items-center gap-3 text-destructive">
-          <XCircle className="w-6 h-6" />
-          <h3 className="font-bold text-lg">KYC Rejected</h3>
-        </div>
-        <p className="text-sm text-muted-foreground leading-relaxed">
-          Your KYC was rejected. <strong>Reason: {userData?.kycRejectionReason || 'No reason provided.'}</strong>. 
-          Please resubmit your documents to unlock payouts.
-        </p>
-        <Button size="sm" variant="destructive" asChild>
-          <Link href="/kyc">Resubmit KYC</Link>
-        </Button>
       </div>
     );
 
@@ -83,7 +105,7 @@ export default function PayoutsPage() {
           <h3 className="font-bold text-lg">KYC Verification Required</h3>
         </div>
         <p className="text-sm text-muted-foreground leading-relaxed">
-          You must complete KYC verification before requesting a payout. This is required to ensure secure and compliant transactions.
+          You must complete KYC verification before requesting a payout.
         </p>
         <Button size="sm" className="bg-primary hover:bg-primary/90 font-bold" asChild>
           <Link href="/kyc">Complete KYC Now</Link>
@@ -111,7 +133,6 @@ export default function PayoutsPage() {
                 <Wallet className="text-primary w-5 h-5" />
               </div>
               <h3 className="text-4xl font-headline font-bold mb-2">$0.00</h3>
-              <p className="text-xs text-muted-foreground italic">Eligibility checked daily.</p>
               
               <TooltipProvider>
                 <Tooltip>
@@ -119,15 +140,17 @@ export default function PayoutsPage() {
                     <span className="w-full">
                       <Button 
                         className="w-full mt-6 font-bold" 
-                        disabled={!isKycVerified}
+                        disabled={!isKycVerified || requesting}
+                        onClick={handleRequestPayout}
                       >
+                        {requesting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                         Request Payout
                       </Button>
                     </span>
                   </TooltipTrigger>
                   {!isKycVerified && (
                     <TooltipContent className="bg-destructive text-white border-none">
-                      <p className="text-xs font-bold">Complete KYC verification to unlock payouts</p>
+                      <p className="text-xs font-bold">Complete KYC to unlock payouts</p>
                     </TooltipContent>
                   )}
                 </Tooltip>
@@ -142,7 +165,6 @@ export default function PayoutsPage() {
                 <ArrowDownRight className="text-accent w-5 h-5" />
               </div>
               <h3 className="text-4xl font-headline font-bold mb-2">${stats.totalPaid.toLocaleString('en-US')}</h3>
-              <p className="text-xs text-muted-foreground">Lifetime withdrawals</p>
             </CardContent>
           </Card>
 
@@ -153,7 +175,6 @@ export default function PayoutsPage() {
                 <Clock className="text-primary w-5 h-5" />
               </div>
               <h3 className="text-4xl font-headline font-bold mb-2">${stats.pending.toLocaleString('en-US')}</h3>
-              <p className="text-xs text-muted-foreground">Awaiting verification</p>
             </CardContent>
           </Card>
         </div>
@@ -180,14 +201,14 @@ export default function PayoutsPage() {
                     <tr key={p.id} className="hover:bg-secondary/20 transition-colors">
                       <td className="py-4 px-2 font-medium">{new Date(p.date).toLocaleDateString()}</td>
                       <td className="py-4 px-2 text-muted-foreground">{p.method}</td>
-                      <td className="py-4 px-2 font-bold text-accent text-right">${parseFloat(p.amount).toLocaleString('en-US')}</td>
+                      <td className="py-4 px-2 font-bold text-accent text-right">${p.amount}</td>
                       <td className="py-4 px-2 text-right">
-                        <span className="px-2 py-1 rounded-full bg-accent/10 text-accent text-[10px] border border-accent/20 uppercase font-bold">{p.status}</span>
+                        <Badge variant="outline" className="text-[10px] uppercase font-bold">{p.status}</Badge>
                       </td>
                     </tr>
                   )) : (
                     <tr>
-                      <td colSpan={4} className="py-10 text-center text-muted-foreground italic">No payout requests found.</td>
+                      <td colSpan={4} className="py-10 text-center text-muted-foreground italic">No requests found.</td>
                     </tr>
                   )}
                 </tbody>
