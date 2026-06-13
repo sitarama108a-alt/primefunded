@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMemo, useState, useEffect } from 'react';
@@ -7,6 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { 
   Users, 
   Copy, 
@@ -19,7 +19,8 @@ import {
   Twitter,
   Send,
   MessageCircle,
-  RefreshCw
+  RefreshCw,
+  AlertCircle
 } from 'lucide-react';
 import { useCollection, useFirestore } from '@/firebase';
 import { where, doc, updateDoc } from 'firebase/firestore';
@@ -32,6 +33,8 @@ export default function ReferralPage() {
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  const MIN_WITHDRAWAL = 100;
 
   // Self-healing referral code generation
   useEffect(() => {
@@ -78,6 +81,9 @@ export default function ReferralPage() {
     };
   }, [referrals]);
 
+  const canWithdraw = stats.pendingEarned >= MIN_WITHDRAWAL;
+  const progressPercent = Math.min((stats.pendingEarned / MIN_WITHDRAWAL) * 100, 100);
+
   const copyToClipboard = (text: string) => {
     if (!userData?.referralCode) return;
     navigator.clipboard.writeText(text);
@@ -88,7 +94,7 @@ export default function ReferralPage() {
 
   const share = (platform: 'twitter' | 'telegram' | 'whatsapp') => {
     if (!userData?.referralCode) return;
-    const text = `Join PrimeFunded and get funded up to $200k! Use my referral link: `;
+    const text = `Join PrimeFunded and get funded up to $300k! Use my referral link: `;
     const url = referralLink;
     let shareUrl = '';
 
@@ -105,7 +111,7 @@ export default function ReferralPage() {
       <main className="flex-1 p-8 overflow-y-auto">
         <header className="mb-10">
           <h1 className="text-3xl font-headline font-bold mb-1">Referral Program</h1>
-          <p className="text-muted-foreground">Invite friends and earn 10% on every challenge purchase they make.</p>
+          <p className="text-muted-foreground">Invite friends and earn up to $50.00 on every challenge purchase they make.</p>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
@@ -145,15 +151,41 @@ export default function ReferralPage() {
             </CardContent>
           </Card>
 
-          <div className="lg:col-span-2 grid grid-cols-2 md:grid-cols-3 gap-4">
-            <StatSmall title="Total Referrals" value={stats.total} icon={<Users />} />
-            <StatSmall title="Purchases" value={stats.successful} icon={<CheckCircle2 />} />
-            <StatSmall title="Total Earned" value={`$${stats.totalEarned.toLocaleString()}`} icon={<TrendingUp />} />
-            <StatSmall title="Pending" value={`$${stats.pendingEarned.toLocaleString()}`} icon={<Clock />} color="amber" />
-            <StatSmall title="Paid" value={`$${stats.paidEarned.toLocaleString()}`} icon={<DollarSign />} color="green" />
-            <Card className="bg-secondary/30 flex flex-col justify-center items-center p-4 text-center">
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Min. Payout</p>
-              <p className="text-xl font-bold">$50</p>
+          <div className="lg:col-span-2 space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <StatSmall title="Total Referrals" value={stats.total} icon={<Users />} />
+              <StatSmall title="Purchases" value={stats.successful} icon={<CheckCircle2 />} />
+              <StatSmall title="Total Earned" value={`$${stats.totalEarned.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} icon={<TrendingUp />} />
+              <StatSmall title="Pending" value={`$${stats.pendingEarned.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} icon={<Clock />} color="amber" />
+              <StatSmall title="Paid" value={`$${stats.paidEarned.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} icon={<DollarSign />} color="green" />
+              <Card className="bg-secondary/30 flex flex-col justify-center items-center p-4 text-center border-accent/20">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Min. Payout</p>
+                <p className="text-xl font-bold text-accent">${MIN_WITHDRAWAL}</p>
+              </Card>
+            </div>
+
+            <Card className="bg-secondary/20 border-border/50">
+              <CardContent className="p-6">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-bold flex items-center gap-2">
+                    Withdrawal Progress
+                    {!canWithdraw && <AlertCircle className="w-4 h-4 text-amber-500" />}
+                  </span>
+                  <span className="text-xs font-mono">${stats.pendingEarned.toFixed(2)} / ${MIN_WITHDRAWAL}.00</span>
+                </div>
+                <Progress value={progressPercent} className="h-2 mb-4" />
+                <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                  <p className="text-xs text-muted-foreground">
+                    {canWithdraw 
+                      ? "You have reached the minimum requirement for withdrawal." 
+                      : `Minimum $${MIN_WITHDRAWAL} required to withdraw pending commissions.`
+                    }
+                  </p>
+                  <Button disabled={!canWithdraw} size="sm" className="font-bold px-8">
+                    Request Payout
+                  </Button>
+                </div>
+              </CardContent>
             </Card>
           </div>
         </div>
@@ -165,7 +197,7 @@ export default function ReferralPage() {
           <div className="grid md:grid-cols-3 gap-6">
             <StepItem step="1" icon={<LinkIcon />} title="Copy Link" desc="Copy your unique referral link from above." />
             <StepItem step="2" icon={<Users />} title="Share Link" desc="Share it with your trading community or friends." />
-            <StepItem step="3" icon={<DollarSign />} title="Earn 10%" desc="Receive 10% commission on every purchase they make." />
+            <StepItem step="3" icon={<DollarSign />} title="Earn Rewards" desc="Earn 10% commission (up to $50) on every purchase they make." />
           </div>
         </section>
 
@@ -189,7 +221,7 @@ export default function ReferralPage() {
                   {referrals?.length > 0 ? referrals.map((r: any) => (
                     <tr key={r.id} className="hover:bg-secondary/10">
                       <td className="py-4 px-6 text-xs text-muted-foreground">
-                        {r.createdAt?.seconds ? new Date(r.createdAt.seconds * 1000).toLocaleDateString() : 'Pending...'}
+                        {r.createdAt?.seconds ? new Date(r.createdAt.seconds * 1000).toLocaleDateString() : 'Processing...'}
                       </td>
                       <td className="py-4 px-6 font-bold truncate max-w-[150px]">
                         {r.referredUserEmail ? `${r.referredUserEmail.split('@')[0].slice(0, 3)}***@${r.referredUserEmail.split('@')[1]}` : 'Anonymous'}

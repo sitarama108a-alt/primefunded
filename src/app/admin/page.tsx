@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, Suspense, useEffect } from 'react';
@@ -40,7 +39,7 @@ import {
   TrendingUp
 } from 'lucide-react';
 import { useFirestore, useCollection } from '@/firebase';
-import { doc, updateDoc, deleteDoc, setDoc, serverTimestamp, getDoc, addDoc } from 'firebase/firestore';
+import { doc, updateDoc, deleteDoc, setDoc, serverTimestamp, getDoc, addDoc, collection } from 'firebase/firestore';
 
 const ADMIN_PASSWORD = "93463962569392846256";
 
@@ -124,7 +123,8 @@ export default function AdminPage() {
       // Handle Referral Commission
       if (userData?.referredBy) {
         const priceNum = parseFloat(order.price.replace('$', '').replace(',', ''));
-        const commission = priceNum * 0.10;
+        // 10% commission capped at $50
+        const commission = Math.min(priceNum * 0.10, 50);
         
         await addDoc(collection(db, 'referrals'), {
           referrerId: userData.referredBy,
@@ -136,7 +136,7 @@ export default function AdminPage() {
           status: 'pending',
           createdAt: serverTimestamp()
         });
-        toast({ title: "Referral Commission Generated", description: `$${commission.toFixed(2)} added to referrer.` });
+        toast({ title: "Referral Commission Generated", description: `$${commission.toFixed(2)} added to referrer (Capped at $50).` });
       }
 
       toast({ title: "Order Verified", description: `Account created for ${order.email}` });
@@ -193,7 +193,29 @@ export default function AdminPage() {
               <StatCard title="Traders" value={traders.length} icon={<Users />} />
               <StatCard title="Verified Orders" value={orders.filter(o => o.status === 'verified').length} icon={<ShoppingCart />} />
               <StatCard title="Pending Payouts" value={payouts?.filter(p => p.status === 'pending').length} icon={<Wallet />} />
-              <StatCard title="Total Referral Owed" value={`$${referrals?.filter(r => r.status === 'pending').reduce((acc, r) => acc + (r.amount || 0), 0).toFixed(2)}`} icon={<TrendingUp />} />
+              <StatCard title="Total Referral Owed" value={`$${referrals?.filter(r => r.status === 'pending').reduce((acc, r) => acc + (r.amount || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`} icon={<TrendingUp />} />
+            </div>
+            
+            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card className="bg-secondary/20">
+                <CardHeader>
+                  <CardTitle className="text-lg">System Config</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">Min. Payout (Profits)</span>
+                    <span className="font-bold">$100.00</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">Min. Payout (Referrals)</span>
+                    <span className="font-bold">$100.00</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">Referral Commission Cap</span>
+                    <span className="font-bold text-accent">$50.00 / purchase</span>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </TabsContent>
 
@@ -266,7 +288,7 @@ export default function AdminPage() {
             <Card className="bg-card/40">
               <CardHeader>
                 <div className="flex justify-between">
-                  <Input placeholder="Search users..." className="max-w-md" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                  <Input placeholder="Search users by Name, Email or UID..." className="max-w-md" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                 </div>
               </CardHeader>
               <CardContent className="p-0">
@@ -284,7 +306,7 @@ export default function AdminPage() {
                       <tr key={t.id} className="border-b">
                         <td className="py-4 px-4">
                           <div className="flex flex-col">
-                            <span className="font-mono text-xs">{t.traderId}</span>
+                            <span className="font-mono text-xs font-bold">{t.traderId}</span>
                             <span className="text-[10px] text-primary">{t.referralCode}</span>
                           </div>
                         </td>
