@@ -1,24 +1,31 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// Simplified in-memory rate limiter for Edge
 const rateLimitMap = new Map<string, { count: number; lastReset: number }>();
 
 export function middleware(request: NextRequest) {
   const ip = request.ip ?? '127.0.0.1';
   const now = Date.now();
-  const limit = 100; // max 100 requests
-  const windowMs = 60 * 1000; // per 1 minute
+  const limit = 100;
+  const windowMs = 60 * 1000;
 
+  // Maintenance mode check via environment variable
+  const isMaintenanceMode = process.env.MAINTENANCE_MODE === 'true';
+  const isMaintenancePage = request.nextUrl.pathname === '/maintenance';
+  const isStaticAsset = request.nextUrl.pathname.startsWith('/_next') || request.nextUrl.pathname.startsWith('/api');
+
+  if (isMaintenanceMode && !isMaintenancePage && !isStaticAsset) {
+    return NextResponse.redirect(new URL('/maintenance', request.url));
+  }
+
+  // Rate Limiting
   const currentLimit = rateLimitMap.get(ip) ?? { count: 0, lastReset: now };
-
   if (now - currentLimit.lastReset > windowMs) {
     currentLimit.count = 1;
     currentLimit.lastReset = now;
   } else {
     currentLimit.count++;
   }
-
   rateLimitMap.set(ip, currentLimit);
 
   if (currentLimit.count > limit) {
@@ -26,8 +33,6 @@ export function middleware(request: NextRequest) {
   }
 
   const response = NextResponse.next();
-
-  // Reinforce security headers in middleware
   response.headers.set('X-Frame-Options', 'DENY');
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
