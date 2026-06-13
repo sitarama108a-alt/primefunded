@@ -3,6 +3,7 @@ import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
 import { Toaster } from '@/components/ui/toaster';
 import { FirebaseClientProvider } from '@/firebase';
+import { ProgressBar } from '@/components/ProgressBar';
 
 export const metadata: Metadata = {
   title: 'PrimeFunded | Institutional Trading Challenges',
@@ -23,6 +24,7 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased bg-background text-foreground">
         <FirebaseClientProvider>
+          <ProgressBar />
           <AuthProvider>
             {children}
             <Toaster />

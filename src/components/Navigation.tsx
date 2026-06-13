@@ -1,7 +1,8 @@
 "use client";
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import { 
   LayoutDashboard, 
   Trophy, 
@@ -38,12 +39,12 @@ const navItems = [
 
 const secondaryItems = [
   { name: 'Rules', href: '/rules', icon: BookOpen },
-  { name: 'KYC Verification', href: '/kyc', icon: Fingerprint },
+  { name: 'KYC Verification', href: '/kyc', icon: FingerprintIcon },
   { name: 'Profile', href: '/profile', icon: UserCircle },
   { name: 'Support', href: '/support', icon: HelpCircle },
 ];
 
-function Fingerprint(props: any) {
+function FingerprintIcon(props: any) {
   return (
     <svg
       {...props}
@@ -74,24 +75,42 @@ function Fingerprint(props: any) {
 
 export function Navigation() {
   const pathname = usePathname();
+  const router = useRouter();
   const { logout, userData, user } = useAuth();
+
+  // Prefetch main routes on app startup
+  useEffect(() => {
+    const routesToPrefetch = [
+      '/dashboard',
+      '/challenges',
+      '/referral',
+      '/profile',
+      '/payouts',
+      '/accounts',
+      '/mt5-account'
+    ];
+    routesToPrefetch.forEach(route => {
+      router.prefetch(route);
+    });
+  }, [router]);
 
   return (
     <div className="w-64 bg-card border-r border-border h-screen sticky top-0 flex flex-col p-6 overflow-y-auto shrink-0 custom-scrollbar">
-      <div className="flex items-center gap-2 mb-10 px-2">
+      <Link href="/dashboard" className="flex items-center gap-2 mb-10 px-2 cursor-pointer transition-opacity hover:opacity-80">
         <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
           <TrendingUp className="text-primary-foreground w-5 h-5" />
         </div>
         <span className="font-headline font-bold text-xl tracking-tight text-primary">PrimeFunded</span>
-      </div>
+      </Link>
 
       <nav className="flex-1 space-y-1">
         {navItems.map((item) => (
           <Link
             key={item.name}
             href={item.href}
+            prefetch={true}
             className={cn(
-              "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors cursor-pointer",
+              "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all cursor-pointer",
               pathname === item.href 
                 ? "bg-primary/10 text-primary border-r-2 border-primary rounded-r-none" 
                 : "text-muted-foreground hover:text-foreground hover:bg-secondary"
@@ -109,8 +128,9 @@ export function Navigation() {
           <Link
             key={item.name}
             href={item.href}
+            prefetch={true}
             className={cn(
-              "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors cursor-pointer",
+              "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all cursor-pointer",
               pathname === item.href 
                 ? "bg-primary/10 text-primary border-r-2 border-primary rounded-r-none" 
                 : "text-muted-foreground hover:text-foreground hover:bg-secondary"
@@ -124,8 +144,9 @@ export function Navigation() {
         {user && (
           <Link
             href="/admin"
+            prefetch={true}
             className={cn(
-              "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors cursor-pointer",
+              "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all cursor-pointer",
               pathname === "/admin" 
                 ? "bg-destructive/10 text-destructive border-r-2 border-destructive rounded-r-none" 
                 : "text-muted-foreground hover:text-destructive hover:bg-destructive/5"
@@ -137,7 +158,9 @@ export function Navigation() {
         )}
         
         <button
-          onClick={logout}
+          onClick={() => {
+            logout();
+          }}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors mt-4 cursor-pointer"
         >
           <LogOut className="w-5 h-5" />
