@@ -30,6 +30,7 @@ import {
   Info
 } from 'lucide-react';
 import { useCollection, useFirestore } from '@/firebase';
+import { auth } from '@/lib/firebase';
 import { where, doc, updateDoc, query, collection, getDocs, setDoc, serverTimestamp, limit, orderBy, getDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -74,9 +75,11 @@ export default function ReferralPage() {
     return result;
   }, []);
 
-  // Comprehensive Data Initialization
   useEffect(() => {
     const initializeReferralData = async (userId: string) => {
+      // 1. Explicit check for Auth state
+      if (!auth.currentUser) return;
+
       try {
         const userRef = doc(db, 'users', userId);
         const userSnap = await getDoc(userRef);
@@ -86,14 +89,16 @@ export default function ReferralPage() {
           const updates: any = {};
           let shouldUpdate = false;
 
-          // Check for missing referral fields
           if (!data?.referralCode) {
             const code = generateUniqueCode();
             updates.referralCode = code;
             updates.codeChangesCount = 0;
+            updates.referralCount = 0;
+            updates.referralEarnings = 0;
+            updates.pendingReferralEarnings = 0;
+            updates.paidReferralEarnings = 0;
             shouldUpdate = true;
 
-            // Register code in global registry
             const codeRegRef = doc(db, 'referralCodes', code);
             setDoc(codeRegRef, {
               code,
@@ -103,19 +108,15 @@ export default function ReferralPage() {
             }).catch(() => {});
           }
 
-          if (data?.referralCount === undefined) { updates.referralCount = 0; shouldUpdate = true; }
-          if (data?.referralEarnings === undefined) { updates.referralEarnings = 0; shouldUpdate = true; }
-          if (data?.pendingReferralEarnings === undefined) { updates.pendingReferralEarnings = 0; shouldUpdate = true; }
-          if (data?.paidReferralEarnings === undefined) { updates.paidReferralEarnings = 0; shouldUpdate = true; }
-          if (data?.codeChangesCount === undefined) { updates.codeChangesCount = data?.codeChangesCount || 0; shouldUpdate = true; }
-
           if (shouldUpdate) {
-            updateDoc(userRef, updates).catch(async (err) => {
-              errorEmitter.emit('permission-error', new FirestorePermissionError({ 
-                path: userRef.path, 
-                operation: 'update',
-                requestResourceData: updates
-              } satisfies SecurityRuleContext));
+            updateDoc(userRef, updates).catch(async (err: any) => {
+              if (err.code === 'permission-denied') {
+                errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+                  path: userRef.path, 
+                  operation: 'update',
+                  requestResourceData: updates
+                }));
+              }
             });
           }
         }
@@ -133,9 +134,8 @@ export default function ReferralPage() {
     }
   }, [user, authLoading, db, generateUniqueCode]);
 
-  // Code availability check
   useEffect(() => {
-    if (!isEditing || !newCode) {
+    if (!isEditing || !newCode || !auth.currentUser) {
       setAvailabilityStatus('idle');
       return;
     }
@@ -211,41 +211,41 @@ export default function ReferralPage() {
     if (!user || availabilityStatus !== 'available' || newCode === userData?.referralCode) return;
     setIsSaving(true);
     
-    try {
-      const oldCode = userData.referralCode;
-      const userRef = doc(db, 'users', user.uid);
-      const newCodeRef = doc(db, 'referralCodes', newCode);
-      
-      const updates = {
-        referralCode: newCode,
-        codeChangesCount: (userData.codeChangesCount || 0) + 1,
-        lastCodeChange: serverTimestamp()
-      };
+    const oldCode = userData.referralCode;
+    const userRef = doc(db, 'users', user.uid);
+    const newCodeRef = doc(db, 'referralCodes', newCode);
+    
+    const updates = {
+      referralCode: newCode,
+      codeChangesCount: (userData.codeChangesCount || 0) + 1,
+      lastCodeChange: serverTimestamp()
+    };
 
-      updateDoc(userRef, updates).catch(async (err) => {
+    updateDoc(userRef, updates).catch(async (err: any) => {
+      if (err.code === 'permission-denied') {
         errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: updates }));
-      });
-
-      if (oldCode) {
-        const oldCodeRef = doc(db, 'referralCodes', oldCode);
-        updateDoc(oldCodeRef, { active: false });
       }
+    });
 
-      setDoc(newCodeRef, {
-        code: newCode,
-        userId: user.uid,
-        active: true,
-        createdAt: serverTimestamp()
-      });
+    if (oldCode) {
+      const oldCodeRef = doc(db, 'referralCodes', oldCode);
+      updateDoc(oldCodeRef, { active: false });
+    }
 
+    setDoc(newCodeRef, {
+      code: newCode,
+      userId: user.uid,
+      active: true,
+      createdAt: serverTimestamp()
+    }).then(() => {
       toast({ title: "Code Updated!", description: `Your referral code has been changed to ${newCode}` });
       setIsEditing(false);
-    } catch (err: any) {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `users/${user.uid}`, operation: 'update' }));
-    } finally {
       setIsSaving(false);
       setShowConfirmDialog(false);
-    }
+    }).catch((err) => {
+      setIsSaving(false);
+      setShowConfirmDialog(false);
+    });
   };
 
   const copyToClipboard = (text: string) => {

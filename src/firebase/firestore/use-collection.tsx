@@ -9,7 +9,7 @@ import {
   type DocumentData,
   type QueryConstraint,
 } from 'firebase/firestore';
-import { useFirestore } from '../provider';
+import { useFirestore, useAuth } from '../provider';
 import { errorEmitter } from '../error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '../errors';
 
@@ -18,13 +18,18 @@ export function useCollection<T = DocumentData>(
   constraints: QueryConstraint[] = []
 ) {
   const db = useFirestore();
+  const auth = useAuth();
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    if (!path) {
+    // 1. Ensure path exists AND user is authenticated
+    if (!path || !auth.currentUser) {
       setLoading(false);
+      if (path && !auth.currentUser) {
+        console.warn(`[useCollection] Blocked query to ${path}: User not authenticated.`);
+      }
       return;
     }
 
@@ -39,20 +44,24 @@ export function useCollection<T = DocumentData>(
         );
         setLoading(false);
       },
-      async (serverError) => {
+      async (serverError: any) => {
+        // Handle Permission Denied and other Firestore errors
         const permissionError = new FirestorePermissionError({
           path: collectionRef.path,
           operation: 'list',
         } satisfies SecurityRuleContext);
 
-        errorEmitter.emit('permission-error', permissionError);
-        setError(permissionError);
+        if (serverError.code === 'permission-denied') {
+          errorEmitter.emit('permission-error', permissionError);
+        }
+        
+        setError(serverError);
         setLoading(false);
       }
     );
 
     return () => unsubscribe();
-  }, [db, path, JSON.stringify(constraints)]);
+  }, [db, auth.currentUser, path, JSON.stringify(constraints)]);
 
   return { data, loading, error };
 }
