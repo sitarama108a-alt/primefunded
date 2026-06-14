@@ -16,74 +16,76 @@ const firebaseConfig = {
 };
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
   try {
+    // 1. Validate Configuration
+    if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+      return new Response('Firebase Configuration Missing', { status: 500 });
+    }
+
+    // 2. Initialize Firebase (Client SDK on Node.js)
     const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
+    // 3. Robust Body Parsing
     let payload: any = {};
     const contentType = request.headers.get('content-type') || '';
     
     try {
       if (contentType.includes('application/json')) {
         payload = await request.json();
-      } else if (contentType.includes('form')) {
+      } else {
         const formData = await request.formData();
         payload = Object.fromEntries(formData.entries());
       }
     } catch (e) {
-      console.error('[MT5-API] Body parse error:', e);
-      return new Response('Invalid request body', { status: 400 });
+      return new Response('Malformed Request Body', { status: 400 });
     }
 
-    // Identify account via accountId or login fallback
+    // 4. Identify Account
     const accountId = payload.accountId || payload.login;
-    const login = payload.login;
-    const balance = payload.balance;
-    const equity = payload.equity;
-    const profit = payload.profit;
-
     if (!accountId) {
-      return new Response('Missing account identification', { status: 400 });
+      return new Response('Missing accountId', { status: 400 });
     }
+
+    // 5. Sanitize Metric Inputs
+    const currBalance = parseFloat(String(payload.balance)) || 0;
+    const currEquity = parseFloat(String(payload.equity)) || 0;
+    const currProfit = parseFloat(String(payload.profit)) || 0;
+    const login = String(payload.login || accountId);
 
     const accRef = doc(db, 'mt5_accounts', String(accountId));
     const accSnap = await getDoc(accRef);
     
-    // Sanitize inputs to prevent NaN Firestore errors
-    const currBalance = parseFloat(String(balance)) || 0;
-    const currEquity = parseFloat(String(equity)) || 0;
-    const currProfit = parseFloat(String(profit)) || 0;
-
     if (!accSnap.exists()) {
       // First-time sync: Provision basic account structure
       await setDoc(accRef, {
-        login: String(login || accountId),
+        login,
         balance: currBalance,
         equity: currEquity,
         profit: currProfit,
         status: 'active',
+        startingBalance: currBalance > 0 ? currBalance : 100000,
         updatedAt: serverTimestamp(),
       }, { merge: true });
       return new Response('OK', { status: 200 });
     }
 
     const accountData = accSnap.data();
-    
-    // Use stored startingBalance or initialize from current balance
-    const startingBalance = parseFloat(String(accountData.startingBalance || currBalance)) || 100000;
+    const startingBalance = parseFloat(String(accountData.startingBalance)) || currBalance || 100000;
     const planType = accountData.planType || '1-step-pro';
     const phase = accountData.phase || 'evaluation';
     const userId = accountData.userId;
     const currentStatus = accountData.status || 'active';
 
-    // Skip monitoring for accounts already in a terminal state
+    // Skip monitoring for terminal accounts
     if (currentStatus === 'terminated' || currentStatus === 'passed') {
       return new Response('OK', { status: 200 });
     }
 
-    // Calculate metrics with division-by-zero guards
+    // 6. Calculate Compliance Metrics
     const profitPct = startingBalance !== 0 ? ((currEquity - startingBalance) / startingBalance) * 100 : 0;
     const floatingLossPct = currBalance !== 0 ? ((currBalance - currEquity) / currBalance) * 100 : 0;
     const dailyDrawdownPct = startingBalance !== 0 ? ((startingBalance - currEquity) / startingBalance) * 100 : 0;
@@ -100,7 +102,7 @@ export async function POST(request: Request) {
       return null;
     };
 
-    // Rule Engine Implementation
+    // 7. Rule Engine
     if (planType === '1-step-pro') {
       const reason = checkHardBreach(phase === 'funded' ? { daily: 3, max: 6, float: 1 } : { daily: 3, max: 6 });
       if (reason) { breachReason = reason; breachType = 'hard'; }
@@ -126,13 +128,13 @@ export async function POST(request: Request) {
 
     if (breachType === 'hard') newStatus = 'terminated';
 
-    // Handle User Notifications for status changes
-    if (newStatus !== currentStatus && userId && typeof userId === 'string') {
-      const notifRef = collection(db, 'users', userId, 'notifications');
+    // 8. Trigger Notifications on Status Change
+    if (newStatus !== currentStatus && userId) {
+      const notifRef = collection(db, 'users', String(userId), 'notifications');
       if (newStatus === 'terminated') {
         await addDoc(notifRef, {
           title: "🚨 Account Terminated",
-          message: `Your account PF-${login || accountId} has been terminated. Reason: ${breachReason}`,
+          message: `Your account PF-${login} has been terminated. Reason: ${breachReason}`,
           type: 'challenge_failed',
           isRead: false,
           createdAt: serverTimestamp()
@@ -140,7 +142,7 @@ export async function POST(request: Request) {
       } else if (newStatus === 'passed') {
         await addDoc(notifRef, {
           title: "🎉 Challenge Passed!",
-          message: `Congratulations! Account PF-${login || accountId} has reached the target. Advancement pending review.`,
+          message: `Congratulations! Account PF-${login} has reached the target. Advancement pending review.`,
           type: 'challenge_passed',
           isRead: false,
           createdAt: serverTimestamp()
@@ -148,9 +150,9 @@ export async function POST(request: Request) {
       }
     }
 
-    // Persist finalized metrics to Firestore
+    // 9. Persist Metrics
     const updatePayload: any = {
-      login: String(login || accountId),
+      login,
       balance: currBalance,
       equity: currEquity,
       profit: currProfit,
@@ -158,7 +160,6 @@ export async function POST(request: Request) {
       floatingLossPct: floatingLossPct || 0,
       dailyDrawdownPct: dailyDrawdownPct || 0,
       maxDrawdownPct: maxDrawdownPct || 0,
-      startingBalance,
       status: newStatus,
       updatedAt: serverTimestamp(),
     };
