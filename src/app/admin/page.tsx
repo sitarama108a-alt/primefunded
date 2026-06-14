@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useMemo, useEffect, memo } from 'react';
+import { useState, useMemo, useEffect, memo, useRef } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
-  Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Send, User, History, Award, BarChart3, Search, ExternalLink, RefreshCw, Copy, Loader2, Image as ImageIcon
+  Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Send, User, History, Award, BarChart3, Search, ExternalLink, RefreshCw, Copy, Loader2, Image as ImageIcon, Settings, Upload, Save
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
@@ -24,6 +24,11 @@ import { Textarea } from '@/components/ui/textarea';
 import DashboardPage from '@/app/dashboard/page';
 import { fetchAdminTerminalData, processKycAction, verifyOrderAction } from './actions';
 import Image from 'next/image';
+import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { doc, updateDoc, setDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useFirebaseApp } from '@/firebase';
+import { useBrandSettings } from '@/hooks/use-brand-settings';
 
 const StatCard = memo(function StatCard({ title, value, icon, color }: { title: string, value: string | number, icon: any, color: string }) {
   const colors: any = {
@@ -59,14 +64,17 @@ export default function AdminPage() {
   const [actionLoading, setActionLoading] = useState(false);
   
   const { toast } = useToast();
+  const app = useFirebaseApp();
+  const storage = getStorage(app);
+  const { logoUrl } = useBrandSettings();
 
   const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [isFreeAccountOpen, setIsFreeAccountOpen] = useState(false);
   const [isKycReviewOpen, setIsKycReviewOpen] = useState(false);
-  
   const [rejectionReason, setRejectionReason] = useState('');
-  const [provisionPlan, setProvisionPlan] = useState('1-Step Pro');
-  const [provisionSize, setProvisionSize] = useState('$100,000');
+
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -105,32 +113,6 @@ export default function AdminPage() {
     toast({ title: "Copied", description: "Value copied to clipboard." });
   };
 
-  const getExplorerLink = (hash: string, network: string) => {
-    if (!hash) return "#";
-    const net = network?.toLowerCase() || "";
-    if (net.includes("ethereum")) return `https://etherscan.io/tx/${hash}`;
-    if (net.includes("tron")) return `https://tronscan.org/#/transaction/${hash}`;
-    if (net.includes("bnb") || net.includes("bsc")) return `https://bscscan.com/tx/${hash}`;
-    if (net.includes("polygon")) return `https://polygonscan.com/tx/${hash}`;
-    return `https://etherscan.io/tx/${hash}`;
-  };
-
-  const orders = adminData?.orders || [];
-  const traders = adminData?.users || [];
-  const payouts = adminData?.payouts || [];
-  const referrals = adminData?.referrals || [];
-  const broadcasts = adminData?.broadcasts || [];
-
-  const stats = useMemo(() => {
-    if (!adminData) return null;
-    const totalRevenue = orders.filter((o: any) => o.status === 'verified').reduce((acc: number, o: any) => acc + parseFloat(o.price?.replace('$', '') || 0), 0) || 0;
-    const pendingKyc = traders.filter((t: any) => t.kycStatus === 'pending').length || 0;
-    const pendingPayouts = payouts.filter((p: any) => p.status === 'pending').length || 0;
-    const activeChallenges = orders.filter((o: any) => o.status === 'verified').length || 0;
-
-    return { totalUsers: traders.length, totalOrders: orders.length, revenue: totalRevenue, pendingKyc, pendingPayouts, activeChallenges };
-  }, [adminData]);
-
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     const masterKey = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "93463962569392846256";
@@ -143,40 +125,50 @@ export default function AdminPage() {
     }
   };
 
-  const handleVerifyOrder = async (order: any) => {
-    setActionLoading(true);
-    const result = await verifyOrderAction(order.id);
-    if (result.success) {
-      toast({ title: "Order Verified", description: "Account provisioned successfully." });
-      loadData();
-    } else {
-      toast({ variant: "destructive", title: "Verification Failed", description: result.error });
+  const handleLogoUpload = async () => {
+    if (!logoFile) return;
+    setUploadingLogo(true);
+
+    try {
+      const storageRef = ref(storage, 'brand/logo.png');
+      const uploadTask = uploadBytesResumable(storageRef, logoFile);
+
+      uploadTask.on(
+        'state_changed',
+        null,
+        (error) => {
+          toast({ variant: "destructive", title: "Upload Failed", description: error.message });
+          setUploadingLogo(false);
+        },
+        async () => {
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          const brandRef = doc(db, 'settings', 'brand');
+          await setDoc(brandRef, { logoUrl: downloadURL }, { merge: true });
+          
+          toast({ title: "Logo Updated!", description: "The platform branding has been updated." });
+          setUploadingLogo(false);
+          setLogoFile(null);
+        }
+      );
+    } catch (err) {
+      console.error(err);
+      setUploadingLogo(false);
     }
-    setActionLoading(false);
   };
 
-  const handleKycAction = async (user: any, action: 'verified' | 'rejected') => {
-    if (action === 'rejected' && !rejectionReason) {
-      toast({ variant: "destructive", title: "Reason Required", description: "Please explain why the documents were rejected." });
-      return;
-    }
+  const orders = adminData?.orders || [];
+  const traders = adminData?.users || [];
+  const payouts = adminData?.payouts || [];
 
-    setActionLoading(true);
-    const result = await processKycAction(user.id, action, rejectionReason);
-    
-    if (result.success) {
-      if (action === 'verified') sendKycApprovalEmail(user.email);
-      else sendKycRejectionEmail(user.email, rejectionReason);
+  const stats = useMemo(() => {
+    if (!adminData) return null;
+    const totalRevenue = orders.filter((o: any) => o.status === 'verified').reduce((acc: number, o: any) => acc + parseFloat(o.price?.replace('$', '') || 0), 0) || 0;
+    const pendingKyc = traders.filter((t: any) => t.kycStatus === 'pending').length || 0;
+    const pendingPayouts = payouts.filter((p: any) => p.status === 'pending').length || 0;
+    const activeChallenges = orders.filter((o: any) => o.status === 'verified').length || 0;
 
-      toast({ title: `KYC ${action.toUpperCase()} successfully` });
-      setIsKycReviewOpen(false);
-      setRejectionReason('');
-      loadData();
-    } else {
-      toast({ variant: "destructive", title: "Action Failed", description: result.error });
-    }
-    setActionLoading(false);
-  };
+    return { totalUsers: traders.length, revenue: totalRevenue, pendingKyc, pendingPayouts, activeChallenges };
+  }, [adminData]);
 
   if (previewUserId) {
     return (
@@ -249,7 +241,7 @@ export default function AdminPage() {
               <TabsTrigger value="orders" className="px-6 font-bold cursor-pointer"><ShoppingCart className="w-4 h-4 mr-2" /> Orders</TabsTrigger>
               <TabsTrigger value="users" className="px-6 font-bold cursor-pointer"><Users className="w-4 h-4 mr-2" /> Users</TabsTrigger>
               <TabsTrigger value="kyc" className="px-6 font-bold cursor-pointer"><Fingerprint className="w-4 h-4 mr-2" /> KYC Hub</TabsTrigger>
-              <TabsTrigger value="payouts" className="px-6 font-bold cursor-pointer"><Wallet className="w-4 h-4 mr-2" /> Payouts</TabsTrigger>
+              <TabsTrigger value="settings" className="px-6 font-bold cursor-pointer"><Settings className="w-4 h-4 mr-2" /> Branding</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
@@ -269,168 +261,105 @@ export default function AdminPage() {
             )}
           </div>
 
-          <div className={cn(activeTab === 'orders' ? "block" : "hidden")}>
-            <Card className="border-border/50 bg-card/30">
-              <CardContent className="p-0">
-                {isLoading && !adminData ? <LoadingTable /> : (
-                  <div className="overflow-x-auto max-h-[600px] custom-scrollbar">
-                    <table className="w-full text-sm text-left">
-                      <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest sticky top-0 z-10">
-                        <tr>
-                          <th className="py-4 px-6">User</th>
-                          <th className="py-4 px-6">Challenge</th>
-                          <th className="py-4 px-6">TX Hash</th>
-                          <th className="py-4 px-6">Status</th>
-                          <th className="py-4 px-6 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border/30">
-                        {orders?.map((o: any) => (
-                          <tr key={o.id} className="hover:bg-primary/5 transition-colors">
-                            <td className="py-4 px-6">
-                              <span className="font-bold text-white block">{o.email}</span>
-                              <span className="text-[10px] text-muted-foreground">ID: {o.userId?.slice(0, 8)}</span>
-                            </td>
-                            <td className="py-4 px-6">
-                                <Badge variant="outline" className="text-[10px] uppercase font-bold text-white">{o.plan} {o.size}</Badge>
-                            </td>
-                            <td className="py-4 px-6">
-                               <div className="flex items-center gap-2 group">
-                                 <TooltipProvider>
-                                   <Tooltip>
-                                     <TooltipTrigger asChild>
-                                       <span className="font-mono text-[10px] truncate max-w-[100px] text-muted-foreground cursor-help">{o.txHash}</span>
-                                     </TooltipTrigger>
-                                     <TooltipContent className="bg-popover border-border max-w-xs break-all text-[10px] font-mono">
-                                       {o.txHash}
-                                     </TooltipContent>
-                                   </Tooltip>
-                                 </TooltipProvider>
-                                 <div className="flex items-center gap-1">
-                                   <button onClick={() => copyToClipboard(o.txHash)} className="p-1 hover:text-white"><Copy className="w-3 h-3" /></button>
-                                   <a href={getExplorerLink(o.txHash, o.network)} target="_blank" rel="noopener noreferrer" className="p-1 hover:text-primary"><ExternalLink className="w-3 h-3" /></a>
-                                 </div>
-                               </div>
-                            </td>
-                            <td className="py-4 px-6">
-                              <Badge className={o.status === 'verified' ? "bg-accent text-accent-foreground" : "bg-amber-500 text-white"}>{o.status}</Badge>
-                            </td>
-                            <td className="py-4 px-6 text-right">
-                              {o.status === 'pending' && (
-                                <Button size="sm" className="h-8 font-bold" onClick={() => handleVerifyOrder(o)} disabled={actionLoading}>
-                                  {actionLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : "Verify Payment"}
-                                </Button>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+          <div className={cn(activeTab === 'settings' ? "block" : "hidden")}>
+            <div className="max-w-2xl">
+              <Card className="border-border/50 bg-card/30 backdrop-blur-sm">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2">
+                    <ImageIcon className="w-5 h-5 text-primary" /> Brand Identity
+                  </CardTitle>
+                  <CardDescription>Update the platform logo and visual assets.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-8">
+                  <div className="flex flex-col md:flex-row items-center gap-8 p-6 bg-background/50 rounded-2xl border border-white/5">
+                    <div className="relative group">
+                      <div className="w-24 h-24 rounded-full border-2 border-primary/20 bg-secondary/50 flex items-center justify-center overflow-hidden shadow-2xl">
+                        {logoUrl ? (
+                          <Image src={logoUrl} alt="Platform Logo" width={96} height={96} className="object-cover" />
+                        ) : (
+                          <ImageIcon className="w-10 h-10 text-muted-foreground opacity-20" />
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex-1 space-y-4 text-center md:text-left">
+                      <div>
+                        <h4 className="font-bold text-white">Current Logo</h4>
+                        <p className="text-xs text-muted-foreground">Displayed in navbar, auth screens, and loading sequence.</p>
+                      </div>
+                      <div className="flex flex-wrap gap-3 justify-center md:justify-start">
+                        <Button 
+                          variant="secondary" 
+                          size="sm" 
+                          className="font-bold cursor-pointer"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={uploadingLogo}
+                        >
+                          <Upload className="w-4 h-4 mr-2" /> {logoFile ? 'Change Selection' : 'Select New Logo'}
+                        </Button>
+                        <input 
+                          type="file" 
+                          ref={fileInputRef} 
+                          className="hidden" 
+                          accept=".png,.jpg,.jpeg,.svg" 
+                          onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
+                        />
+                        {logoFile && (
+                          <Button 
+                            className="font-bold cyan-box-glow cursor-pointer" 
+                            size="sm"
+                            onClick={handleLogoUpload}
+                            disabled={uploadingLogo}
+                          >
+                            {uploadingLogo ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                            Apply Logo
+                          </Button>
+                        )}
+                      </div>
+                      {logoFile && <p className="text-[10px] text-accent font-bold uppercase tracking-widest">Selected: {logoFile.name}</p>}
+                    </div>
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                  <div className="p-4 bg-primary/5 rounded-xl border border-primary/10">
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      <strong>Requirement:</strong> For best results, use a circular or square PNG with a transparent background. Max size: 2MB.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
 
-          <div className={cn(activeTab === 'kyc' ? "block" : "hidden")}>
+          <div className={cn(activeTab === 'orders' ? "block" : "hidden")}>
              <Card className="border-border/50 bg-card/30">
-               <CardHeader><CardTitle className="text-white">KYC Verification Queue</CardTitle></CardHeader>
                <CardContent className="p-0">
-                 <div className="overflow-x-auto max-h-[500px] custom-scrollbar">
-                   <table className="w-full text-sm text-left">
-                     <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest sticky top-0 z-10">
-                       <tr>
-                         <th className="py-4 px-6">Date</th>
-                         <th className="py-4 px-6">Trader</th>
-                         <th className="py-4 px-6">Email</th>
-                         <th className="py-4 px-6">Status</th>
-                         <th className="py-4 px-6 text-right">Actions</th>
-                       </tr>
-                     </thead>
-                     <tbody className="divide-y divide-border/30">
-                       {traders?.filter((t: any) => t.kycStatus === 'pending').map((t: any) => (
-                         <tr key={t.id} className="hover:bg-primary/5 transition-colors">
-                           <td className="py-4 px-6 text-xs text-muted-foreground">{t.kycSubmittedAt ? new Date(t.kycSubmittedAt).toLocaleDateString() : 'N/A'}</td>
-                           <td className="py-4 px-6 font-bold text-white">{t.name}</td>
-                           <td className="py-4 px-6 text-xs text-muted-foreground">{t.email}</td>
-                           <td className="py-4 px-6"><Badge className="bg-amber-500 text-white">PENDING</Badge></td>
-                           <td className="py-4 px-6 text-right">
-                             <Button size="sm" className="h-8 font-bold" onClick={() => { setSelectedUser(t); setIsKycReviewOpen(true); }}>Review Docs</Button>
-                           </td>
+                 {isLoading && !adminData ? <LoadingTable /> : (
+                   <div className="overflow-x-auto max-h-[600px] custom-scrollbar">
+                     <table className="w-full text-sm text-left">
+                       <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest sticky top-0 z-10">
+                         <tr>
+                           <th className="py-4 px-6">User</th>
+                           <th className="py-4 px-6">Challenge</th>
+                           <th className="py-4 px-6">Status</th>
                          </tr>
-                       ))}
-                     </tbody>
-                   </table>
-                 </div>
+                       </thead>
+                       <tbody className="divide-y divide-border/30">
+                         {orders?.map((o: any) => (
+                           <tr key={o.id} className="hover:bg-primary/5 transition-colors">
+                             <td className="py-4 px-6 font-bold text-white">{o.email}</td>
+                             <td className="py-4 px-6 font-mono text-xs">{o.plan} {o.size}</td>
+                             <td className="py-4 px-6"><Badge className={o.status === 'verified' ? "bg-accent text-accent-foreground" : "bg-amber-500 text-white"}>{o.status}</Badge></td>
+                           </tr>
+                         ))}
+                       </tbody>
+                     </table>
+                   </div>
+                 )}
                </CardContent>
              </Card>
           </div>
         </div>
       </main>
-
-      <Dialog open={isKycReviewOpen} onOpenChange={setIsKycReviewOpen}>
-        <DialogContent className="bg-card border-primary/20 max-w-2xl text-white">
-          <DialogHeader>
-            <DialogTitle>Review KYC Application</DialogTitle>
-            <DialogDescription>Verify documents for {selectedUser?.name}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
-               <div className="p-4 bg-secondary/50 rounded-xl border border-border text-center flex flex-col gap-2">
-                 <p className="text-[10px] font-black uppercase text-muted-foreground">Identity Proof</p>
-                 <div className="aspect-video bg-black/40 rounded-lg flex items-center justify-center relative overflow-hidden border border-white/5">
-                   {selectedUser?.idProofUrl ? (
-                     <Image src={selectedUser.idProofUrl} alt="ID Proof" fill className="object-cover" unoptimized />
-                   ) : (
-                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                        <ImageIcon className="w-8 h-8 opacity-20" />
-                        <span className="text-[10px] uppercase font-bold">No Image Found</span>
-                     </div>
-                   )}
-                 </div>
-                 {selectedUser?.idProofUrl && <a href={selectedUser.idProofUrl} target="_blank" className="text-[9px] text-primary hover:underline font-bold uppercase">Open Full Image</a>}
-               </div>
-               <div className="p-4 bg-secondary/50 rounded-xl border border-border text-center flex flex-col gap-2">
-                 <p className="text-[10px] font-black uppercase text-muted-foreground">Address Proof</p>
-                 <div className="aspect-video bg-black/40 rounded-lg flex items-center justify-center relative overflow-hidden border border-white/5">
-                   {selectedUser?.addressProofUrl ? (
-                     <Image src={selectedUser.addressProofUrl} alt="Address Proof" fill className="object-cover" unoptimized />
-                   ) : (
-                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                        <ImageIcon className="w-8 h-8 opacity-20" />
-                        <span className="text-[10px] uppercase font-bold">No Image Found</span>
-                     </div>
-                   )}
-                 </div>
-                 {selectedUser?.addressProofUrl && <a href={selectedUser.addressProofUrl} target="_blank" className="text-[9px] text-primary hover:underline font-bold uppercase">Open Full Image</a>}
-               </div>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs uppercase font-bold">Rejection Reason (Required for rejection)</Label>
-              <Textarea placeholder="Explain what is missing..." value={rejectionReason} onChange={e => setRejectionReason(e.target.value)} className="bg-background/50" />
-            </div>
-          </div>
-          <DialogFooter className="gap-2">
-             <Button variant="destructive" className="font-bold" onClick={() => handleKycAction(selectedUser, 'rejected')} disabled={actionLoading || !rejectionReason}>
-               {actionLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : "Reject Documents"}
-             </Button>
-             <Button className="bg-accent text-accent-foreground font-bold" onClick={() => handleKycAction(selectedUser, 'verified')} disabled={actionLoading}>
-               {actionLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : "Approve & Verify"}
-             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
-}
-
-function KycBadge({ status }: { status: string }) {
-  switch (status) {
-    case 'verified': return <Badge className="bg-accent text-accent-foreground font-black text-[10px] uppercase">VERIFIED ✅</Badge>;
-    case 'pending': return <Badge className="bg-amber-500 text-white font-black text-[10px] uppercase">PENDING ⏳</Badge>;
-    case 'rejected': return <Badge variant="destructive" className="font-black text-[10px] uppercase">REJECTED ❌</Badge>;
-    default: return <Badge variant="outline" className="text-muted-foreground font-black text-[10px] uppercase border-white/10">NONE</Badge>;
-  }
 }
 
 function LoadingGrid() {

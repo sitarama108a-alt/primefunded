@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, Suspense, useEffect } from 'react';
@@ -17,9 +18,7 @@ import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/e
 import { cn, sanitizeInput } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { z } from 'zod';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
-
-const logoUrl = PlaceHolderImages.find(img => img.id === 'app-logo')?.imageUrl || 'https://picsum.photos/seed/pflogo-blue-silver/400/400';
+import { useBrandSettings } from '@/hooks/use-brand-settings';
 
 const SignupSchema = z.object({
   name: z.string().min(2, "Name is too short").max(100, "Name must be under 100 characters"),
@@ -46,6 +45,7 @@ function SignupContent() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const { user: existingUser, loading: authLoading } = useAuth();
+  const { logoUrl, siteName } = useBrandSettings();
 
   const referralCodeFromUrl = searchParams.get('ref');
   const redirectTo = searchParams.get('redirect') || '/dashboard';
@@ -62,16 +62,6 @@ function SignupContent() {
       validateCode(referralCodeFromUrl.toUpperCase());
     }
   }, [referralCodeFromUrl]);
-
-  useEffect(() => {
-    if (!referralInput || referralInput === referralCodeFromUrl?.toUpperCase()) return;
-    
-    const timeout = setTimeout(() => {
-      validateCode(referralInput);
-    }, 500);
-
-    return () => clearTimeout(timeout);
-  }, [referralInput]);
 
   const validateCode = async (code: string) => {
     if (!code || code.length < 4) {
@@ -118,9 +108,6 @@ function SignupContent() {
 
     setLoading(true);
     const sanitizedEmail = sanitizeInput(email);
-    const sanitizedName = sanitizeInput(name);
-    const sanitizedPhone = sanitizeInput(phone);
-    const sanitizedCountry = sanitizeInput(country);
 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, sanitizedEmail, password);
@@ -155,12 +142,10 @@ function SignupContent() {
         referralCode,
         codeChangesCount: 0,
         referredBy: referredByUid,
-        referralCount: 0,
-        referralEarnings: 0,
-        name: sanitizedName,
+        name: sanitizeInput(name),
         email: sanitizedEmail,
-        phone: sanitizedPhone,
-        country: sanitizedCountry,
+        phone: sanitizeInput(phone),
+        country: sanitizeInput(country),
         tier: 'Bronze',
         joinDate: new Date().toISOString(),
         balance: 0,
@@ -172,18 +157,10 @@ function SignupContent() {
       };
 
       const userRef = doc(db, `users`, user.uid);
-      setDoc(userRef, userData)
-        .catch(async (serverError) => {
-          const permissionError = new FirestorePermissionError({
-            path: userRef.path,
-            operation: 'create',
-            requestResourceData: userData,
-          } satisfies SecurityRuleContext);
-          errorEmitter.emit('permission-error', permissionError);
-        });
+      await setDoc(userRef, userData);
 
       const codeRegRef = doc(db, 'referralCodes', referralCode);
-      setDoc(codeRegRef, {
+      await setDoc(codeRegRef, {
         code: referralCode,
         userId: user.uid,
         active: true,
@@ -210,13 +187,13 @@ function SignupContent() {
           <div className="flex items-center gap-3 mb-12">
             <Image 
               src={logoUrl} 
-              alt="PrimeFunded Logo"
+              alt={siteName}
               width={50}
               height={50}
               className="rounded-full border-2 border-primary/20"
-              data-ai-hint="PF logo"
+              data-ai-hint="site logo"
             />
-            <span className="font-headline font-bold text-3xl tracking-tight text-white">PrimeFunded</span>
+            <span className="font-headline font-bold text-3xl tracking-tight text-white">{siteName}</span>
           </div>
           <h1 className="text-5xl font-headline font-bold mb-8 leading-tight text-white">Start Your <br />Funding Journey.</h1>
           <div className="space-y-6">
@@ -239,49 +216,20 @@ function SignupContent() {
           <form onSubmit={handleSignup} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="name">Full Name</Label>
-              <Input 
-                id="name" 
-                placeholder="John Doe" 
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                className="h-11 bg-secondary/50 text-white"
-              />
+              <Input id="name" placeholder="John Doe" value={name} onChange={(e) => setName(e.target.value)} required className="h-11 bg-secondary/50 text-white" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email Address</Label>
-              <Input 
-                id="email" 
-                type="email" 
-                placeholder="trader@email.com" 
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="h-11 bg-secondary/50 text-white"
-              />
+              <Input id="email" type="email" placeholder="trader@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="h-11 bg-secondary/50 text-white" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="phone">Phone</Label>
-                <Input 
-                  id="phone" 
-                  placeholder="+1 555..." 
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  required
-                  className="h-11 bg-secondary/50 text-white"
-                />
+                <Input id="phone" placeholder="+1 555..." value={phone} onChange={(e) => setPhone(e.target.value)} required className="h-11 bg-secondary/50 text-white" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="country">Country</Label>
-                <Input 
-                  id="country" 
-                  placeholder="United Kingdom" 
-                  value={country}
-                  onChange={(e) => setCountry(e.target.value)}
-                  required
-                  className="h-11 bg-secondary/50 text-white"
-                />
+                <Input id="country" placeholder="United Kingdom" value={country} onChange={(e) => setCountry(e.target.value)} required className="h-11 bg-secondary/50 text-white" />
               </div>
             </div>
             
@@ -289,43 +237,17 @@ function SignupContent() {
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
                 <div className="relative">
-                  <Input 
-                    id="password" 
-                    type={showPassword ? "text" : "password"} 
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    className="h-11 bg-secondary/50 text-white pr-10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white transition-colors"
-                  >
+                  <Input id="password" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required className="h-11 bg-secondary/50 text-white pr-10" />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white transition-colors">
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
-                <p className="text-[10px] text-muted-foreground">Min. 8 characters</p>
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword">Confirm Password</Label>
                 <div className="relative">
-                  <Input 
-                    id="confirmPassword" 
-                    type={showConfirmPassword ? "text" : "password"} 
-                    placeholder="••••••••"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                    className="h-11 bg-secondary/50 text-white pr-10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white transition-colors"
-                  >
+                  <Input id="confirmPassword" type={showConfirmPassword ? "text" : "password"} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required className="h-11 bg-secondary/50 text-white pr-10" />
+                  <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white transition-colors">
                     {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
@@ -343,7 +265,10 @@ function SignupContent() {
                 id="referral" 
                 placeholder="e.g. LAVANYA" 
                 value={referralInput}
-                onChange={(e) => setReferralInput(e.target.value.toUpperCase())}
+                onChange={(e) => {
+                  setReferralInput(e.target.value.toUpperCase());
+                  validateCode(e.target.value.toUpperCase());
+                }}
                 readOnly={!!referralCodeFromUrl}
                 className={cn(
                   "h-11 bg-secondary/50 transition-all uppercase font-mono text-xs text-white",

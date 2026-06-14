@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, Suspense } from 'react';
@@ -13,9 +14,7 @@ import { Loader2, Mail, ChevronLeft, ShieldAlert, Eye, EyeOff } from 'lucide-rea
 import { useToast } from '@/hooks/use-toast';
 import { sanitizeInput } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
-
-const logoUrl = PlaceHolderImages.find(img => img.id === 'app-logo')?.imageUrl || 'https://picsum.photos/seed/pflogo-blue-silver/400/400';
+import { useBrandSettings } from '@/hooks/use-brand-settings';
 
 function LoginContent() {
   const [email, setEmail] = useState('');
@@ -33,6 +32,7 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
+  const { logoUrl, siteName } = useBrandSettings();
 
   const redirectTo = searchParams.get('redirect') || '/dashboard';
 
@@ -137,13 +137,13 @@ function LoginContent() {
           <div className="flex items-center gap-3 mb-12">
             <Image 
               src={logoUrl} 
-              alt="PrimeFunded Logo"
+              alt={siteName}
               width={50}
               height={50}
               className="rounded-full border-2 border-primary/20"
-              data-ai-hint="PF logo"
+              data-ai-hint="site logo"
             />
-            <span className="font-headline font-bold text-3xl tracking-tight text-white">PrimeFunded</span>
+            <span className="font-headline font-bold text-3xl tracking-tight text-white">{siteName}</span>
           </div>
           <h1 className="text-5xl font-headline font-bold mb-6 leading-tight text-white">
             {view === 'login' ? "Welcome Back, \nTrader." : "Recover Your \nAccount."}
@@ -262,7 +262,7 @@ function LoginContent() {
           )}
           
           <p className="text-center text-sm text-muted-foreground">
-            Don't have an account? <Link href={redirectTo !== '/dashboard' ? `/signup?redirect=${encodeURIComponent(redirectTo)}` : '/signup'} className="text-primary font-semibold hover:underline">Join PrimeFunded</Link>
+            Don't have an account? <Link href={redirectTo !== '/dashboard' ? `/signup?redirect=${encodeURIComponent(redirectTo)}` : '/signup'} className="text-primary font-semibold hover:underline">Join {siteName}</Link>
           </p>
         </div>
       </div>

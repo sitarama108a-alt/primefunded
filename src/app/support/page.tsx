@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from 'next/link';
@@ -12,9 +13,7 @@ import {
   AccordionTrigger 
 } from '@/components/ui/accordion';
 import { Mail, MessageSquare, Clock, ShieldCheck, HelpCircle, TrendingUp } from 'lucide-react';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
-
-const logoUrl = PlaceHolderImages.find(img => img.id === 'app-logo')?.imageUrl || 'https://picsum.photos/seed/pflogo-blue-silver/400/400';
+import { useBrandSettings } from '@/hooks/use-brand-settings';
 
 const FAQS = [
   {
@@ -23,43 +22,25 @@ const FAQS = [
   },
   {
     q: "Is news trading allowed?",
-    a: "YES! News trading is fully allowed on all PrimeFunded accounts. Trade during any market conditions—including NFP, FOMC, and CPI—with absolutely no restrictions."
+    a: "YES! News trading is fully allowed on all accounts. Trade during any market conditions—including NFP, FOMC, and CPI—with absolutely no restrictions."
   },
   {
     q: "Are there consistency rules?",
-    a: "NO! PrimeFunded has absolutely no consistency rules. Trade your way, use any lot size, and trade on any day that suits your strategy."
+    a: "NO! We have absolutely no consistency rules. Trade your way, use any lot size, and trade on any day that suits your strategy."
   },
   {
     q: "What is the profit split?",
-    a: "All PrimeFunded traders receive 80% profit split from day one. No tiers required."
+    a: "All our traders receive 80% profit split from day one. No tiers required."
   },
   {
     q: "How do I request a payout?",
     a: "Navigate to the Payouts page in your dashboard, click 'Request Payout', and enter your desired amount and crypto wallet address."
-  },
-  {
-    q: "Which crypto do you accept?",
-    a: "We accept USDT/USDC on Ethereum (ERC20), USDT on Tron (TRC20), USDT on BNB Smart Chain (BEP20), and USDT on Polygon."
-  },
-  {
-    q: "Is there a time limit to pass the challenge?",
-    a: "No! PrimeFunded offers indefinite trading time on all 1-Step Pro and 2-Step Classic challenges. Take your time to reach your goals."
-  },
-  {
-    q: "Can I use an EA or trading bot?",
-    a: "Yes! Expert Advisors (EAs) and trading bots are fully allowed. However, martingale or grid strategies are prohibited in funded accounts."
-  },
-  {
-    q: "When can I get my first payout?",
-    a: "For 1-Step Pro and 2-Step Classic: after a minimum of 5 trading days. For Instant Funding: after 24 hours from your first executed trade."
-  },
-  {
-    q: "What happens if I breach a rule?",
-    a: "Hard breaches result in immediate account termination. You are always welcome to purchase a new challenge at any time to try again."
   }
 ];
 
 export default function SupportPage() {
+  const { logoUrl, siteName } = useBrandSettings();
+
   return (
     <div className="min-h-screen bg-background">
       {/* Public Nav */}
@@ -67,14 +48,14 @@ export default function SupportPage() {
         <div className="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3 cursor-pointer">
             <Image 
-              src={logoUrl || 'https://picsum.photos/seed/pflogo-blue-silver/400/400'} 
-              alt="PrimeFunded Logo"
+              src={logoUrl} 
+              alt={siteName}
               width={40}
               height={40}
               className="rounded-full border border-primary/20"
-              data-ai-hint="PF logo"
+              data-ai-hint="site logo"
             />
-            <span className="font-headline font-bold text-2xl tracking-tight text-white">PrimeFunded</span>
+            <span className="font-headline font-bold text-2xl tracking-tight text-white">{siteName}</span>
           </Link>
           <div className="flex items-center gap-6">
             <Link href="/challenges" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Challenges</Link>
@@ -165,10 +146,10 @@ export default function SupportPage() {
         <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-12">
           <div className="flex flex-col items-center md:items-start gap-4">
             <div className="flex items-center gap-3">
-              <Image src={logoUrl || 'https://picsum.photos/seed/pflogo-blue-silver/400/400'} alt="Logo" width={30} height={30} className="rounded-full" data-ai-hint="PF logo" />
-              <span className="font-headline font-bold text-2xl tracking-tight text-white">PrimeFunded</span>
+              <Image src={logoUrl} alt={siteName} width={30} height={30} className="rounded-full" data-ai-hint="site logo" />
+              <span className="font-headline font-bold text-2xl tracking-tight text-white">{siteName}</span>
             </div>
-            <p className="text-xs text-muted-foreground">© 2024 PrimeFunded Global. All rights reserved.</p>
+            <p className="text-xs text-muted-foreground">© 2024 {siteName} Global. All rights reserved.</p>
           </div>
           <div className="flex gap-8 text-sm text-muted-foreground">
             <Link href="/about" className="hover:text-primary transition-colors">About Us</Link>

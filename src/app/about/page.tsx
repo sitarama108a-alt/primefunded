@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from 'next/link';
@@ -5,11 +6,11 @@ import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Zap, Globe, Award, CheckCircle2, BarChart3, Clock, TrendingUp } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
-
-const logoUrl = PlaceHolderImages.find(img => img.id === 'app-logo')?.imageUrl || 'https://picsum.photos/seed/pflogo-blue-silver/400/400';
+import { useBrandSettings } from '@/hooks/use-brand-settings';
 
 export default function AboutPage() {
+  const { logoUrl, siteName } = useBrandSettings();
+
   return (
     <div className="min-h-screen bg-background">
       {/* Simple Nav */}
@@ -17,14 +18,14 @@ export default function AboutPage() {
         <div className="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3 cursor-pointer">
             <Image 
-              src={logoUrl || 'https://picsum.photos/seed/pflogo-blue-silver/400/400'} 
-              alt="PrimeFunded Logo"
+              src={logoUrl} 
+              alt={siteName}
               width={40}
               height={40}
               className="rounded-full border border-primary/20"
-              data-ai-hint="PF logo"
+              data-ai-hint="site logo"
             />
-            <span className="font-headline font-bold text-2xl tracking-tight text-white">PrimeFunded</span>
+            <span className="font-headline font-bold text-2xl tracking-tight text-white">{siteName}</span>
           </Link>
           <div className="flex items-center gap-6">
             <Link href="/challenges" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Challenges</Link>
@@ -44,7 +45,7 @@ export default function AboutPage() {
               animate={{ opacity: 1, scale: 1 }}
               className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold mb-6 uppercase tracking-widest"
             >
-              About PrimeFunded
+              About {siteName}
             </motion.div>
             <motion.h1 
               initial={{ opacity: 0, y: 20 }}
@@ -60,7 +61,7 @@ export default function AboutPage() {
               transition={{ delay: 0.1 }}
               className="text-xl text-muted-foreground leading-relaxed max-w-3xl mx-auto"
             >
-              Founded in 2024, PrimeFunded is dedicated to bridging the gap between elite retail talent and the capital they need to succeed.
+              Founded in 2024, {siteName} is dedicated to bridging the gap between elite retail talent and the capital they need to succeed.
             </motion.p>
           </header>
 
@@ -74,7 +75,7 @@ export default function AboutPage() {
               >
                 <h2 className="text-4xl font-headline font-bold">Our Mission</h2>
                 <p className="text-xl text-muted-foreground leading-relaxed">
-                  We believe every skilled trader deserves access to institutional capital. PrimeFunded was built to bridge the gap between talented traders and the funding they need to succeed in the global markets.
+                  We believe every skilled trader deserves access to institutional capital. {siteName} was built to bridge the gap between talented traders and the funding they need to succeed in the global markets.
                 </p>
                 <div className="pt-4 flex flex-col gap-4">
                   <div className="flex gap-4 items-center">
@@ -150,15 +151,6 @@ export default function AboutPage() {
             </div>
           </section>
 
-          <section className="mb-32 text-center">
-            <div className="max-w-3xl mx-auto space-y-6">
-              <h2 className="text-4xl font-headline font-bold">Our Team</h2>
-              <p className="text-xl text-muted-foreground leading-relaxed">
-                PrimeFunded is built by a team of professional traders and technology experts dedicated to creating the most trader-friendly proprietary firm in the industry.
-              </p>
-            </div>
-          </section>
-
           <section className="bg-primary/5 rounded-[4rem] p-16 border border-primary/20 text-center relative overflow-hidden">
             <div className="absolute bottom-0 right-0 w-96 h-96 bg-primary/10 blur-[120px] -mr-48 -mb-48 rounded-full" />
             <h2 className="text-4xl font-headline font-bold mb-6">Contact Us</h2>
@@ -179,10 +171,10 @@ export default function AboutPage() {
         <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-12">
           <div className="flex flex-col items-center md:items-start gap-4">
             <div className="flex items-center gap-3">
-              <Image src={logoUrl || 'https://picsum.photos/seed/pflogo-blue-silver/400/400'} alt="Logo" width={30} height={30} className="rounded-full" data-ai-hint="PF logo" />
-              <span className="font-headline font-bold text-2xl tracking-tight text-white">PrimeFunded</span>
+              <Image src={logoUrl} alt={siteName} width={30} height={30} className="rounded-full" data-ai-hint="site logo" />
+              <span className="font-headline font-bold text-2xl tracking-tight text-white">{siteName}</span>
             </div>
-            <p className="text-xs text-muted-foreground">© 2024 PrimeFunded Global. All rights reserved.</p>
+            <p className="text-xs text-muted-foreground">© 2024 {siteName} Global. All rights reserved.</p>
           </div>
           <div className="flex gap-8 text-sm text-muted-foreground">
             <Link href="/about" className="hover:text-primary transition-colors">About Us</Link>

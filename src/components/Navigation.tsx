@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from 'next/link';
@@ -14,7 +15,6 @@ import {
   HelpCircle,
   LogOut,
   ChevronRight,
-  TrendingUp,
   Award,
   Terminal,
   Shield,
@@ -25,9 +25,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
-
-const logoUrl = PlaceHolderImages.find(img => img.id === 'app-logo')?.imageUrl || 'https://picsum.photos/seed/pflogo-blue-silver/400/400';
+import { useBrandSettings } from '@/hooks/use-brand-settings';
 
 const navItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -81,6 +79,7 @@ export const Navigation = memo(function Navigation() {
   const pathname = usePathname();
   const router = useRouter();
   const { logout, userData, user } = useAuth();
+  const { logoUrl, siteName } = useBrandSettings();
 
   useEffect(() => {
     const routesToPrefetch = [
@@ -101,14 +100,14 @@ export const Navigation = memo(function Navigation() {
     <div className="w-64 bg-card border-r border-border h-screen sticky top-0 flex flex-col p-6 overflow-y-auto shrink-0 custom-scrollbar">
       <Link href="/dashboard" className="flex items-center gap-3 mb-10 px-2 cursor-pointer transition-opacity hover:opacity-80">
         <Image 
-          src={logoUrl || 'https://picsum.photos/seed/pflogo-blue-silver/400/400'} 
-          alt="PrimeFunded Logo"
+          src={logoUrl} 
+          alt={siteName}
           width={40}
           height={40}
           className="rounded-full border border-primary/20"
-          data-ai-hint="PF logo"
+          data-ai-hint="site logo"
         />
-        <span className="font-headline font-bold text-xl tracking-tight text-white">PrimeFunded</span>
+        <span className="font-headline font-bold text-xl tracking-tight text-white">{siteName}</span>
       </Link>
 
       <nav className="flex-1 space-y-1">

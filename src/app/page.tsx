@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from 'next/link';
@@ -6,9 +7,7 @@ import { Button } from '@/components/ui/button';
 import { TrendingUp, ShieldCheck, Zap, Globe, ArrowRight, BarChart3, CheckCircle2, Trophy, Wallet } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
-
-const logoUrl = PlaceHolderImages.find(img => img.id === 'app-logo')?.imageUrl || 'https://picsum.photos/seed/pflogo-blue-silver/400/400';
+import { useBrandSettings } from '@/hooks/use-brand-settings';
 
 const fadeInUp = {
   initial: { opacity: 0, y: 15 },
@@ -19,6 +18,7 @@ const fadeInUp = {
 
 export default function Home() {
   const { user } = useAuth();
+  const { logoUrl, siteName } = useBrandSettings();
 
   return (
     <div className="min-h-screen bg-background selection:bg-primary selection:text-primary-foreground overflow-x-hidden">
@@ -32,14 +32,14 @@ export default function Home() {
           >
             <Link href="/" className="flex items-center gap-3 cursor-pointer">
               <Image 
-                src={logoUrl || 'https://picsum.photos/seed/pflogo-blue-silver/400/400'} 
-                alt="PrimeFunded Logo"
+                src={logoUrl} 
+                alt={siteName}
                 width={40}
                 height={40}
                 className="rounded-full border border-primary/20"
-                data-ai-hint="PF logo"
+                data-ai-hint="site logo"
               />
-              <span className="font-headline font-bold text-2xl tracking-tight text-white">PrimeFunded</span>
+              <span className="font-headline font-bold text-2xl tracking-tight text-white">{siteName}</span>
             </Link>
           </motion.div>
           
@@ -146,7 +146,7 @@ export default function Home() {
             <HighlightCard 
               icon={<ShieldCheck className="w-8 h-8" />}
               title="Secure & Transparent"
-              subtitle="Fully verified payouts, real MT5 accounts and 24/7 trader support"
+              subtitle={`Fully verified payouts, real MT5 accounts and 24/7 trader support`}
             />
           </motion.div>
         </div>
@@ -202,14 +202,14 @@ export default function Home() {
           <div className="flex flex-col items-center md:items-start gap-4">
             <div className="flex items-center gap-3">
               <Image 
-                src={logoUrl || 'https://picsum.photos/seed/pflogo-blue-silver/400/400'} 
-                alt="PrimeFunded Logo"
+                src={logoUrl} 
+                alt={siteName}
                 width={30}
                 height={30}
                 className="rounded-full"
-                data-ai-hint="PF logo"
+                data-ai-hint="site logo"
               />
-              <span className="font-headline font-bold text-2xl tracking-tight text-white">PrimeFunded</span>
+              <span className="font-headline font-bold text-2xl tracking-tight text-white">{siteName}</span>
             </div>
             <p className="text-sm text-muted-foreground max-w-xs text-center md:text-left">
               The world's most transparent institutional funding firm for traders.
@@ -224,7 +224,7 @@ export default function Home() {
           </div>
           
           <div className="flex flex-col items-center md:items-end gap-2">
-            <p className="text-xs text-muted-foreground">© 2024 PrimeFunded Global. All rights reserved.</p>
+            <p className="text-xs text-muted-foreground">© 2024 {siteName} Global. All rights reserved.</p>
             <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Built for Elite Traders</p>
           </div>
         </div>
