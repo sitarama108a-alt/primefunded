@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect, memo, useRef } from 'react';
@@ -21,10 +22,10 @@ import { cn } from '@/lib/utils';
 import { sendKycApprovalEmail, sendKycRejectionEmail, sendPayoutProcessedEmail } from '@/lib/email';
 import { Textarea } from '@/components/ui/textarea';
 import DashboardPage from '@/app/dashboard/page';
-import { fetchAdminTerminalData, processKycAction, verifyOrderAction } from './actions';
+import { processKycAction, verifyOrderAction } from './actions';
 import Image from 'next/image';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { doc, updateDoc, setDoc } from 'firebase/firestore';
+import { doc, updateDoc, setDoc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useFirebaseApp } from '@/firebase';
 import { useBrandSettings } from '@/hooks/use-brand-settings';
@@ -96,13 +97,54 @@ export default function AdminPage() {
 
   const loadData = async () => {
     setIsLoading(true);
-    const result = await fetchAdminTerminalData();
-    if (result.success) {
-      setAdminData(result);
-    } else {
-      toast({ variant: "destructive", title: "Sync Failed", description: result.error });
+    try {
+      const fetchCollectionData = async (collName: string, orderByField?: string) => {
+        const collRef = collection(db, collName);
+        let q;
+        if (orderByField) {
+          q = query(collRef, orderBy(orderByField, 'desc'), limit(100));
+        } else {
+          q = query(collRef, limit(100));
+        }
+        const snap = await getDocs(q);
+        return snap.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          // Standardize dates from Timestamps to ISO strings for UI components
+          createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || doc.data().createdAt,
+          sentAt: doc.data().sentAt?.toDate?.()?.toISOString() || doc.data().sentAt,
+          date: doc.data().date?.toDate?.()?.toISOString() || doc.data().date,
+          kycSubmittedAt: doc.data().kycSubmittedAt?.toDate?.()?.toISOString() || doc.data().kycSubmittedAt,
+          lastCodeChange: doc.data().lastCodeChange?.toDate?.()?.toISOString() || doc.data().lastCodeChange,
+        }));
+      };
+
+      const [users, orders, payouts, referrals, broadcasts] = await Promise.all([
+        fetchCollectionData('users'),
+        fetchCollectionData('orders', 'date'),
+        fetchCollectionData('payouts', 'date'),
+        fetchCollectionData('referrals', 'createdAt'),
+        fetchCollectionData('broadcasts', 'sentAt'),
+      ]);
+
+      setAdminData({
+        users,
+        orders,
+        payouts,
+        referrals,
+        broadcasts,
+        success: true
+      });
+    } catch (error: any) {
+      console.error('[Admin-Client-Sync] Failed:', error);
+      toast({ 
+        variant: "destructive", 
+        title: "Sync Failed", 
+        description: "Firestore read error. Ensure security rules allow reads." 
+      });
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   useEffect(() => {
@@ -110,7 +152,8 @@ export default function AdminPage() {
     if (saved) setActiveTab(saved);
     
     const savedPass = sessionStorage.getItem('admin_master_key');
-    if (savedPass && savedPass === (process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "93463962569392846256")) {
+    const masterKey = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "93463962569392846256";
+    if (savedPass && savedPass === masterKey) {
       setIsAuthenticated(true);
     }
   }, []);
@@ -678,7 +721,7 @@ export default function AdminPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label className="text-white">Announcement Title</Label>
+                    <Label className="text-white">Announcement Title</Label Lane
                     <Input placeholder="e.g. Server Maintenance: Weekend Upgrade" className="bg-secondary/50" />
                   </div>
                   <div className="space-y-2">
