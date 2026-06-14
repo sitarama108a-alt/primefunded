@@ -142,7 +142,7 @@ function LoginContent() {
               width={50}
               height={50}
               className="rounded-full border-2 border-primary/20"
-              data-ai-hint="trading logo"
+              data-ai-hint="PF logo"
             />
             <span className="font-headline font-bold text-3xl tracking-tight text-white">PrimeFunded</span>
           </div>

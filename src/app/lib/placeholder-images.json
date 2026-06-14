@@ -15,9 +15,9 @@
     },
     {
       "id": "app-logo",
-      "description": "PrimeFunded official logo",
-      "imageUrl": "https://picsum.photos/seed/pflogo/200/200",
-      "imageHint": "trading logo"
+      "description": "PrimeFunded official PF circle logo",
+      "imageUrl": "https://picsum.photos/seed/pflogo-blue-silver/400/400",
+      "imageHint": "PF logo"
     }
   ]
 }

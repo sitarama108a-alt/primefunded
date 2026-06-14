@@ -73,7 +73,7 @@ export default function SupportPage() {
               width={40}
               height={40}
               className="rounded-full border border-primary/20"
-              data-ai-hint="trading logo"
+              data-ai-hint="PF logo"
             />
             <span className="font-headline font-bold text-2xl tracking-tight text-white">PrimeFunded</span>
           </Link>

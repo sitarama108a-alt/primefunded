@@ -18,7 +18,7 @@ export default function RootLoading() {
             width={50} 
             height={50} 
             className="rounded-full animate-pulse shadow-[0_0_20px_rgba(17,179,245,0.4)]"
-            data-ai-hint="trading logo"
+            data-ai-hint="PF logo"
           />
         </div>
       </div>
