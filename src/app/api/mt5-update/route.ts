@@ -24,29 +24,45 @@ export async function POST(request: Request) {
 
     let payload: any = {};
     const contentType = request.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      payload = await request.json();
-    } else {
-      const formData = await request.formData();
-      payload = Object.fromEntries(formData.entries());
+    
+    try {
+      if (contentType.includes('application/json')) {
+        payload = await request.json();
+      } else if (contentType.includes('form')) {
+        const formData = await request.formData();
+        payload = Object.fromEntries(formData.entries());
+      }
+    } catch (e) {
+      console.error('[MT5-API] Body parse error:', e);
+      return new Response('Invalid request body', { status: 400 });
     }
 
-    const { accountId, login, balance, equity, margin, profit } = payload;
+    // Identify account via accountId or login fallback
+    const accountId = payload.accountId || payload.login;
+    const login = payload.login;
+    const balance = payload.balance;
+    const equity = payload.equity;
+    const profit = payload.profit;
 
     if (!accountId) {
-      return new Response('Missing accountId', { status: 400 });
+      return new Response('Missing account identification', { status: 400 });
     }
 
     const accRef = doc(db, 'mt5_accounts', String(accountId));
     const accSnap = await getDoc(accRef);
     
+    // Sanitize inputs to prevent NaN Firestore errors
+    const currBalance = parseFloat(String(balance)) || 0;
+    const currEquity = parseFloat(String(equity)) || 0;
+    const currProfit = parseFloat(String(profit)) || 0;
+
     if (!accSnap.exists()) {
-      // If the account isn't provisioned yet, we save the initial data but can't check rules accurately
+      // First-time sync: Provision basic account structure
       await setDoc(accRef, {
-        login: String(login),
-        balance: Number(balance),
-        equity: Number(equity),
-        profit: Number(profit),
+        login: String(login || accountId),
+        balance: currBalance,
+        equity: currEquity,
+        profit: currProfit,
         status: 'active',
         updatedAt: serverTimestamp(),
       }, { merge: true });
@@ -55,32 +71,28 @@ export async function POST(request: Request) {
 
     const accountData = accSnap.data();
     
-    // 1. Initialize Starting Balance (Set once)
-    const startingBalance = accountData.startingBalance || Number(balance);
+    // Use stored startingBalance or initialize from current balance
+    const startingBalance = parseFloat(String(accountData.startingBalance || currBalance)) || 100000;
     const planType = accountData.planType || '1-step-pro';
     const phase = accountData.phase || 'evaluation';
     const userId = accountData.userId;
     const currentStatus = accountData.status || 'active';
 
+    // Skip monitoring for accounts already in a terminal state
     if (currentStatus === 'terminated' || currentStatus === 'passed') {
-      return new Response('OK', { status: 200 }); // Ignore updates for closed accounts
+      return new Response('OK', { status: 200 });
     }
 
-    // 2. Calculate Real-time Metrics
-    const currBalance = Number(balance);
-    const currEquity = Number(equity);
-    const profitPct = ((currEquity - startingBalance) / startingBalance) * 100;
-    const floatingLossPct = ((currBalance - currEquity) / currBalance) * 100;
-    
-    // Drawdown from starting balance (simplified for real-time check)
-    const dailyDrawdownPct = ((startingBalance - currEquity) / startingBalance) * 100;
-    const maxDrawdownPct = dailyDrawdownPct; // Usually tracked vs high-water mark, but simple for this payload
+    // Calculate metrics with division-by-zero guards
+    const profitPct = startingBalance !== 0 ? ((currEquity - startingBalance) / startingBalance) * 100 : 0;
+    const floatingLossPct = currBalance !== 0 ? ((currBalance - currEquity) / currBalance) * 100 : 0;
+    const dailyDrawdownPct = startingBalance !== 0 ? ((startingBalance - currEquity) / startingBalance) * 100 : 0;
+    const maxDrawdownPct = dailyDrawdownPct; 
 
     let newStatus = 'active';
     let breachType: 'hard' | 'soft' | null = null;
     let breachReason = '';
 
-    // 3. Rule Engine
     const checkHardBreach = (rules: { daily: number, max: number, float?: number }) => {
       if (dailyDrawdownPct > rules.daily) return `Daily drawdown limit exceeded (${dailyDrawdownPct.toFixed(2)}% > ${rules.daily}%)`;
       if (maxDrawdownPct > rules.max) return `Maximum drawdown limit exceeded (${maxDrawdownPct.toFixed(2)}% > ${rules.max}%)`;
@@ -88,6 +100,7 @@ export async function POST(request: Request) {
       return null;
     };
 
+    // Rule Engine Implementation
     if (planType === '1-step-pro') {
       const reason = checkHardBreach(phase === 'funded' ? { daily: 3, max: 6, float: 1 } : { daily: 3, max: 6 });
       if (reason) { breachReason = reason; breachType = 'hard'; }
@@ -113,13 +126,13 @@ export async function POST(request: Request) {
 
     if (breachType === 'hard') newStatus = 'terminated';
 
-    // 4. Handle State Changes (Notifications)
-    if (newStatus !== currentStatus && userId) {
+    // Handle User Notifications for status changes
+    if (newStatus !== currentStatus && userId && typeof userId === 'string') {
       const notifRef = collection(db, 'users', userId, 'notifications');
       if (newStatus === 'terminated') {
         await addDoc(notifRef, {
           title: "🚨 Account Terminated",
-          message: `Your account PF-${login} has been terminated. Reason: ${breachReason}`,
+          message: `Your account PF-${login || accountId} has been terminated. Reason: ${breachReason}`,
           type: 'challenge_failed',
           isRead: false,
           createdAt: serverTimestamp()
@@ -127,7 +140,7 @@ export async function POST(request: Request) {
       } else if (newStatus === 'passed') {
         await addDoc(notifRef, {
           title: "🎉 Challenge Passed!",
-          message: `Congratulations! Account PF-${login} has reached the target. Advancement pending review.`,
+          message: `Congratulations! Account PF-${login || accountId} has reached the target. Advancement pending review.`,
           type: 'challenge_passed',
           isRead: false,
           createdAt: serverTimestamp()
@@ -135,16 +148,16 @@ export async function POST(request: Request) {
       }
     }
 
-    // 5. Update Firestore
+    // Persist finalized metrics to Firestore
     const updatePayload: any = {
-      login: String(login),
+      login: String(login || accountId),
       balance: currBalance,
       equity: currEquity,
-      profit: Number(profit),
-      profitPct,
-      floatingLossPct,
-      dailyDrawdownPct,
-      maxDrawdownPct,
+      profit: currProfit,
+      profitPct: profitPct || 0,
+      floatingLossPct: floatingLossPct || 0,
+      dailyDrawdownPct: dailyDrawdownPct || 0,
+      maxDrawdownPct: maxDrawdownPct || 0,
       startingBalance,
       status: newStatus,
       updatedAt: serverTimestamp(),
@@ -161,6 +174,7 @@ export async function POST(request: Request) {
     return new Response('OK', { status: 200, headers: { 'Content-Type': 'text/plain' } });
 
   } catch (error: any) {
+    console.error('[MT5-API] Global Error:', error);
     return new Response(`Error: ${error.message}`, { status: 500 });
   }
 }
