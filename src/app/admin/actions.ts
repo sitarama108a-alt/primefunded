@@ -19,6 +19,7 @@ function getAdminDb() {
     }
 
     try {
+      // Ensure the key is parsed correctly. If it has raw newlines, it might fail.
       const serviceAccount = JSON.parse(serviceAccountKey);
       initializeApp({
         credential: cert(serviceAccount),
@@ -26,7 +27,7 @@ function getAdminDb() {
       console.log('[Admin-SDK] Initialized successfully via Server Action');
     } catch (e: any) {
       console.error('[Admin-SDK] Initialization failed:', e.message);
-      throw new Error(`Admin SDK Config Error: ${e.message}. Ensure .env key is valid single-line JSON.`);
+      throw new Error(`Admin SDK Config Error: ${e.message}. Ensure .env key is valid single-line JSON with escaped newlines.`);
     }
   }
   return getFirestore();
@@ -45,8 +46,8 @@ export async function fetchAdminTerminalData() {
         }
         const snap = await q.limit(limitCount).get();
         return snap.docs;
-      } catch (err) {
-        console.warn(`[Admin-Action] Failed to fetch collection: ${name}`, err);
+      } catch (err: any) {
+        console.warn(`[Admin-Action] Failed to fetch collection: ${name}`, err.message);
         return [];
       }
     };
@@ -78,7 +79,7 @@ export async function fetchAdminTerminalData() {
     };
   } catch (error: any) {
     console.error('[Admin-Action] Critical fetch error:', error.message);
-    return { success: false, error: `Critical Sync Failure: ${error.message}` };
+    return { success: false, error: `Sync Failure: ${error.message}` };
   }
 }
 
