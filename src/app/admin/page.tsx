@@ -7,14 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
-  Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Send, User, History, Award, BarChart3, Search, ExternalLink, RefreshCw, Copy, Loader2, Image as ImageIcon, Settings, Upload, Save, Instagram, MessageCircle, Phone, SearchX, AlertTriangle
+  Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Send, User, History, Award, BarChart3, Search, ExternalLink, RefreshCw, Copy, Loader2, Image as ImageIcon, Settings, Upload, Save, Instagram, MessageCircle, Phone, SearchX, AlertTriangle, Megaphone, DollarSign
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
@@ -118,6 +118,9 @@ export default function AdminPage() {
   useEffect(() => {
     if (isAuthenticated) {
       loadData();
+      // Pseudo-realtime: Refresh every 60 seconds
+      const interval = setInterval(loadData, 60000);
+      return () => clearInterval(interval);
     }
   }, [isAuthenticated]);
 
@@ -162,6 +165,25 @@ export default function AdminPage() {
       o.size?.toLowerCase().includes(query)
     );
   }, [adminData?.orders, searchTerm]);
+
+  const stats = useMemo(() => {
+    if (!adminData) return null;
+    const verifiedOrders = adminData.orders.filter((o: any) => o.status === 'verified');
+    const totalRevenue = verifiedOrders.reduce((acc: number, o: any) => acc + parseFloat(o.price?.replace('$', '').replace(',', '') || 0), 0) || 0;
+    const pendingKyc = adminData.users.filter((t: any) => t.kycStatus === 'pending').length || 0;
+    const pendingPayouts = adminData.payouts.filter((p: any) => p.status === 'pending').length || 0;
+    const activeChallenges = verifiedOrders.length || 0;
+    const pendingOrders = adminData.orders.filter((o: any) => o.status === 'pending').length || 0;
+
+    return { 
+      totalUsers: adminData.users.length, 
+      revenue: totalRevenue, 
+      pendingKyc, 
+      pendingPayouts, 
+      activeChallenges,
+      pendingOrders
+    };
+  }, [adminData]);
 
   const handleLogoUpload = async () => {
     if (!logoFile) return;
@@ -238,16 +260,6 @@ export default function AdminPage() {
     setActionLoading(false);
   };
 
-  const stats = useMemo(() => {
-    if (!adminData) return null;
-    const totalRevenue = adminData.orders.filter((o: any) => o.status === 'verified').reduce((acc: number, o: any) => acc + parseFloat(o.price?.replace('$', '') || 0), 0) || 0;
-    const pendingKyc = adminData.users.filter((t: any) => t.kycStatus === 'pending').length || 0;
-    const pendingPayouts = adminData.payouts.filter((p: any) => p.status === 'pending').length || 0;
-    const activeChallenges = adminData.orders.filter((o: any) => o.status === 'verified').length || 0;
-
-    return { totalUsers: adminData.users.length, revenue: totalRevenue, pendingKyc, pendingPayouts, activeChallenges };
-  }, [adminData]);
-
   if (previewUserId) {
     return (
       <div className="min-h-screen bg-background relative">
@@ -319,12 +331,15 @@ export default function AdminPage() {
           </div>
 
           <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-            <TabsList className="bg-secondary/50 p-1 h-12 w-full justify-start rounded-xl border border-border/50 shrink-0">
-              <TabsTrigger value="overview" className="px-6 font-bold cursor-pointer"><Activity className="w-4 h-4 mr-2" /> Overview</TabsTrigger>
-              <TabsTrigger value="users" className="px-6 font-bold cursor-pointer"><Users className="w-4 h-4 mr-2" /> User Directory</TabsTrigger>
-              <TabsTrigger value="orders" className="px-6 font-bold cursor-pointer"><ShoppingCart className="w-4 h-4 mr-2" /> Order Journal</TabsTrigger>
-              <TabsTrigger value="kyc" className="px-6 font-bold cursor-pointer"><Fingerprint className="w-4 h-4 mr-2" /> KYC Hub</TabsTrigger>
-              <TabsTrigger value="settings" className="px-6 font-bold cursor-pointer"><Settings className="w-4 h-4 mr-2" /> Branding</TabsTrigger>
+            <TabsList className="bg-secondary/50 p-1 h-12 w-full justify-start rounded-xl border border-border/50 shrink-0 overflow-x-auto no-scrollbar">
+              <TabsTrigger value="overview" className="px-6 font-bold cursor-pointer whitespace-nowrap"><Activity className="w-4 h-4 mr-2" /> Overview</TabsTrigger>
+              <TabsTrigger value="users" className="px-6 font-bold cursor-pointer whitespace-nowrap"><Users className="w-4 h-4 mr-2" /> User Directory</TabsTrigger>
+              <TabsTrigger value="orders" className="px-6 font-bold cursor-pointer whitespace-nowrap"><ShoppingCart className="w-4 h-4 mr-2" /> Order Journal</TabsTrigger>
+              <TabsTrigger value="kyc" className="px-6 font-bold cursor-pointer whitespace-nowrap"><Fingerprint className="w-4 h-4 mr-2" /> KYC Hub</TabsTrigger>
+              <TabsTrigger value="referrals" className="px-6 font-bold cursor-pointer whitespace-nowrap"><TrendingUp className="w-4 h-4 mr-2" /> Referrals</TabsTrigger>
+              <TabsTrigger value="payouts" className="px-6 font-bold cursor-pointer whitespace-nowrap"><DollarSign className="w-4 h-4 mr-2" /> Payouts</TabsTrigger>
+              <TabsTrigger value="broadcast" className="px-6 font-bold cursor-pointer whitespace-nowrap"><Megaphone className="w-4 h-4 mr-2" /> Broadcast</TabsTrigger>
+              <TabsTrigger value="settings" className="px-6 font-bold cursor-pointer whitespace-nowrap"><Settings className="w-4 h-4 mr-2" /> Branding</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
@@ -338,8 +353,67 @@ export default function AdminPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   <StatCard title="Total Revenue" value={`$${stats.revenue.toLocaleString()}`} icon={<Wallet />} color="blue" />
                   <StatCard title="Total Traders" value={stats.totalUsers} icon={<Users />} color="purple" />
-                  <StatCard title="Active Challenges" value={stats.activeChallenges} icon={<Award />} color="green" />
-                  <StatCard title="Pending KYC" value={stats.pendingKyc} icon={<Fingerprint />} color="amber" />
+                  <StatCard title="Verified Challenges" value={stats.activeChallenges} icon={<Award />} color="green" />
+                  <StatCard title="Pending Payments" value={stats.pendingOrders} icon={<Clock />} color="amber" />
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Recent Users */}
+                  <Card className="border-border/50 bg-card/30">
+                    <CardHeader className="flex flex-row items-center justify-between">
+                      <div>
+                        <CardTitle className="text-white text-lg">Newest Traders</CardTitle>
+                        <CardDescription>Latest registrations in the last 24h.</CardDescription>
+                      </div>
+                      <Button variant="ghost" size="sm" className="text-primary font-bold" onClick={() => handleTabChange('users')}>View All</Button>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="divide-y divide-border/30">
+                        {adminData.users.slice(0, 5).map((u: any) => (
+                          <div key={u.id} className="p-4 flex items-center justify-between hover:bg-white/5 transition-colors group">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center font-bold text-xs border border-border group-hover:border-primary/20">
+                                {u.name?.slice(0, 2).toUpperCase()}
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-white">{u.name}</p>
+                                <p className="text-[10px] text-muted-foreground">{u.email}</p>
+                              </div>
+                            </div>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => setPreviewUserId(u.id)}>
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Recent Orders */}
+                  <Card className="border-border/50 bg-card/30">
+                    <CardHeader className="flex flex-row items-center justify-between">
+                      <div>
+                        <CardTitle className="text-white text-lg">Latest Orders</CardTitle>
+                        <CardDescription>Most recent challenge purchases.</CardDescription>
+                      </div>
+                      <Button variant="ghost" size="sm" className="text-primary font-bold" onClick={() => handleTabChange('orders')}>View All</Button>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="divide-y divide-border/30">
+                        {adminData.orders.slice(0, 5).map((o: any) => (
+                          <div key={o.id} className="p-4 flex items-center justify-between hover:bg-white/5 transition-colors">
+                            <div>
+                              <p className="text-sm font-bold text-white">{o.plan} ({o.size})</p>
+                              <p className="text-[10px] text-muted-foreground">{o.email}</p>
+                            </div>
+                            <Badge className={o.status === 'verified' ? "bg-accent text-accent-foreground" : "bg-amber-500 text-white"}>
+                              {o.status.toUpperCase()}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
               </>
             )}
@@ -447,7 +521,7 @@ export default function AdminPage() {
                              </td>
                              <td className="py-4 px-6">
                                <Badge className={o.status === 'verified' ? "bg-accent text-accent-foreground" : "bg-amber-500 text-white"}>
-                                 {o.status}
+                                 {o.status.toUpperCase()}
                                </Badge>
                              </td>
                              <td className="py-4 px-6 text-right">
@@ -493,14 +567,18 @@ export default function AdminPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border/30">
-                        {adminData?.users?.filter((u: any) => u.kycStatus === 'pending').map((u: any) => (
+                        {adminData?.users?.filter((u: any) => u.kycStatus === 'pending').length === 0 ? (
+                          <tr><td colSpan={4} className="py-12 text-center text-muted-foreground italic">No pending KYC applications.</td></tr>
+                        ) : adminData?.users?.filter((u: any) => u.kycStatus === 'pending').map((u: any) => (
                           <tr key={u.id} className="hover:bg-amber-500/5 transition-colors">
                             <td className="py-4 px-6">
                               <div className="font-bold text-white">{u.name}</div>
                               <div className="text-xs text-muted-foreground">{u.email}</div>
                             </td>
-                            <td className="py-4 px-6 text-muted-foreground text-xs">{new Date(u.kycSubmittedAt).toLocaleString()}</td>
-                            <td className="py-4 px-6"><Badge className="bg-amber-500 text-white">PENDING</Badge></td>
+                            <td className="py-4 px-6 text-muted-foreground text-xs">
+                              {u.kycSubmittedAt ? new Date(u.kycSubmittedAt).toLocaleString() : 'N/A'}
+                            </td>
+                            <td className="py-4 px-6"><Badge className="bg-amber-500 text-white font-bold">PENDING</Badge></td>
                             <td className="py-4 px-6 text-right">
                               <Button 
                                 size="sm" 
@@ -518,6 +596,125 @@ export default function AdminPage() {
                   </div>
                </CardContent>
              </Card>
+          </div>
+
+          {/* REFERRALS TAB */}
+          <div className={cn("space-y-6", activeTab === 'referrals' ? "block" : "hidden")}>
+             <Card className="border-border/50 bg-card/30">
+                <CardHeader><CardTitle className="text-white">Global Referrals</CardTitle></CardHeader>
+                <CardContent className="p-0">
+                   <div className="overflow-x-auto">
+                     <table className="w-full text-sm text-left">
+                       <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-bold tracking-widest">
+                         <tr>
+                           <th className="py-4 px-6">Date</th>
+                           <th className="py-4 px-6">Referrer ID</th>
+                           <th className="py-4 px-6">Referred User</th>
+                           <th className="py-4 px-6">Status</th>
+                           <th className="py-4 px-6 text-right">Comm.</th>
+                         </tr>
+                       </thead>
+                       <tbody className="divide-y divide-border/30">
+                         {adminData?.referrals?.length === 0 ? (
+                           <tr><td colSpan={5} className="py-12 text-center text-muted-foreground italic">No referral records found.</td></tr>
+                         ) : adminData?.referrals?.map((r: any) => (
+                           <tr key={r.id} className="hover:bg-white/5">
+                             <td className="py-4 px-6 text-xs text-muted-foreground">
+                               {r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'N/A'}
+                             </td>
+                             <td className="py-4 px-6 font-mono text-[10px] text-white truncate max-w-[120px]">{r.referrerId}</td>
+                             <td className="py-4 px-6 font-bold text-white truncate max-w-[150px]">{r.referredUserEmail}</td>
+                             <td className="py-4 px-6"><Badge variant="outline" className="text-[10px]">{r.status?.toUpperCase()}</Badge></td>
+                             <td className="py-4 px-6 text-right font-bold text-accent">${r.amount || 0}</td>
+                           </tr>
+                         ))}
+                       </tbody>
+                     </table>
+                   </div>
+                </CardContent>
+             </Card>
+          </div>
+
+          {/* PAYOUTS TAB */}
+          <div className={cn("space-y-6", activeTab === 'payouts' ? "block" : "hidden")}>
+             <Card className="border-border/50 bg-card/30">
+                <CardHeader><CardTitle className="text-white">Payout Requests</CardTitle></CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-bold tracking-widest">
+                        <tr>
+                          <th className="py-4 px-6">Date</th>
+                          <th className="py-4 px-6">Trader</th>
+                          <th className="py-4 px-6">Method</th>
+                          <th className="py-4 px-6 text-right">Amount</th>
+                          <th className="py-4 px-6 text-right">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/30">
+                        {adminData?.payouts?.length === 0 ? (
+                           <tr><td colSpan={5} className="py-12 text-center text-muted-foreground italic">No payout history.</td></tr>
+                        ) : adminData?.payouts?.map((p: any) => (
+                           <tr key={p.id} className="hover:bg-white/5">
+                             <td className="py-4 px-6 text-xs text-muted-foreground">{p.date ? new Date(p.date).toLocaleDateString() : 'N/A'}</td>
+                             <td className="py-4 px-6 font-bold text-white">{p.email}</td>
+                             <td className="py-4 px-6 text-xs">{p.method}</td>
+                             <td className="py-4 px-6 text-right font-bold text-accent">${p.amount}</td>
+                             <td className="py-4 px-6 text-right">
+                               <Badge className={p.status === 'done' ? "bg-accent text-accent-foreground" : "bg-amber-500 text-white"}>{p.status.toUpperCase()}</Badge>
+                             </td>
+                           </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+             </Card>
+          </div>
+
+          {/* BROADCAST TAB */}
+          <div className={cn("space-y-8", activeTab === 'broadcast' ? "block" : "hidden")}>
+            <div className="max-w-3xl space-y-8">
+              <Card className="border-border/50 bg-card/30">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2"><Megaphone className="w-5 h-5 text-primary" /> Global Broadcast</CardTitle>
+                  <CardDescription>Send an institutional announcement to all active traders.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-white">Announcement Title</Label>
+                    <Input placeholder="e.g. Server Maintenance: Weekend Upgrade" className="bg-secondary/50" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-white">Message Body</Label>
+                    <Textarea placeholder="Type your announcement here..." className="bg-secondary/50 min-h-[150px]" />
+                  </div>
+                  <Button className="w-full font-bold cyan-box-glow cursor-not-allowed" disabled>
+                    <Send className="w-4 h-4 mr-2" /> Send to 5,000+ Traders
+                  </Button>
+                  <p className="text-[10px] text-center text-muted-foreground uppercase tracking-widest">Broadcasts are currently disabled for system stability.</p>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/50 bg-card/30">
+                 <CardHeader><CardTitle className="text-white text-lg">Sent Broadcasts</CardTitle></CardHeader>
+                 <CardContent className="p-0">
+                    <div className="divide-y divide-border/20">
+                       {adminData?.broadcasts?.length === 0 ? (
+                          <div className="p-8 text-center text-xs text-muted-foreground italic">No message history.</div>
+                       ) : adminData?.broadcasts?.map((b: any) => (
+                          <div key={b.id} className="p-4 flex justify-between items-center">
+                             <div>
+                                <p className="font-bold text-white text-sm">{b.title}</p>
+                                <p className="text-[10px] text-muted-foreground">{new Date(b.sentAt).toLocaleString()}</p>
+                             </div>
+                             <Badge variant="outline">DELIVERED</Badge>
+                          </div>
+                       ))}
+                    </div>
+                 </CardContent>
+              </Card>
+            </div>
           </div>
 
           {/* SETTINGS TAB */}
