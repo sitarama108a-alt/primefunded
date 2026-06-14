@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect, memo, useRef } from 'react';
@@ -17,9 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { 
   Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Send, User, History, Award, BarChart3, Search, ExternalLink, RefreshCw, Copy, Loader2, Image as ImageIcon, Settings, Upload, Save, Instagram, MessageCircle, Phone, SearchX, AlertTriangle, Megaphone, DollarSign
 } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { sendKycApprovalEmail, sendKycRejectionEmail, sendPayoutProcessedEmail } from '@/lib/email';
 import { Textarea } from '@/components/ui/textarea';
 import DashboardPage from '@/app/dashboard/page';
 import { processKycAction, verifyOrderAction } from './actions';
@@ -110,7 +107,6 @@ export default function AdminPage() {
         return snap.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
-          // Standardize dates from Timestamps to ISO strings for UI components
           createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || doc.data().createdAt,
           sentAt: doc.data().sentAt?.toDate?.()?.toISOString() || doc.data().sentAt,
           date: doc.data().date?.toDate?.()?.toISOString() || doc.data().date,
@@ -161,7 +157,6 @@ export default function AdminPage() {
   useEffect(() => {
     if (isAuthenticated) {
       loadData();
-      // Pseudo-realtime: Refresh every 60 seconds
       const interval = setInterval(loadData, 60000);
       return () => clearInterval(interval);
     }
@@ -385,7 +380,6 @@ export default function AdminPage() {
 
         <div className="flex-1 overflow-y-auto p-8 pt-0 custom-scrollbar">
           
-          {/* OVERVIEW TAB */}
           <div className={cn("space-y-8", activeTab === 'overview' ? "block" : "hidden")}>
             {isLoading && !adminData ? <LoadingGrid /> : !stats ? <div className="text-center py-20 text-muted-foreground">Sync required.</div> : (
               <>
@@ -397,7 +391,6 @@ export default function AdminPage() {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  {/* Recent Users */}
                   <Card className="border-border/50 bg-card/30">
                     <CardHeader className="flex flex-row items-center justify-between">
                       <div>
@@ -428,7 +421,6 @@ export default function AdminPage() {
                     </CardContent>
                   </Card>
 
-                  {/* Recent Orders */}
                   <Card className="border-border/50 bg-card/30">
                     <CardHeader className="flex flex-row items-center justify-between">
                       <div>
@@ -458,7 +450,6 @@ export default function AdminPage() {
             )}
           </div>
 
-          {/* USERS TAB */}
           <div className={cn("space-y-6", activeTab === 'users' ? "block" : "hidden")}>
             <div className="flex justify-between items-center mb-4">
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
@@ -511,7 +502,6 @@ export default function AdminPage() {
             </Card>
           </div>
 
-          {/* ORDERS TAB */}
           <div className={cn("space-y-6", activeTab === 'orders' ? "block" : "hidden")}>
              <div className="flex justify-between items-center mb-4">
                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
@@ -585,7 +575,6 @@ export default function AdminPage() {
              </Card>
           </div>
 
-          {/* KYC HUB TAB */}
           <div className={cn("space-y-8", activeTab === 'kyc' ? "block" : "hidden")}>
              <Card className="border-border/50 bg-card/30">
                <CardHeader>
@@ -637,7 +626,6 @@ export default function AdminPage() {
              </Card>
           </div>
 
-          {/* REFERRALS TAB */}
           <div className={cn("space-y-6", activeTab === 'referrals' ? "block" : "hidden")}>
              <Card className="border-border/50 bg-card/30">
                 <CardHeader><CardTitle className="text-white">Global Referrals</CardTitle></CardHeader>
@@ -674,7 +662,6 @@ export default function AdminPage() {
              </Card>
           </div>
 
-          {/* PAYOUTS TAB */}
           <div className={cn("space-y-6", activeTab === 'payouts' ? "block" : "hidden")}>
              <Card className="border-border/50 bg-card/30">
                 <CardHeader><CardTitle className="text-white">Payout Requests</CardTitle></CardHeader>
@@ -711,7 +698,6 @@ export default function AdminPage() {
              </Card>
           </div>
 
-          {/* BROADCAST TAB */}
           <div className={cn("space-y-8", activeTab === 'broadcast' ? "block" : "hidden")}>
             <div className="max-w-3xl space-y-8">
               <Card className="border-border/50 bg-card/30">
@@ -721,7 +707,7 @@ export default function AdminPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label className="text-white">Announcement Title</Label Lane
+                    <Label className="text-white">Announcement Title</Label>
                     <Input placeholder="e.g. Server Maintenance: Weekend Upgrade" className="bg-secondary/50" />
                   </div>
                   <div className="space-y-2">
@@ -756,7 +742,6 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* SETTINGS TAB */}
           <div className={cn("space-y-8 pb-20", activeTab === 'settings' ? "block" : "hidden")}>
             <div className="max-w-3xl grid gap-8">
               <Card className="border-border/50 bg-card/30 backdrop-blur-sm">
@@ -886,7 +871,6 @@ export default function AdminPage() {
         </div>
       </main>
 
-      {/* KYC REVIEW DIALOG */}
       <Dialog open={isKycReviewOpen} onOpenChange={setIsKycReviewOpen}>
         <DialogContent className="bg-card border-primary/20 max-w-2xl overflow-y-auto max-h-[90vh]">
           <DialogHeader>
