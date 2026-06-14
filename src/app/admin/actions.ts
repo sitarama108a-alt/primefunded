@@ -1,7 +1,7 @@
 'use server';
 
-import { getApps, initializeApp, cert } from 'firebase-admin/app';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getApps, initializeApp, cert, type App } from 'firebase-admin/app';
+import { getFirestore, FieldValue, type Firestore } from 'firebase-admin/firestore';
 
 /**
  * @fileOverview Administrative Server Actions
@@ -9,8 +9,11 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
  * Requires FIREBASE_SERVICE_ACCOUNT_KEY environment variable.
  */
 
-function getAdminDb() {
-  if (!getApps().length) {
+function getAdminDb(): Firestore {
+  const existingApps = getApps();
+  let app: App;
+
+  if (!existingApps.length) {
     let serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
     
     if (!serviceAccountKey) {
@@ -19,7 +22,7 @@ function getAdminDb() {
     }
 
     try {
-      // Clean up string if it was wrapped in quotes by some .env parsers
+      // Clean up string if it was wrapped in quotes or has escaped characters
       if (serviceAccountKey.startsWith("'") && serviceAccountKey.endsWith("'")) {
         serviceAccountKey = serviceAccountKey.slice(1, -1);
       } else if (serviceAccountKey.startsWith('"') && serviceAccountKey.endsWith('"')) {
@@ -27,30 +30,31 @@ function getAdminDb() {
       }
 
       const serviceAccount = JSON.parse(serviceAccountKey);
-      initializeApp({
+      app = initializeApp({
         credential: cert(serviceAccount),
       });
-      console.log('[Admin-SDK] Initialized successfully via Server Action');
+      console.log('[Admin-SDK] Initialized successfully');
     } catch (e: any) {
       console.error('[Admin-SDK] Initialization failed:', e.message);
-      // Log the first few chars of the key for debugging without exposing secrets
-      console.error('[Admin-SDK] Key Preview:', serviceAccountKey.substring(0, 20) + '...');
-      throw new Error(`Admin SDK Config Error: ${e.message}. Ensure .env key is valid single-line JSON with escaped newlines.`);
+      throw new Error(`Admin SDK Config Error: ${e.message}`);
     }
+  } else {
+    app = existingApps[0];
   }
-  return getFirestore();
+  return getFirestore(app);
 }
 
 export async function fetchAdminTerminalData() {
   try {
     const db = getAdminDb();
 
-    // Fetch collections individually to prevent one failure blocking all stats
     const fetchCollection = async (name: string, limitCount = 100, orderByField?: string) => {
       try {
         let q = db.collection(name);
         if (orderByField) {
-          q = q.orderBy(orderByField, 'desc') as any;
+          const query = q.orderBy(orderByField, 'desc');
+          const snap = await query.limit(limitCount).get();
+          return snap.docs;
         }
         const snap = await q.limit(limitCount).get();
         return snap.docs;

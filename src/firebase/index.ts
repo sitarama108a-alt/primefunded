@@ -11,37 +11,46 @@ import { firebaseConfig } from './config';
  * Includes a safety check for missing configuration to prevent invalid-api-key crashes.
  */
 export function initializeFirebase(): {
-  firebaseApp: FirebaseApp;
-  firestore: Firestore;
-  auth: Auth;
+  firebaseApp: FirebaseApp | null;
+  firestore: Firestore | null;
+  auth: Auth | null;
 } {
-  // Validate config presence to prevent obscure SDK errors during initialization
-  const isConfigMissing = !firebaseConfig.apiKey || firebaseConfig.apiKey.includes('REPLACE');
+  // Validate config presence
+  const isConfigMissing = !firebaseConfig.apiKey || firebaseConfig.apiKey === '' || firebaseConfig.apiKey.includes('REPLACE');
   
   if (isConfigMissing) {
-    console.error('[Firebase] CRITICAL: Configuration is missing or using placeholders. Auth and Firestore will fail. Please check your .env file.');
-  }
-
-  // Initialize app only if not already initialized
-  const firebaseApp =
-    getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-    
-  const auth = getAuth(firebaseApp);
-  const firestore = getFirestore(firebaseApp);
-  
-  // Initialize App Check (Optional: Only if site key is provided)
-  if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
-    try {
-      initializeAppCheck(firebaseApp, {
-        provider: new ReCaptchaEnterpriseProvider(process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY),
-        isTokenAutoRefreshEnabled: true,
-      });
-    } catch (err) {
-      console.warn('[Firebase] App Check failed to initialize:', err);
+    if (typeof window !== 'undefined') {
+      console.error('[Firebase] CRITICAL: Configuration is missing or using placeholders. Auth and Firestore will fail. Please check your .env file.');
     }
+    // Return nulls rather than crashing the entire Node process during SSR/Compilation
+    return { firebaseApp: null, firestore: null, auth: null };
   }
 
-  return { firebaseApp, firestore, auth };
+  try {
+    // Initialize app only if not already initialized
+    const firebaseApp =
+      getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+      
+    const auth = getAuth(firebaseApp);
+    const firestore = getFirestore(firebaseApp);
+    
+    // Initialize App Check (Optional: Only if site key is provided)
+    if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
+      try {
+        initializeAppCheck(firebaseApp, {
+          provider: new ReCaptchaEnterpriseProvider(process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY),
+          isTokenAutoRefreshEnabled: true,
+        });
+      } catch (err) {
+        console.warn('[Firebase] App Check failed to initialize:', err);
+      }
+    }
+
+    return { firebaseApp, firestore, auth };
+  } catch (error) {
+    console.error('[Firebase] Initialization Error:', error);
+    return { firebaseApp: null, firestore: null, auth: null };
+  }
 }
 
 export * from './provider';
