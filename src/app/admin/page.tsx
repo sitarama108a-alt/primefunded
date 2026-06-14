@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect, memo, useRef } from 'react';
@@ -15,7 +14,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
-  Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Send, User, History, Award, BarChart3, Search, ExternalLink, RefreshCw, Copy, Loader2, Image as ImageIcon, Settings, Upload, Save
+  Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Send, User, History, Award, BarChart3, Search, ExternalLink, RefreshCw, Copy, Loader2, Image as ImageIcon, Settings, Upload, Save, Instagram, MessageCircle, Phone
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
@@ -66,7 +65,7 @@ export default function AdminPage() {
   const { toast } = useToast();
   const app = useFirebaseApp();
   const storage = getStorage(app);
-  const { logoUrl } = useBrandSettings();
+  const branding = useBrandSettings();
 
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [isKycReviewOpen, setIsKycReviewOpen] = useState(false);
@@ -75,6 +74,25 @@ export default function AdminPage() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [socialLinks, setSocialLinks] = useState({
+    discord: '',
+    instagram: '',
+    telegram: '',
+    whatsapp: ''
+  });
+  const [savingLinks, setSavingLinks] = useState(false);
+
+  useEffect(() => {
+    if (branding && !branding.loading) {
+      setSocialLinks({
+        discord: branding.discordUrl || '',
+        instagram: branding.instagramUrl || '',
+        telegram: branding.telegramUrl || '',
+        whatsapp: branding.whatsappUrl || ''
+      });
+    }
+  }, [branding]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -106,11 +124,6 @@ export default function AdminPage() {
   const handleTabChange = (val: string) => {
     setActiveTab(val);
     localStorage.setItem('admin_active_tab', val);
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast({ title: "Copied", description: "Value copied to clipboard." });
   };
 
   const handleLogin = (e: React.FormEvent) => {
@@ -153,6 +166,24 @@ export default function AdminPage() {
     } catch (err) {
       console.error(err);
       setUploadingLogo(false);
+    }
+  };
+
+  const handleSaveSocialLinks = async () => {
+    setSavingLinks(true);
+    try {
+      const brandRef = doc(db, 'settings', 'brand');
+      await setDoc(brandRef, {
+        discordUrl: socialLinks.discord,
+        instagramUrl: socialLinks.instagram,
+        telegramUrl: socialLinks.telegram,
+        whatsappUrl: socialLinks.whatsapp
+      }, { merge: true });
+      toast({ title: "Links Saved", description: "Community links have been updated across the site." });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Save Failed" });
+    } finally {
+      setSavingLinks(false);
     }
   };
 
@@ -261,8 +292,8 @@ export default function AdminPage() {
             )}
           </div>
 
-          <div className={cn(activeTab === 'settings' ? "block" : "hidden")}>
-            <div className="max-w-2xl">
+          <div className={cn("space-y-8 pb-20", activeTab === 'settings' ? "block" : "hidden")}>
+            <div className="max-w-3xl grid gap-8">
               <Card className="border-border/50 bg-card/30 backdrop-blur-sm">
                 <CardHeader>
                   <CardTitle className="text-white flex items-center gap-2">
@@ -274,8 +305,8 @@ export default function AdminPage() {
                   <div className="flex flex-col md:flex-row items-center gap-8 p-6 bg-background/50 rounded-2xl border border-white/5">
                     <div className="relative group">
                       <div className="w-24 h-24 rounded-full border-2 border-primary/20 bg-secondary/50 flex items-center justify-center overflow-hidden shadow-2xl">
-                        {logoUrl ? (
-                          <Image src={logoUrl} alt="Platform Logo" width={96} height={96} className="object-cover" />
+                        {branding.logoUrl ? (
+                          <Image src={branding.logoUrl} alt="Platform Logo" width={96} height={96} className="object-cover" />
                         ) : (
                           <ImageIcon className="w-10 h-10 text-muted-foreground opacity-20" />
                         )}
@@ -318,11 +349,71 @@ export default function AdminPage() {
                       {logoFile && <p className="text-[10px] text-accent font-bold uppercase tracking-widest">Selected: {logoFile.name}</p>}
                     </div>
                   </div>
-                  <div className="p-4 bg-primary/5 rounded-xl border border-primary/10">
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      <strong>Requirement:</strong> For best results, use a circular or square PNG with a transparent background. Max size: 2MB.
-                    </p>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/50 bg-card/30 backdrop-blur-sm">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2">
+                    <Users className="w-5 h-5 text-purple-500" /> Community Links
+                  </CardTitle>
+                  <CardDescription>Configure external social and community destinations.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
+                        <DiscordIcon className="w-3.5 h-3.5" /> Discord Invite
+                      </Label>
+                      <Input 
+                        placeholder="https://discord.gg/..." 
+                        value={socialLinks.discord}
+                        onChange={e => setSocialLinks({...socialLinks, discord: e.target.value})}
+                        className="bg-secondary/30 text-white"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
+                        <Instagram className="w-3.5 h-3.5" /> Instagram Profile
+                      </Label>
+                      <Input 
+                        placeholder="https://instagram.com/..." 
+                        value={socialLinks.instagram}
+                        onChange={e => setSocialLinks({...socialLinks, instagram: e.target.value})}
+                        className="bg-secondary/30 text-white"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
+                        <Send className="w-3.5 h-3.5" /> Telegram Channel
+                      </Label>
+                      <Input 
+                        placeholder="https://t.me/..." 
+                        value={socialLinks.telegram}
+                        onChange={e => setSocialLinks({...socialLinks, telegram: e.target.value})}
+                        className="bg-secondary/30 text-white"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
+                        <Phone className="w-3.5 h-3.5" /> WhatsApp Group
+                      </Label>
+                      <Input 
+                        placeholder="https://chat.whatsapp.com/..." 
+                        value={socialLinks.whatsapp}
+                        onChange={e => setSocialLinks({...socialLinks, whatsapp: e.target.value})}
+                        className="bg-secondary/30 text-white"
+                      />
+                    </div>
                   </div>
+                  <Button 
+                    className="font-bold cursor-pointer" 
+                    onClick={handleSaveSocialLinks}
+                    disabled={savingLinks}
+                  >
+                    {savingLinks ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                    Save Community Links
+                  </Button>
                 </CardContent>
               </Card>
             </div>
@@ -359,6 +450,14 @@ export default function AdminPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+function DiscordIcon(props: any) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993.023.03.07.039.084.028a19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.419-2.157 2.419zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.419-2.157 2.419z" />
+    </svg>
   );
 }
 
