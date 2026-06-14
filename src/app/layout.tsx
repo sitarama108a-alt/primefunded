@@ -1,3 +1,4 @@
+
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
@@ -6,6 +7,9 @@ import { FirebaseClientProvider } from '@/firebase';
 import { ProgressBar } from '@/components/ProgressBar';
 import { PerformanceTracker } from '@/components/PerformanceTracker';
 import { Suspense } from 'react';
+import { PlaceHolderImages } from '@/lib/placeholder-images';
+
+const logoUrl = PlaceHolderImages.find(img => img.id === 'app-logo')?.imageUrl || '';
 
 export const viewport: Viewport = {
   themeColor: '#020817',
@@ -19,6 +23,11 @@ export const metadata: Metadata = {
   description: 'Scale your trading career with PrimeFunded institutional funding. No consistency rules, daily payouts, and up to $200,000 in capital.',
   keywords: ['prop firm', 'funded account', 'trading challenge', 'forex funding', 'institutional capital'],
   authors: [{ name: 'PrimeFunded Global' }],
+  icons: {
+    icon: logoUrl,
+    shortcut: logoUrl,
+    apple: logoUrl,
+  },
   robots: 'index, follow',
   openGraph: {
     type: 'website',
@@ -29,7 +38,7 @@ export const metadata: Metadata = {
     description: 'Get funded up to $200,000. Keep 80% of your profits. Start your challenge today.',
     images: [
       {
-        url: 'https://picsum.photos/seed/primefunded/1200/630',
+        url: logoUrl,
         width: 1200,
         height: 630,
         alt: 'PrimeFunded Dashboard',
@@ -40,7 +49,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'PrimeFunded | Institutional Trading Challenges',
     description: 'The world\'s most transparent prop firm. No hidden rules.',
-    images: ['https://picsum.photos/seed/primefunded/1200/630'],
+    images: [logoUrl],
   },
 };
 

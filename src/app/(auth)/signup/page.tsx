@@ -3,6 +3,7 @@
 
 import { useState, Suspense, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp, getDocs, collection, query, where } from 'firebase/firestore';
@@ -10,13 +11,16 @@ import { auth, db } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { TrendingUp, CheckCircle2, XCircle, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
+import { CheckCircle2, XCircle, Loader2, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 import { cn, sanitizeInput } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { z } from 'zod';
+import { PlaceHolderImages } from '@/lib/placeholder-images';
+
+const logoUrl = PlaceHolderImages.find(img => img.id === 'app-logo')?.imageUrl || '';
 
 const SignupSchema = z.object({
   name: z.string().min(2, "Name is too short").max(100, "Name must be under 100 characters"),
@@ -47,7 +51,6 @@ function SignupContent() {
   const referralCodeFromUrl = searchParams.get('ref');
   const redirectTo = searchParams.get('redirect') || '/dashboard';
 
-  // Redirect if already logged in
   useEffect(() => {
     if (existingUser && !authLoading) {
       router.push(redirectTo);
@@ -95,7 +98,6 @@ function SignupContent() {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validation
     const validation = SignupSchema.safeParse({ name, email, phone, country, password });
     if (!validation.success) {
       toast({
@@ -136,7 +138,6 @@ function SignupContent() {
         if (!querySnapshot.empty) {
           referredByUid = querySnapshot.docs[0].id;
           
-          // Log referral signup in real-time
           const referralId = Math.random().toString(36).substring(7);
           setDoc(doc(db, 'referrals', referralId), {
             referrerId: referredByUid,
@@ -207,16 +208,23 @@ function SignupContent() {
       <div className="hidden lg:flex flex-col justify-center p-20 bg-secondary relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full bg-grid-white opacity-20" />
         <div className="relative z-10">
-          <div className="flex items-center gap-2 mb-12">
-            <TrendingUp className="text-primary w-10 h-10" />
+          <div className="flex items-center gap-3 mb-12">
+            <Image 
+              src={logoUrl} 
+              alt="PrimeFunded Logo"
+              width={50}
+              height={50}
+              className="rounded-full border-2 border-primary/20"
+              data-ai-hint="trading logo"
+            />
             <span className="font-headline font-bold text-3xl tracking-tight text-white">PrimeFunded</span>
           </div>
           <h1 className="text-5xl font-headline font-bold mb-8 leading-tight text-white">Start Your <br />Funding Journey.</h1>
           <div className="space-y-6">
-            <FeatureItem text="Up to $200k in institutional capital" />
             <FeatureItem text="No Consistency Rules" />
             <FeatureItem text="News Trading Allowed" />
             <FeatureItem text="Daily Payouts (Instant)" />
+            <FeatureItem text="Up to $200k in institutional capital" />
             <FeatureItem text="80% Profit Split" />
           </div>
         </div>

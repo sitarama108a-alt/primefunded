@@ -1,10 +1,15 @@
+
 "use client";
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { TrendingUp, ShieldCheck, Zap, Globe, ArrowRight, BarChart3, CheckCircle2, Trophy, Wallet } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
+import { PlaceHolderImages } from '@/lib/placeholder-images';
+
+const logoUrl = PlaceHolderImages.find(img => img.id === 'app-logo')?.imageUrl || '';
 
 const fadeInUp = {
   initial: { opacity: 0, y: 15 },
@@ -25,12 +30,18 @@ export default function Home() {
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.2 }}
-            className="flex items-center gap-2"
           >
-            <div className="bg-primary/20 p-1.5 rounded-lg border border-primary/20">
-              <TrendingUp className="text-primary w-6 h-6" />
-            </div>
-            <span className="font-headline font-bold text-2xl tracking-tight text-white">PrimeFunded</span>
+            <Link href="/" className="flex items-center gap-3 cursor-pointer">
+              <Image 
+                src={logoUrl} 
+                alt="PrimeFunded Logo"
+                width={40}
+                height={40}
+                className="rounded-full border border-primary/20"
+                data-ai-hint="trading logo"
+              />
+              <span className="font-headline font-bold text-2xl tracking-tight text-white">PrimeFunded</span>
+            </Link>
           </motion.div>
           
           <div className="hidden md:flex items-center gap-8">
@@ -190,8 +201,14 @@ export default function Home() {
       <footer className="py-20 border-t border-white/5 bg-secondary/20 relative">
         <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-12">
           <div className="flex flex-col items-center md:items-start gap-4">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="text-primary w-7 h-7" />
+            <div className="flex items-center gap-3">
+              <Image 
+                src={logoUrl} 
+                alt="PrimeFunded Logo"
+                width={30}
+                height={30}
+                className="rounded-full"
+              />
               <span className="font-headline font-bold text-2xl tracking-tight text-white">PrimeFunded</span>
             </div>
             <p className="text-sm text-muted-foreground max-w-xs text-center md:text-left">

@@ -1,17 +1,22 @@
+
 "use client";
 
 import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { TrendingUp, Loader2, Mail, ChevronLeft, ShieldAlert, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Mail, ChevronLeft, ShieldAlert, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { sanitizeInput } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
+import { PlaceHolderImages } from '@/lib/placeholder-images';
+
+const logoUrl = PlaceHolderImages.find(img => img.id === 'app-logo')?.imageUrl || '';
 
 function LoginContent() {
   const [email, setEmail] = useState('');
@@ -21,7 +26,6 @@ function LoginContent() {
   const [resetLoading, setResetLoading] = useState(false);
   const [view, setView] = useState<'login' | 'forgot'>('login');
   
-  // Security: Failed attempt tracking
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [isLocked, setIsLocked] = useState(false);
   const [lockRemaining, setLockRemaining] = useState(0);
@@ -33,7 +37,6 @@ function LoginContent() {
 
   const redirectTo = searchParams.get('redirect') || '/dashboard';
 
-  // Redirect if already logged in
   useEffect(() => {
     if (user && !authLoading) {
       router.push(redirectTo);
@@ -80,7 +83,7 @@ function LoginContent() {
       
       if (newAttempts >= 5) {
         setIsLocked(true);
-        setLockRemaining(30); // 30 second lockout
+        setLockRemaining(30);
         toast({
           variant: "destructive",
           title: "Security Lockout",
@@ -132,8 +135,15 @@ function LoginContent() {
       <div className="hidden lg:flex flex-col justify-center p-20 bg-secondary relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full bg-grid-white opacity-20" />
         <div className="relative z-10">
-          <div className="flex items-center gap-2 mb-12">
-            <TrendingUp className="text-primary w-10 h-10" />
+          <div className="flex items-center gap-3 mb-12">
+            <Image 
+              src={logoUrl} 
+              alt="PrimeFunded Logo"
+              width={50}
+              height={50}
+              className="rounded-full border-2 border-primary/20"
+              data-ai-hint="trading logo"
+            />
             <span className="font-headline font-bold text-3xl tracking-tight text-white">PrimeFunded</span>
           </div>
           <h1 className="text-5xl font-headline font-bold mb-6 leading-tight text-white">

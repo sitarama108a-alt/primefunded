@@ -1,0 +1,23 @@
+
+{
+  "placeholderImages": [
+    {
+      "id": "hero-bg",
+      "description": "Abstract trading charts",
+      "imageUrl": "https://picsum.photos/seed/trading1/1920/1080",
+      "imageHint": "trading charts"
+    },
+    {
+      "id": "feature-1",
+      "description": "Algorithmic code",
+      "imageUrl": "https://picsum.photos/seed/algo1/600/400",
+      "imageHint": "code algorithm"
+    },
+    {
+      "id": "app-logo",
+      "description": "PrimeFunded official logo",
+      "imageUrl": "https://picsum.photos/seed/pflogo/200/200",
+      "imageHint": "trading logo"
+    }
+  ]
+}

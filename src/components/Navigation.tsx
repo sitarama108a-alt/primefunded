@@ -4,6 +4,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, memo } from 'react';
+import Image from 'next/image';
 import { 
   LayoutDashboard, 
   Trophy, 
@@ -25,6 +26,9 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
+import { PlaceHolderImages } from '@/lib/placeholder-images';
+
+const logoUrl = PlaceHolderImages.find(img => img.id === 'app-logo')?.imageUrl || '';
 
 const navItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -96,11 +100,16 @@ export const Navigation = memo(function Navigation() {
 
   return (
     <div className="w-64 bg-card border-r border-border h-screen sticky top-0 flex flex-col p-6 overflow-y-auto shrink-0 custom-scrollbar">
-      <Link href="/dashboard" className="flex items-center gap-2 mb-10 px-2 cursor-pointer transition-opacity hover:opacity-80">
-        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-          <TrendingUp className="text-primary-foreground w-5 h-5" />
-        </div>
-        <span className="font-headline font-bold text-xl tracking-tight text-primary">PrimeFunded</span>
+      <Link href="/dashboard" className="flex items-center gap-3 mb-10 px-2 cursor-pointer transition-opacity hover:opacity-80">
+        <Image 
+          src={logoUrl} 
+          alt="PrimeFunded Logo"
+          width={40}
+          height={40}
+          className="rounded-full border border-primary/20"
+          data-ai-hint="trading logo"
+        />
+        <span className="font-headline font-bold text-xl tracking-tight text-white">PrimeFunded</span>
       </Link>
 
       <nav className="flex-1 space-y-1">
@@ -170,8 +179,12 @@ export const Navigation = memo(function Navigation() {
 
       <div className="mt-auto bg-secondary/50 rounded-xl p-4 border border-border">
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-            <UserCircle className="text-primary w-6 h-6" />
+          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden">
+             {userData?.photoURL ? (
+               <Image src={userData.photoURL} alt="Avatar" width={40} height={40} className="object-cover" />
+             ) : (
+               <UserCircle className="text-primary w-6 h-6" />
+             )}
           </div>
           <div className="overflow-hidden">
             <p className="text-sm font-semibold truncate text-white">{userData?.name || 'Trader'}</p>

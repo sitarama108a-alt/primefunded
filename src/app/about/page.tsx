@@ -1,9 +1,14 @@
+
 "use client";
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, ShieldCheck, Zap, Globe, Users, Award, CheckCircle2, ArrowRight, BarChart3, Clock } from 'lucide-react';
+import { Zap, Globe, Award, CheckCircle2, BarChart3, Clock, TrendingUp } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { PlaceHolderImages } from '@/lib/placeholder-images';
+
+const logoUrl = PlaceHolderImages.find(img => img.id === 'app-logo')?.imageUrl || '';
 
 export default function AboutPage() {
   return (
@@ -11,10 +16,15 @@ export default function AboutPage() {
       {/* Simple Nav */}
       <nav className="fixed top-0 w-full z-50 bg-background/60 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="bg-primary/20 p-1.5 rounded-lg border border-primary/20">
-              <TrendingUp className="text-primary w-6 h-6" />
-            </div>
+          <Link href="/" className="flex items-center gap-3 cursor-pointer">
+            <Image 
+              src={logoUrl} 
+              alt="PrimeFunded Logo"
+              width={40}
+              height={40}
+              className="rounded-full border border-primary/20"
+              data-ai-hint="trading logo"
+            />
             <span className="font-headline font-bold text-2xl tracking-tight text-white">PrimeFunded</span>
           </Link>
           <div className="flex items-center gap-6">
@@ -169,8 +179,8 @@ export default function AboutPage() {
       <footer className="py-20 border-t border-white/5 bg-secondary/20">
         <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-12">
           <div className="flex flex-col items-center md:items-start gap-4">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="text-primary w-7 h-7" />
+            <div className="flex items-center gap-3">
+              <Image src={logoUrl} alt="Logo" width={30} height={30} className="rounded-full" />
               <span className="font-headline font-bold text-2xl tracking-tight text-white">PrimeFunded</span>
             </div>
             <p className="text-xs text-muted-foreground">© 2024 PrimeFunded Global. All rights reserved.</p>
