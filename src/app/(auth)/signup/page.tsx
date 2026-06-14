@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, Suspense, useEffect } from 'react';
@@ -134,6 +135,17 @@ function SignupContent() {
         const querySnapshot = await getDocs(q);
         if (!querySnapshot.empty) {
           referredByUid = querySnapshot.docs[0].id;
+          
+          // Log referral signup in real-time
+          const referralId = Math.random().toString(36).substring(7);
+          setDoc(doc(db, 'referrals', referralId), {
+            referrerId: referredByUid,
+            referredUserId: user.uid,
+            referredUserEmail: sanitizedEmail,
+            status: 'joined',
+            amount: 0,
+            createdAt: serverTimestamp()
+          });
         }
       }
 
@@ -202,7 +214,6 @@ function SignupContent() {
           <h1 className="text-5xl font-headline font-bold mb-8 leading-tight text-white">Start Your <br />Funding Journey.</h1>
           <div className="space-y-6">
             <FeatureItem text="Up to $200k in institutional capital" />
-            <FeatureItem text="No hidden rules or time limits" />
             <FeatureItem text="No Consistency Rules" />
             <FeatureItem text="News Trading Allowed" />
             <FeatureItem text="Daily Payouts (Instant)" />

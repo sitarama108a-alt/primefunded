@@ -204,7 +204,7 @@ export default function ReferralPage() {
 
   const referralConstraints = useMemo(() => {
     if (!user?.uid) return [];
-    return [where('referrerId', '==', user.uid), orderBy('createdAt', 'desc'), limit(20)];
+    return [where('referrerId', '==', user.uid), orderBy('createdAt', 'desc'), limit(50)];
   }, [user?.uid]);
 
   const { data: referrals, loading: referralsLoading, error: referralsError } = useCollection<any>(
@@ -220,9 +220,13 @@ export default function ReferralPage() {
 
   const stats = useMemo(() => {
     const data = referrals || [];
+    const purchaseCount = data.filter((r: any) => (r.amount || 0) > 0).length;
+    const avgCommission = purchaseCount > 0 ? (data.reduce((acc: number, r: any) => acc + (r.amount || 0), 0) / purchaseCount).toFixed(0) : "30";
+    
     return {
-      total: data.length,
-      successful: data.filter((r: any) => (r.amount || 0) > 0).length,
+      totalSignups: data.length,
+      purchaseCount,
+      avgCommission,
       totalEarned: data.reduce((acc: number, r: any) => acc + (r.amount || 0), 0),
       pendingEarned: data.filter((r: any) => r.status === 'pending').reduce((acc: number, r: any) => acc + (r.amount || 0), 0),
       paidEarned: data.filter((r: any) => r.status === 'paid').reduce((acc: number, r: any) => acc + (r.amount || 0), 0),
@@ -470,14 +474,14 @@ export default function ReferralPage() {
 
           <div className="lg:col-span-2 space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <StatSmall title="Total Referrals" value={stats.total} icon={<Users />} />
-              <StatSmall title="Purchases" value={stats.successful} icon={<CheckCircle2 />} />
+              <StatSmall title="Total Referrals" value={stats.totalSignups} icon={<Users />} />
+              <StatSmall title="Purchases" value={stats.purchaseCount} icon={<CheckCircle2 />} />
               <StatSmall title="Total Earned" value={`$${stats.totalEarned.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} icon={<TrendingUp />} />
               <StatSmall title="Pending" value={`$${stats.pendingEarned.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} icon={<Clock />} color="amber" />
               <StatSmall title="Paid" value={`$${stats.paidEarned.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} icon={<DollarSign />} color="green" />
               <Card className="bg-secondary/30 flex flex-col justify-center items-center p-4 text-center border-accent/20">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Min. Payout</p>
-                <p className="text-xl font-bold text-accent">$100.00</p>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Commission Detail</p>
+                <p className="text-lg font-bold text-white">${stats.avgCommission} x {stats.purchaseCount} = ${stats.totalEarned.toFixed(0)}</p>
               </Card>
             </div>
 
@@ -578,7 +582,7 @@ export default function ReferralPage() {
                       <td className="py-4 px-6 font-bold truncate max-w-[150px] text-white">
                         {r.referredUserEmail ? `${r.referredUserEmail.split('@')[0].slice(0, 3)}***@${r.referredUserEmail.split('@')[1]}` : 'Anonymous'}
                       </td>
-                      <td className="py-4 px-6 text-xs uppercase font-black text-muted-foreground/50">{r.plan || 'N/A'}</td>
+                      <td className="py-4 px-6 text-xs uppercase font-black text-muted-foreground/50">{r.plan || (r.status === 'joined' ? 'JOINED' : 'N/A')}</td>
                       <td className="py-4 px-6 font-bold text-accent">${(r.amount || 0).toFixed(2)}</td>
                       <td className="py-4 px-6 text-right">
                         <Badge variant={r.status === 'paid' ? 'default' : 'outline'} className="uppercase text-[9px] font-black text-white border-white/10">
@@ -590,8 +594,8 @@ export default function ReferralPage() {
                     <tr>
                       <td colSpan={5} className="py-20 text-center text-muted-foreground flex flex-col items-center gap-2">
                         <Info className="w-12 h-12 opacity-10 mb-2" />
-                        <h3 className="text-lg font-bold text-white/40">No earnings found</h3>
-                        <p className="text-sm italic max-w-xs mx-auto">Your referrals will appear here once they complete a challenge purchase.</p>
+                        <h3 className="text-lg font-bold text-white/40">No signups found</h3>
+                        <p className="text-sm italic max-w-xs mx-auto">Your referrals will appear here once someone joins using your link.</p>
                       </td>
                     </tr>
                   )}

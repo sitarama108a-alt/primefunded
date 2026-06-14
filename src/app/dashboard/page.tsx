@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, useMemo, Suspense, memo } from 'react';
@@ -20,7 +21,9 @@ import {
   Check,
   ShieldAlert,
   AlertTriangle,
-  ExternalLink
+  ExternalLink,
+  Users,
+  DollarSign
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -29,7 +32,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { aiComplianceMonitorAlerts } from '@/ai/flows/ai-compliance-monitor-alerts';
 import { useFirestore, useCollection, useDoc } from '@/firebase';
-import { where, doc, updateDoc, setDoc, serverTimestamp, limit } from 'firebase/firestore';
+import { where, doc, updateDoc, setDoc, serverTimestamp, limit, orderBy } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -72,6 +75,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   const [isConnected, setIsConnected] = useState(true);
   const [compliance, setCompliance] = useState<any>(null);
   const [copied, setCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const { toast } = useToast();
   const db = useFirestore();
 
@@ -79,6 +83,22 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   const [completingPhone, setCompletingPhone] = useState('');
   const [completingCountry, setCompletingCountry] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
+
+  // Referral Stats Listener
+  const referralConstraints = useMemo(() => [
+    where('referrerId', '==', effectiveUid || 'none'),
+    orderBy('createdAt', 'desc')
+  ], [effectiveUid]);
+
+  const { data: referrals } = useCollection<any>('referrals', referralConstraints);
+
+  const refStats = useMemo(() => {
+    const data = referrals || [];
+    return {
+      total: data.length,
+      earned: data.reduce((acc: number, r: any) => acc + (r.amount || 0), 0)
+    };
+  }, [referrals]);
 
   // Auth Guard
   useEffect(() => {
@@ -195,6 +215,14 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     }
   };
 
+  const copyReferralLink = () => {
+    const link = `${window.location.origin}/signup?ref=${userData?.referralCode}`;
+    navigator.clipboard.writeText(link);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
+    toast({ title: "Link Copied!", description: "Referral link is ready to share." });
+  };
+
   if (authLoading || accountsLoading || targetUserLoading) {
     return (
       <div className="flex min-h-screen bg-background items-center justify-center">
@@ -239,41 +267,6 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
           </div>
         )}
 
-        {showProfilePrompt && !adminViewMode && (
-          <div className="mb-8 p-6 rounded-2xl bg-primary/10 border border-primary/30 flex flex-col md:flex-row items-center justify-between gap-6 shadow-[0_0_20px_rgba(17,179,245,0.1)]">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center text-primary">
-                <User className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="font-bold text-lg text-white">Complete Your Profile</h3>
-                <p className="text-sm text-muted-foreground">Please provide your contact details to enable full dashboard features.</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-4 w-full md:auto">
-              <div className="flex-1 md:flex-none">
-                <Input 
-                  placeholder="Phone Number" 
-                  value={completingPhone} 
-                  onChange={(e) => setCompletingPhone(e.target.value)}
-                  className="bg-background/50 border-primary/20 h-10 min-w-[150px]"
-                />
-              </div>
-              <div className="flex-1 md:flex-none">
-                <Input 
-                  placeholder="Country" 
-                  value={completingCountry} 
-                  onChange={(e) => setCompletingCountry(e.target.value)}
-                  className="bg-background/50 border-primary/20 h-10 min-w-[150px]"
-                />
-              </div>
-              <Button onClick={handleCompleteProfile} disabled={savingProfile || !completingPhone || !completingCountry} className="font-bold h-10 px-6 cursor-pointer">
-                Save & Continue
-              </Button>
-            </div>
-          </div>
-        )}
-
         <header className="flex justify-between items-start mb-10">
           <div>
             <h1 className="text-3xl font-headline font-bold mb-1 text-white">Trader Terminal</h1>
@@ -314,16 +307,16 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
             footer={activeAccount ? `${activeAccount.size} ${activeAccount.plan}` : 'NO ACTIVE ACCOUNT'}
           />
           <MetricCard 
-            title="Current Equity" 
-            value={`$${metrics.equity.toLocaleString('en-US')}`} 
-            icon={<Activity className="text-accent" />}
-            footer={!activeAccount ? 'NO ACTIVE ACCOUNT' : undefined}
+            title="Total Referrals" 
+            value={refStats.total.toString()} 
+            icon={<Users className="text-accent" />}
+            footer={`${refStats.total} traders joined via your code`}
           />
           <MetricCard 
-            title="Today's P&L" 
-            value={`$${metrics.dailyPnL.toLocaleString('en-US')}`} 
-            icon={metrics.dailyPnL >= 0 ? <TrendingUp className="text-accent" /> : <TrendingDown className="text-destructive" />}
-            footer={!activeAccount ? 'NO ACTIVE ACCOUNT' : undefined}
+            title="Referral Earnings" 
+            value={`$${refStats.earned.toFixed(2)}`} 
+            icon={<DollarSign className="text-emerald-500" />}
+            footer="Total commissions generated"
           />
           <MetricCard 
             title="Win Rate" 
@@ -337,17 +330,35 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
           <Card className="lg:col-span-2 border-border/50 shadow-xl shadow-primary/5 bg-card/40 backdrop-blur-sm">
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-xl font-headline text-white">14-Day Performance</CardTitle>
-                <CardDescription>Visualizing your daily trading P&L</CardDescription>
+                <CardTitle className="text-xl font-headline text-white">Referral Terminal</CardTitle>
+                <CardDescription>Share your link and earn up to 10% commission on purchases.</CardDescription>
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="h-[320px] w-full mt-4 flex items-center justify-center bg-secondary/10 rounded-xl border border-dashed border-border">
-                <div className="text-center text-muted-foreground">
-                  <BarChart3 className="w-12 h-12 mx-auto mb-2 opacity-20" />
-                  <p className="text-sm font-medium">No trading history found for this account.</p>
-                </div>
+            <CardContent className="space-y-6">
+              <div className="p-6 rounded-2xl bg-primary/5 border border-primary/20">
+                 <p className="text-[10px] font-black uppercase text-muted-foreground tracking-[0.2em] mb-3">Your Referral Link:</p>
+                 <div className="flex items-center gap-2">
+                   <div className="flex-1 font-mono text-sm font-bold p-3 bg-background/50 rounded-xl border border-border text-white truncate">
+                     {window.location.origin}/signup?ref={userData?.referralCode}
+                   </div>
+                   <Button onClick={copyReferralLink} className="h-12 w-12 rounded-xl cyan-box-glow cursor-pointer" size="icon">
+                     {linkCopied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+                   </Button>
+                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                 <div className="p-4 rounded-xl bg-secondary/30 border border-border text-center">
+                    <p className="text-[10px] font-black uppercase text-muted-foreground mb-1">Signups</p>
+                    <p className="text-2xl font-bold text-white">{refStats.total}</p>
+                 </div>
+                 <div className="p-4 rounded-xl bg-secondary/30 border border-border text-center">
+                    <p className="text-[10px] font-black uppercase text-muted-foreground mb-1">Purchases</p>
+                    <p className="text-2xl font-bold text-accent">{referrals?.filter((r: any) => r.amount > 0).length || 0}</p>
+                 </div>
+              </div>
+              <Button variant="outline" className="w-full font-bold h-12 border-primary/20 text-primary cursor-pointer" asChild>
+                <Link href="/referral">View Detailed History <ExternalLink className="ml-2 w-4 h-4" /></Link>
+              </Button>
             </CardContent>
           </Card>
 

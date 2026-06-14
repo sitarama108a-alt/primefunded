@@ -30,8 +30,6 @@ service cloud.firestore {
     }
 
     match /mt5_accounts/{accountId} {
-      // Endpoint for MT5 terminal synchronization.
-      // In production, implement fixed-IP or secret-key verification headers.
       allow write: if true; 
       allow read: if isSignedIn();
     }
@@ -65,6 +63,11 @@ service cloud.firestore {
     match /referralCodes/{codeId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn();
+    }
+
+    match /referrals/{refId} {
+      allow read: if isSignedIn() && (resource == null || resource.data.referrerId == request.auth.uid);
+      allow create: if isSignedIn(); // Allow creating signup records
     }
 
     match /{document=**} {
