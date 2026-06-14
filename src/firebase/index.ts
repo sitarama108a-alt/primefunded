@@ -10,6 +10,7 @@ import { firebaseConfig } from './config';
 
 /**
  * Initializes the Firebase Client App Instance with production services.
+ * Includes a safety check for missing configuration.
  */
 export function initializeFirebase(): {
   firebaseApp: FirebaseApp;
@@ -17,6 +18,11 @@ export function initializeFirebase(): {
   auth: Auth;
   performance?: FirebasePerformance;
 } {
+  // Validate config presence to prevent obscure SDK errors
+  if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes('REPLACE')) {
+    console.warn('[Firebase] Configuration is missing or using placeholders. Auth and Firestore will fail until .env is configured.');
+  }
+
   const firebaseApp =
     getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
   const auth = getAuth(firebaseApp);
@@ -24,10 +30,14 @@ export function initializeFirebase(): {
   
   let performance;
   if (typeof window !== 'undefined') {
-    performance = getPerformance(firebaseApp);
+    try {
+      performance = getPerformance(firebaseApp);
+    } catch (e) {
+      console.warn('[Firebase] Performance monitoring initialization failed:', e);
+    }
   }
 
-  // Initialize App Check
+  // Initialize App Check (Optional: Only if site key is provided)
   if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
     try {
       initializeAppCheck(firebaseApp, {
@@ -35,7 +45,7 @@ export function initializeFirebase(): {
         isTokenAutoRefreshEnabled: true,
       });
     } catch (err) {
-      console.warn('App Check failed to initialize:', err);
+      console.warn('[Firebase] App Check failed to initialize:', err);
     }
   }
 
