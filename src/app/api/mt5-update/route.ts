@@ -12,15 +12,21 @@ export const runtime = 'nodejs';
 // Initialize Firebase Admin once
 function getAdminDb() {
   if (!getApps().length) {
-    if (!process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+    const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+    
+    if (!serviceAccountKey) {
+      console.error('[MT5-Update] FIREBASE_SERVICE_ACCOUNT_KEY is missing.');
       throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY is missing from environment variables.');
     }
+
     try {
-      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+      const serviceAccount = JSON.parse(serviceAccountKey);
       initializeApp({
         credential: cert(serviceAccount),
       });
+      console.log('[MT5-Update] Admin SDK Initialized');
     } catch (e: any) {
+      console.error('[MT5-Update] Admin SDK Init Failed:', e.message);
       throw new Error('Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY: ' + e.message);
     }
   }

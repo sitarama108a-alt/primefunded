@@ -1,4 +1,3 @@
-
 'use server';
 
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
@@ -12,16 +11,22 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 function getAdminDb() {
   if (!getApps().length) {
-    if (!process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-      throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY is missing from environment variables.');
+    const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+    
+    if (!serviceAccountKey) {
+      console.error('[Admin-SDK] FIREBASE_SERVICE_ACCOUNT_KEY is missing from environment variables.');
+      throw new Error('Administrative terminal requires FIREBASE_SERVICE_ACCOUNT_KEY to be configured in .env');
     }
+
     try {
-      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+      const serviceAccount = JSON.parse(serviceAccountKey);
       initializeApp({
         credential: cert(serviceAccount),
       });
+      console.log('[Admin-SDK] Initialized successfully via Server Action');
     } catch (e: any) {
-      throw new Error('Failed to initialize Admin SDK: ' + e.message);
+      console.error('[Admin-SDK] Initialization failed:', e.message);
+      throw new Error('Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY. Ensure it is valid stringified JSON.');
     }
   }
   return getFirestore();
