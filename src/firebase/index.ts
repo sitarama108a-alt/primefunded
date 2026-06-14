@@ -1,10 +1,8 @@
-
 'use client';
 
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
-import { getPerformance, type FirebasePerformance } from 'firebase/performance';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 import { firebaseConfig } from './config';
 
@@ -16,7 +14,6 @@ export function initializeFirebase(): {
   firebaseApp: FirebaseApp;
   firestore: Firestore;
   auth: Auth;
-  performance?: FirebasePerformance;
 } {
   // Validate config presence to prevent obscure SDK errors during initialization
   const isConfigMissing = !firebaseConfig.apiKey || firebaseConfig.apiKey.includes('REPLACE');
@@ -32,18 +29,6 @@ export function initializeFirebase(): {
   const auth = getAuth(firebaseApp);
   const firestore = getFirestore(firebaseApp);
   
-  let performance;
-  if (typeof window !== 'undefined') {
-    try {
-      performance = getPerformance(firebaseApp);
-      // Disable automatic data collection and instrumentation to prevent className attribute errors
-      performance.dataCollectionEnabled = false;
-      performance.instrumentationEnabled = false;
-    } catch (e) {
-      console.warn('[Firebase] Performance monitoring initialization failed:', e);
-    }
-  }
-
   // Initialize App Check (Optional: Only if site key is provided)
   if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
     try {
@@ -56,7 +41,7 @@ export function initializeFirebase(): {
     }
   }
 
-  return { firebaseApp, firestore, auth, performance };
+  return { firebaseApp, firestore, auth };
 }
 
 export * from './provider';
