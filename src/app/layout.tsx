@@ -1,4 +1,3 @@
-
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
@@ -9,7 +8,7 @@ import { PerformanceTracker } from '@/components/PerformanceTracker';
 import { Suspense } from 'react';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 
-const logoUrl = PlaceHolderImages.find(img => img.id === 'app-logo')?.imageUrl || '';
+const logoUrl = 'https://picsum.photos/seed/pflogo-blue-silver/400/400';
 
 export const viewport: Viewport = {
   themeColor: '#020817',

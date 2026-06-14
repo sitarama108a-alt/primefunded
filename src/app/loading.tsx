@@ -1,10 +1,9 @@
-
 'use client';
 
 import Image from 'next/image';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 
-const logoUrl = PlaceHolderImages.find(img => img.id === 'app-logo')?.imageUrl || '';
+const logoUrl = PlaceHolderImages.find(img => img.id === 'app-logo')?.imageUrl || 'https://picsum.photos/seed/pflogo-blue-silver/400/400';
 
 export default function RootLoading() {
   return (

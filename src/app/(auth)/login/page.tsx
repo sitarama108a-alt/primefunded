@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, Suspense } from 'react';
@@ -16,7 +15,7 @@ import { sanitizeInput } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 
-const logoUrl = PlaceHolderImages.find(img => img.id === 'app-logo')?.imageUrl || '';
+const logoUrl = PlaceHolderImages.find(img => img.id === 'app-logo')?.imageUrl || 'https://picsum.photos/seed/pflogo-blue-silver/400/400';
 
 function LoginContent() {
   const [email, setEmail] = useState('');
