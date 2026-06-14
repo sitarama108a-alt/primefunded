@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -10,9 +10,31 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { User, Mail, Shield, CheckCircle2, Phone, Globe, Save, Copy, Loader2 } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+import { 
+  User, 
+  Mail, 
+  Shield, 
+  CheckCircle2, 
+  Phone, 
+  Globe, 
+  Save, 
+  Copy, 
+  Loader2, 
+  Camera, 
+  Trash2,
+  Image as ImageIcon 
+} from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
+import { 
+  getStorage, 
+  ref, 
+  uploadBytesResumable, 
+  getDownloadURL, 
+  deleteObject 
+} from 'firebase/storage';
 import { db } from '@/lib/firebase';
+import { useFirebaseApp } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
@@ -28,7 +50,13 @@ const ProfileSchema = z.object({
 export default function ProfilePage() {
   const { user, userData } = useAuth();
   const { toast } = useToast();
+  const app = useFirebaseApp();
+  const storage = getStorage(app);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -46,22 +74,93 @@ export default function ProfilePage() {
     }
   }, [userData]);
 
+  const getInitials = (name: string) => {
+    if (!name) return 'PF';
+    const parts = name.split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    // Validation
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      toast({ variant: "destructive", title: "Invalid format", description: "Please use JPG, PNG or WebP." });
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ variant: "destructive", title: "File too large", description: "Max photo size is 5MB." });
+      return;
+    }
+
+    uploadPhoto(file);
+  };
+
+  const uploadPhoto = (file: File) => {
+    if (!user) return;
+    setUploading(true);
+    setUploadProgress(0);
+
+    const storageRef = ref(storage, `profilePhotos/${user.uid}/avatar.jpg`);
+    const uploadTask = uploadBytesResumable(storageRef, file);
+
+    uploadTask.on(
+      'state_changed',
+      (snapshot) => {
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        setUploadProgress(progress);
+      },
+      (error) => {
+        setUploading(false);
+        toast({ variant: "destructive", title: "Upload Failed", description: error.message });
+      },
+      async () => {
+        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+        const userRef = doc(db, 'users', user.uid);
+        
+        await updateDoc(userRef, { photoURL: downloadURL });
+        
+        setUploading(false);
+        toast({ title: "Photo Updated", description: "Your profile picture has been synced." });
+      }
+    );
+  };
+
+  const handleRemovePhoto = async () => {
+    if (!user || !userData?.photoURL) return;
+    
+    setLoading(true);
+    try {
+      const storageRef = ref(storage, `profilePhotos/${user.uid}/avatar.jpg`);
+      await deleteObject(storageRef).catch(() => console.warn("File already deleted from storage"));
+      
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, { photoURL: null });
+      
+      toast({ title: "Photo Removed", description: "Your profile is back to default." });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSave = () => {
     if (!user) return;
     
-    // Validation
     const validation = ProfileSchema.safeParse(formData);
     if (!validation.success) {
-      toast({
-        variant: "destructive",
-        title: "Validation Error",
-        description: validation.error.errors[0].message,
-      });
+      toast({ variant: "destructive", title: "Validation Error", description: validation.error.errors[0].message });
       return;
     }
 
     setLoading(true);
-    
     const updates = {
       name: sanitizeInput(formData.name),
       phone: sanitizeInput(formData.phone),
@@ -71,22 +170,12 @@ export default function ProfilePage() {
     const userRef = doc(db, 'users', user.uid);
     updateDoc(userRef, updates)
       .then(() => {
-        toast({
-          title: "Profile Updated",
-          description: "Your personal details have been saved successfully.",
-        });
+        toast({ title: "Profile Updated", description: "Your personal details have been saved successfully." });
       })
       .catch(async (err) => {
-        const permissionError = new FirestorePermissionError({
-          path: userRef.path,
-          operation: 'update',
-          requestResourceData: updates
-        } satisfies SecurityRuleContext);
-        errorEmitter.emit('permission-error', permissionError);
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: updates }));
       })
-      .finally(() => {
-        setLoading(false);
-      });
+      .finally(() => setLoading(false));
   };
 
   const copyTraderId = () => {
@@ -107,25 +196,72 @@ export default function ProfilePage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-1 space-y-8">
-            <Card className="border-border/50 bg-card/40 backdrop-blur-sm">
+            <Card className="border-border/50 bg-card/40 backdrop-blur-sm relative overflow-hidden">
+              {uploading && (
+                <div className="absolute top-0 left-0 w-full z-20">
+                  <Progress value={uploadProgress} className="h-1 bg-transparent rounded-none" />
+                </div>
+              )}
+              
               <CardContent className="pt-10 flex flex-col items-center text-center">
-                <Avatar className="w-32 h-32 mb-6 border-4 border-primary/20 shadow-[0_0_30px_rgba(17,179,245,0.15)]">
-                  <AvatarImage src={`https://picsum.photos/seed/${user?.uid}/200`} />
-                  <AvatarFallback className="text-4xl bg-secondary text-white">{userData?.name?.[0] || 'T'}</AvatarFallback>
-                </Avatar>
-                <h2 className="text-2xl font-headline font-bold mb-1 text-white">{userData?.name || 'Trader'}</h2>
-                <p className="text-sm text-muted-foreground mb-4">{userData?.email}</p>
-                
-                <div 
-                  className="flex items-center gap-2 px-3 py-1 bg-secondary border border-primary/20 rounded-lg cursor-pointer hover:border-primary/50 transition-colors mb-6 group" 
-                  onClick={copyTraderId}
-                >
-                  <span className="text-[10px] font-black uppercase tracking-widest text-primary">UID:</span>
-                  <span className="font-mono text-sm font-bold text-white">{userData?.traderId || '--------'}</span>
-                  <Copy className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors" />
+                <div className="relative group mb-6">
+                  <Avatar className="w-32 h-32 border-4 border-primary/20 shadow-[0_0_30px_rgba(17,179,245,0.15)] transition-transform duration-300 group-hover:scale-105">
+                    <AvatarImage src={userData?.photoURL} className="object-cover" />
+                    <AvatarFallback className="text-4xl bg-gradient-to-br from-primary to-blue-600 text-white font-bold">
+                      {getInitials(userData?.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  
+                  <button 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer backdrop-blur-[2px]"
+                  >
+                    <Camera className="w-8 h-8 text-white" />
+                  </button>
+                  
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    className="hidden" 
+                    accept="image/*" 
+                    onChange={handleFileSelect}
+                  />
                 </div>
 
-                <div className="flex flex-col gap-2 w-full mb-8">
+                <div className="space-y-1 mb-6">
+                  <h2 className="text-2xl font-headline font-bold text-white">{userData?.name || 'Trader'}</h2>
+                  <p className="text-sm text-muted-foreground">{userData?.email}</p>
+                </div>
+                
+                <div className="flex flex-col gap-3 w-full mb-8">
+                   <div className="flex justify-center gap-4">
+                     <button 
+                       onClick={() => fileInputRef.current?.click()}
+                       className="text-[10px] font-black uppercase tracking-widest text-primary hover:text-white transition-colors"
+                     >
+                       Change Photo
+                     </button>
+                     {userData?.photoURL && (
+                       <button 
+                         onClick={handleRemovePhoto}
+                         className="text-[10px] font-black uppercase tracking-widest text-destructive hover:text-white transition-colors"
+                       >
+                         Remove
+                       </button>
+                     )}
+                   </div>
+
+                   <div 
+                    className="flex items-center gap-2 px-3 py-1 bg-secondary border border-primary/20 rounded-lg cursor-pointer hover:border-primary/50 transition-colors group" 
+                    onClick={copyTraderId}
+                  >
+                    <span className="text-[10px] font-black uppercase tracking-widest text-primary">UID:</span>
+                    <span className="font-mono text-sm font-bold text-white">{userData?.traderId || '--------'}</span>
+                    <Copy className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors ml-auto" />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 w-full mb-4">
                   <Badge className="bg-primary/20 text-primary border-primary/30 uppercase text-[10px] font-bold tracking-widest px-3 py-1 justify-center">
                     {userData?.tier || 'Bronze'} Tier
                   </Badge>
@@ -150,11 +286,11 @@ export default function ProfilePage() {
                 <CardDescription>Protect your trading account access.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Button variant="secondary" className="w-full justify-start h-11 px-4 font-bold text-xs uppercase tracking-widest cursor-pointer">
-                  Change Password
+                <Button variant="secondary" className="w-full justify-start h-11 px-4 font-bold text-xs uppercase tracking-widest cursor-pointer group">
+                   Change Password <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity"><CheckCircle2 className="w-3 h-3" /></div>
                 </Button>
-                <Button variant="secondary" className="w-full justify-start h-11 px-4 font-bold text-xs uppercase tracking-widest cursor-pointer">
-                  Enable 2FA Authentication
+                <Button variant="secondary" className="w-full justify-start h-11 px-4 font-bold text-xs uppercase tracking-widest cursor-pointer group">
+                  Enable 2FA Auth <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity"><CheckCircle2 className="w-3 h-3" /></div>
                 </Button>
               </CardContent>
             </Card>
@@ -175,7 +311,7 @@ export default function ProfilePage() {
                     <Input 
                       value={formData.name} 
                       onChange={(e) => setFormData({...formData, name: e.target.value})}
-                      className="bg-secondary/30 h-11 text-white border-border/50"
+                      className="bg-secondary/30 h-11 text-white border-border/50 focus:border-primary/50 transition-all"
                       maxLength={100}
                     />
                   </div>
@@ -193,7 +329,7 @@ export default function ProfilePage() {
                       placeholder="+1 (555) 000-0000" 
                       value={formData.phone}
                       onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                      className="bg-secondary/30 h-11 text-white border-border/50"
+                      className="bg-secondary/30 h-11 text-white border-border/50 focus:border-primary/50 transition-all"
                       maxLength={20}
                     />
                   </div>
@@ -205,7 +341,7 @@ export default function ProfilePage() {
                       placeholder="United Kingdom" 
                       value={formData.country}
                       onChange={(e) => setFormData({...formData, country: e.target.value})}
-                      className="bg-secondary/30 h-11 text-white border-border/50"
+                      className="bg-secondary/30 h-11 text-white border-border/50 focus:border-primary/50 transition-all"
                     />
                   </div>
                 </div>
