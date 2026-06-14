@@ -36,6 +36,9 @@ export function initializeFirebase(): {
   if (typeof window !== 'undefined') {
     try {
       performance = getPerformance(firebaseApp);
+      // Disable automatic data collection and instrumentation to prevent className attribute errors
+      performance.dataCollectionEnabled = false;
+      performance.instrumentationEnabled = false;
     } catch (e) {
       console.warn('[Firebase] Performance monitoring initialization failed:', e);
     }
