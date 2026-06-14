@@ -10,7 +10,7 @@ import { firebaseConfig } from './config';
 
 /**
  * Initializes the Firebase Client App Instance with production services.
- * Includes a safety check for missing configuration.
+ * Includes a safety check for missing configuration to prevent invalid-api-key crashes.
  */
 export function initializeFirebase(): {
   firebaseApp: FirebaseApp;
@@ -18,13 +18,17 @@ export function initializeFirebase(): {
   auth: Auth;
   performance?: FirebasePerformance;
 } {
-  // Validate config presence to prevent obscure SDK errors
-  if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes('REPLACE')) {
-    console.warn('[Firebase] Configuration is missing or using placeholders. Auth and Firestore will fail until .env is configured.');
+  // Validate config presence to prevent obscure SDK errors during initialization
+  const isConfigMissing = !firebaseConfig.apiKey || firebaseConfig.apiKey.includes('REPLACE');
+  
+  if (isConfigMissing) {
+    console.error('[Firebase] CRITICAL: Configuration is missing or using placeholders. Auth and Firestore will fail. Please check your .env file.');
   }
 
+  // Initialize app only if not already initialized
   const firebaseApp =
     getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+    
   const auth = getAuth(firebaseApp);
   const firestore = getFirestore(firebaseApp);
   
