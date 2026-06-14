@@ -207,7 +207,7 @@ export default function ReferralPage() {
     return [where('referrerId', '==', user.uid), orderBy('createdAt', 'desc'), limit(50)];
   }, [user?.uid]);
 
-  const { data: referrals, loading: referralsLoading, error: referralsError } = useCollection<any>(
+  const { data: referrals, loading: referralsLoading } = useCollection<any>(
     user?.uid ? 'referrals' : null, 
     referralConstraints
   );
@@ -221,15 +221,18 @@ export default function ReferralPage() {
   const stats = useMemo(() => {
     const data = referrals || [];
     const purchaseCount = data.filter((r: any) => (r.amount || 0) > 0).length;
-    const avgCommission = purchaseCount > 0 ? (data.reduce((acc: number, r: any) => acc + (r.amount || 0), 0) / purchaseCount).toFixed(0) : "30";
+    
+    // Commission is $30 per verified purchase as requested
+    const totalEarned = purchaseCount * 30;
+    const paidEarned = data.filter((r: any) => r.status === 'paid').reduce((acc: number, r: any) => acc + (r.amount || 0), 0);
+    const pendingEarned = totalEarned - paidEarned;
     
     return {
       totalSignups: data.length,
       purchaseCount,
-      avgCommission,
-      totalEarned: data.reduce((acc: number, r: any) => acc + (r.amount || 0), 0),
-      pendingEarned: data.filter((r: any) => r.status === 'pending').reduce((acc: number, r: any) => acc + (r.amount || 0), 0),
-      paidEarned: data.filter((r: any) => r.status === 'paid').reduce((acc: number, r: any) => acc + (r.amount || 0), 0),
+      totalEarned,
+      pendingEarned: Math.max(0, pendingEarned),
+      paidEarned: paidEarned,
     };
   }, [referrals]);
 
@@ -315,38 +318,14 @@ export default function ReferralPage() {
     );
   }
 
-  if (!user || !userData) {
-    return (
-      <div className="flex min-h-screen bg-background">
-        <Navigation />
-        <main className="flex-1 p-8 flex flex-col items-center justify-center text-center">
-          <XCircle className="w-16 h-16 text-destructive mb-4" />
-          <h2 className="text-2xl font-bold">Session hydration incomplete</h2>
-          <p className="text-muted-foreground mt-2">We couldn't load your trader profile. Please try refreshing.</p>
-          <Button className="mt-6 font-bold cursor-pointer" onClick={() => window.location.reload()}>Retry Connection</Button>
-        </main>
-      </div>
-    );
-  }
-
   return (
     <div className="flex min-h-screen bg-background">
       <Navigation />
       <main className="flex-1 p-8 overflow-y-auto custom-scrollbar">
         <header className="mb-10">
           <h1 className="text-3xl font-headline font-bold mb-1 text-white">Referral Program</h1>
-          <p className="text-muted-foreground">Invite friends and earn up to $50.00 on every challenge purchase they make.</p>
+          <p className="text-muted-foreground">Invite friends and earn $30.00 on every challenge purchase they make.</p>
         </header>
-
-        {referralsError && (
-          <div className="mb-10 bg-destructive/10 border border-destructive/20 p-6 rounded-2xl flex items-start gap-4">
-            <AlertTriangle className="w-6 h-6 text-destructive shrink-0" />
-            <div>
-              <p className="text-sm font-bold text-white uppercase tracking-tight">Database Indexing Required</p>
-              <p className="text-xs text-muted-foreground mt-1">We are having trouble sorting your referral history. This is usually resolved automatically by the system within a few minutes.</p>
-            </div>
-          </div>
-        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
           <Card className="lg:col-span-1 border-primary/20 bg-primary/5 relative overflow-hidden">
@@ -386,59 +365,19 @@ export default function ReferralPage() {
                           {availabilityStatus === 'taken' && <XCircle className="w-5 h-5 text-destructive" />}
                         </div>
                       </div>
-                      
-                      <div className="text-center">
-                        {availabilityStatus === 'available' && <p className="text-[10px] text-accent font-bold uppercase tracking-widest flex items-center justify-center gap-1"><Check className="w-3 h-3" /> {newCode} is available!</p>}
-                        {availabilityStatus === 'taken' && <p className="text-[10px] text-destructive font-bold uppercase tracking-widest flex items-center justify-center gap-1"><X className="w-3 h-3" /> Code already taken</p>}
-                        {availabilityStatus === 'too-short' && <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Min. 4 characters</p>}
-                        {availabilityStatus === 'invalid' && <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest">Letters & numbers only</p>}
-                      </div>
-
                       <div className="flex gap-2">
-                        <Button 
-                          variant="outline" 
-                          className="flex-1 cursor-pointer font-bold" 
-                          onClick={() => { setIsEditing(false); setNewCode(''); }}
-                        >
-                          Cancel
-                        </Button>
-                        <Button 
-                          className="flex-1 font-bold bg-accent hover:bg-accent/90 cursor-pointer" 
-                          disabled={availabilityStatus !== 'available' || newCode === userData?.referralCode}
-                          onClick={() => setShowConfirmDialog(true)}
-                        >
-                          Save
-                        </Button>
+                        <Button variant="outline" className="flex-1 cursor-pointer font-bold" onClick={() => { setIsEditing(false); setNewCode(''); }}>Cancel</Button>
+                        <Button className="flex-1 font-bold bg-accent hover:bg-accent/90 cursor-pointer" disabled={availabilityStatus !== 'available' || newCode === userData?.referralCode} onClick={() => setShowConfirmDialog(true)}>Save</Button>
                       </div>
                     </motion.div>
                   ) : (
-                    <motion.div 
-                      key="display"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="p-4 rounded-xl bg-background/50 border border-primary/20 text-center min-h-[64px] flex items-center justify-center group relative"
-                    >
+                    <motion.div key="display" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 rounded-xl bg-background/50 border border-primary/20 text-center min-h-[64px] flex items-center justify-center group relative">
                       {userData?.referralCode ? (
                         <div className="flex items-center gap-4">
-                          <span className="text-2xl font-mono font-bold tracking-widest text-primary uppercase">
-                            {userData.referralCode}
-                          </span>
-                          {changesRemaining > 0 && (
-                            <button 
-                              onClick={() => { setIsEditing(true); setNewCode(userData.referralCode); }}
-                              className="p-2 hover:bg-primary/20 rounded-lg text-primary transition-colors cursor-pointer"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                          )}
+                          <span className="text-2xl font-mono font-bold tracking-widest text-primary uppercase">{userData.referralCode}</span>
+                          {changesRemaining > 0 && <button onClick={() => { setIsEditing(true); setNewCode(userData.referralCode); }} className="p-2 hover:bg-primary/20 rounded-lg text-primary transition-colors cursor-pointer"><Edit2 className="w-4 h-4" /></button>}
                         </div>
-                      ) : (
-                        <div className="flex flex-col items-center gap-2">
-                          <Loader2 className="w-6 h-6 animate-spin text-primary/50" />
-                          <p className="text-[9px] uppercase font-black tracking-widest text-muted-foreground">Generating Code...</p>
-                        </div>
-                      )}
+                      ) : <Loader2 className="w-6 h-6 animate-spin text-primary/50" />}
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -446,26 +385,12 @@ export default function ReferralPage() {
 
               {!isEditing && (
                 <div className="space-y-4">
-                  <p className="text-[10px] text-center font-bold text-muted-foreground uppercase tracking-widest">
-                    {changesRemaining > 0 
-                      ? `Changes remaining: ${changesRemaining}/${MAX_CHANGES}`
-                      : "Maximum changes reached"
-                    }
-                  </p>
-                  
-                  <Button 
-                    onClick={() => copyToClipboard(referralLink)} 
-                    className="w-full h-12 font-bold cyan-box-glow cursor-pointer"
-                    disabled={!userData?.referralCode}
-                  >
-                    <Copy className="w-4 h-4 mr-2" />
-                    {copied ? 'Copied Link!' : 'Copy Referral Link'}
-                  </Button>
-                  
+                  <p className="text-[10px] text-center font-bold text-muted-foreground uppercase tracking-widest">{changesRemaining > 0 ? `Changes remaining: ${changesRemaining}/${MAX_CHANGES}` : "Maximum changes reached"}</p>
+                  <Button onClick={() => copyToClipboard(referralLink)} className="w-full h-12 font-bold cyan-box-glow cursor-pointer" disabled={!userData?.referralCode}><Copy className="w-4 h-4 mr-2" />{copied ? 'Copied Link!' : 'Copy Referral Link'}</Button>
                   <div className="grid grid-cols-3 gap-2">
-                    <Button variant="outline" size="icon" onClick={() => share('twitter')} className="h-12 w-full cursor-pointer" disabled={!userData?.referralCode}><Twitter className="w-5 h-5" /></Button>
-                    <Button variant="outline" size="icon" onClick={() => share('telegram')} className="h-12 w-full cursor-pointer" disabled={!userData?.referralCode}><Send className="w-5 h-5" /></Button>
-                    <Button variant="outline" size="icon" onClick={() => share('whatsapp')} className="h-12 w-full cursor-pointer" disabled={!userData?.referralCode}><MessageCircle className="w-5 h-5" /></Button>
+                    <Button variant="outline" size="icon" onClick={() => share('twitter')} className="h-12 w-full cursor-pointer"><Twitter className="w-5 h-5" /></Button>
+                    <Button variant="outline" size="icon" onClick={() => share('telegram')} className="h-12 w-full cursor-pointer"><Send className="w-5 h-5" /></Button>
+                    <Button variant="outline" size="icon" onClick={() => share('whatsapp')} className="h-12 w-full cursor-pointer"><MessageCircle className="w-5 h-5" /></Button>
                   </div>
                 </div>
               )}
@@ -476,87 +401,33 @@ export default function ReferralPage() {
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <StatSmall title="Total Referrals" value={stats.totalSignups} icon={<Users />} />
               <StatSmall title="Purchases" value={stats.purchaseCount} icon={<CheckCircle2 />} />
-              <StatSmall title="Total Earned" value={`$${stats.totalEarned.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} icon={<TrendingUp />} />
-              <StatSmall title="Pending" value={`$${stats.pendingEarned.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} icon={<Clock />} color="amber" />
-              <StatSmall title="Paid" value={`$${stats.paidEarned.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} icon={<DollarSign />} color="green" />
+              <StatSmall title="Total Earned" value={`$${stats.totalEarned.toFixed(2)}`} icon={<TrendingUp />} />
+              <StatSmall title="Pending" value={`$${stats.pendingEarned.toFixed(2)}`} icon={<Clock />} color="amber" />
+              <StatSmall title="Paid" value={`$${stats.paidEarned.toFixed(2)}`} icon={<DollarSign />} color="green" />
               <Card className="bg-secondary/30 flex flex-col justify-center items-center p-4 text-center border-accent/20">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Commission Detail</p>
-                <p className="text-lg font-bold text-white">${stats.avgCommission} x {stats.purchaseCount} = ${stats.totalEarned.toFixed(0)}</p>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Commission Rate</p>
+                <p className="text-lg font-bold text-white">$30.00 / sale</p>
               </Card>
             </div>
 
             <Card className="bg-secondary/20 border-border/50 overflow-hidden">
               <CardContent className="p-6">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-bold flex items-center gap-2 text-white">
-                    Withdrawal Progress
-                    {stats.pendingEarned < MIN_WITHDRAWAL && <AlertCircle className="w-4 h-4 text-amber-500" />}
-                    {stats.pendingEarned >= MIN_WITHDRAWAL && !isKycVerified && <Lock className="w-4 h-4 text-destructive" />}
-                  </span>
+                  <span className="text-sm font-bold text-white">Withdrawal Progress</span>
                   <span className="text-xs font-mono text-white">${stats.pendingEarned.toFixed(2)} / $100.00</span>
                 </div>
                 <Progress value={progressPercent} className="h-2 mb-4" />
-                
-                {!isKycVerified && (
-                  <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 flex items-center gap-2">
-                    <AlertTriangle className="text-destructive w-4 h-4 shrink-0" />
-                    <p className="text-[10px] font-bold text-destructive uppercase tracking-tighter leading-none">KYC verification required to withdraw referral earnings</p>
-                  </div>
-                )}
-
                 <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-                  <p className="text-xs text-muted-foreground">
-                    {canWithdraw 
-                      ? "You have reached the minimum requirement and are KYC verified." 
-                      : !isKycVerified 
-                      ? "Complete KYC verification to unlock referral earnings."
-                      : `Minimum $${MIN_WITHDRAWAL} required to withdraw pending commissions.`
-                    }
-                  </p>
-                  
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="w-full md:w-auto">
-                          <Button 
-                            disabled={!canWithdraw} 
-                            size="sm" 
-                            className="font-bold px-8 w-full md:w-auto cursor-pointer"
-                          >
-                            Request Payout
-                          </Button>
-                        </span>
-                      </TooltipTrigger>
-                      {!canWithdraw && (
-                        <TooltipContent className="bg-destructive text-white border-none">
-                          <p className="text-xs font-bold">
-                            {!isKycVerified ? "Complete KYC to unlock" : "Min. $100 required"}
-                          </p>
-                        </TooltipContent>
-                      )}
-                    </Tooltip>
-                  </TooltipProvider>
+                  <p className="text-xs text-muted-foreground">{canWithdraw ? "Threshold reached. You are eligible for withdrawal." : !isKycVerified ? "Complete KYC verification to unlock referral earnings." : `Minimum $${MIN_WITHDRAWAL} required to withdraw pending commissions.`}</p>
+                  <Button disabled={!canWithdraw} size="sm" className="font-bold px-8 w-full md:w-auto cursor-pointer">Request Payout</Button>
                 </div>
               </CardContent>
             </Card>
           </div>
         </div>
 
-        <section className="mb-12">
-          <h2 className="text-2xl font-headline font-bold mb-6 flex items-center gap-2 text-white">
-            <TrendingUp className="text-primary w-6 h-6" /> How It Works
-          </h2>
-          <div className="grid md:grid-cols-3 gap-6">
-            <StepItem step="1" icon={<LinkIcon />} title="Customize Code" desc="Choose a custom referral code that represents your brand." />
-            <StepItem step="2" icon={<Users />} title="Share Link" desc="Share your updated link with your trading community." />
-            <StepItem step="3" icon={<DollarSign />} title="Earn Rewards" desc="Earn 10% commission (up to $50) on every purchase they make." />
-          </div>
-        </section>
-
         <Card className="border-border/50 bg-card/40 backdrop-blur-sm">
-          <CardHeader>
-            <CardTitle className="text-white">Referral History</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="text-white">Referral History</CardTitle></CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
@@ -564,41 +435,21 @@ export default function ReferralPage() {
                   <tr className="border-b border-border bg-secondary/30 text-muted-foreground uppercase text-[10px] font-bold tracking-widest">
                     <th className="py-4 px-6">Date</th>
                     <th className="py-4 px-6">Trader</th>
-                    <th className="py-4 px-6">Challenge</th>
+                    <th className="py-4 px-6">Status</th>
                     <th className="py-4 px-6">Commission</th>
                     <th className="py-4 px-6 text-right">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/50">
-                  {referralsLoading ? (
-                    [1, 2, 3].map(i => (
-                      <tr key={i}><td colSpan={5} className="py-4"><Skeleton className="h-10 w-full rounded-lg mx-6" /></td></tr>
-                    ))
-                  ) : (referrals && referrals.length > 0) ? referrals.map((r: any) => (
+                  {referralsLoading ? [1, 2, 3].map(i => <tr key={i}><td colSpan={5} className="py-4"><Skeleton className="h-10 w-full rounded-lg mx-6" /></td></tr>) : (referrals && referrals.length > 0) ? referrals.map((r: any) => (
                     <tr key={r.id} className="hover:bg-secondary/10 transition-colors">
-                      <td className="py-4 px-6 text-xs text-muted-foreground">
-                        {r.createdAt?.seconds ? new Date(r.createdAt.seconds * 1000).toLocaleDateString() : 'Processing...'}
-                      </td>
-                      <td className="py-4 px-6 font-bold truncate max-w-[150px] text-white">
-                        {r.referredUserEmail ? `${r.referredUserEmail.split('@')[0].slice(0, 3)}***@${r.referredUserEmail.split('@')[1]}` : 'Anonymous'}
-                      </td>
-                      <td className="py-4 px-6 text-xs uppercase font-black text-muted-foreground/50">{r.plan || (r.status === 'joined' ? 'JOINED' : 'N/A')}</td>
-                      <td className="py-4 px-6 font-bold text-accent">${(r.amount || 0).toFixed(2)}</td>
-                      <td className="py-4 px-6 text-right">
-                        <Badge variant={r.status === 'paid' ? 'default' : 'outline'} className="uppercase text-[9px] font-black text-white border-white/10">
-                          {r.status || 'pending'}
-                        </Badge>
-                      </td>
+                      <td className="py-4 px-6 text-xs text-muted-foreground">{r.createdAt?.seconds ? new Date(r.createdAt.seconds * 1000).toLocaleDateString() : 'Processing...'}</td>
+                      <td className="py-4 px-6 font-bold truncate max-w-[150px] text-white">{r.referredUserEmail ? `${r.referredUserEmail.split('@')[0].slice(0, 3)}***@${r.referredUserEmail.split('@')[1]}` : 'Anonymous'}</td>
+                      <td className="py-4 px-6 text-xs uppercase font-black text-muted-foreground/50">{r.amount > 0 ? 'CONVERTED' : 'JOINED'}</td>
+                      <td className="py-4 px-6 font-bold text-accent">${(r.amount || (r.amount > 0 ? 30 : 0)).toFixed(2)}</td>
+                      <td className="py-4 px-6 text-right"><Badge variant={r.status === 'paid' ? 'default' : 'outline'} className="uppercase text-[9px] font-black text-white border-white/10">{r.status === 'joined' && r.amount > 0 ? 'PENDING' : (r.status || 'PENDING')}</Badge></td>
                     </tr>
-                  )) : (
-                    <tr>
-                      <td colSpan={5} className="py-20 text-center text-muted-foreground flex flex-col items-center gap-2">
-                        <Info className="w-12 h-12 opacity-10 mb-2" />
-                        <h3 className="text-lg font-bold text-white/40">No signups found</h3>
-                        <p className="text-sm italic max-w-xs mx-auto">Your referrals will appear here once someone joins using your link.</p>
-                      </td>
-                    </tr>
-                  )}
+                  )) : <tr><td colSpan={5} className="py-20 text-center text-muted-foreground italic">No signups found. Your referrals will appear here once someone joins using your link.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -609,24 +460,12 @@ export default function ReferralPage() {
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <AlertDialogContent className="bg-card border-primary/20">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-white">
-              <AlertTriangle className="text-amber-500 w-5 h-5" /> Confirm Code Change
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">
-              Changing your referral code to <span className="text-white font-bold">{newCode}</span> will immediately invalidate all previously shared links. Users clicking your old links will no longer be linked to your account.
-              <br /><br />
-              Changes remaining: <span className="text-white font-bold">{changesRemaining}/{MAX_CHANGES}</span>
-            </AlertDialogDescription>
+            <AlertDialogTitle className="flex items-center gap-2 text-white"><AlertTriangle className="text-amber-500 w-5 h-5" /> Confirm Code Change</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">Changing your code to <span className="text-white font-bold">{newCode}</span> will invalidate all previous links. Users clicking old links will no longer be linked to you.<br /><br />Changes remaining: <span className="text-white font-bold">{changesRemaining}/{MAX_CHANGES}</span></AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="cursor-pointer font-bold">Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleSaveCode}
-              className="bg-accent text-accent-foreground hover:bg-accent/90 cursor-pointer font-bold"
-              disabled={isSaving}
-            >
-              {isSaving ? "Updating..." : "Yes, Change Code"}
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleSaveCode} className="bg-accent text-accent-foreground hover:bg-accent/90 cursor-pointer font-bold" disabled={isSaving}>{isSaving ? "Updating..." : "Yes, Change Code"}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
