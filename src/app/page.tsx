@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from 'next/link';
@@ -9,7 +8,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 
-const logoUrl = PlaceHolderImages.find(img => img.id === 'app-logo')?.imageUrl || '';
+const logoUrl = PlaceHolderImages.find(img => img.id === 'app-logo')?.imageUrl || 'https://picsum.photos/seed/pflogo-blue-silver/400/400';
 
 const fadeInUp = {
   initial: { opacity: 0, y: 15 },
@@ -33,7 +32,7 @@ export default function Home() {
           >
             <Link href="/" className="flex items-center gap-3 cursor-pointer">
               <Image 
-                src={logoUrl} 
+                src={logoUrl || 'https://picsum.photos/seed/pflogo-blue-silver/400/400'} 
                 alt="PrimeFunded Logo"
                 width={40}
                 height={40}
@@ -163,7 +162,7 @@ export default function Home() {
             className="text-center mb-20"
           >
             <h2 className="text-4xl md:text-5xl font-headline font-bold mb-6">Built for Performance.</h2>
-            <p className="text-muted-foreground max-w-xl mx-auto text-lg leading-relaxed">
+            <p className="text-muted-foreground max-xl mx-auto text-lg leading-relaxed">
               Our infrastructure is engineered by institutional traders to give you the competitive edge you need.
             </p>
           </motion.div>
@@ -203,11 +202,12 @@ export default function Home() {
           <div className="flex flex-col items-center md:items-start gap-4">
             <div className="flex items-center gap-3">
               <Image 
-                src={logoUrl} 
+                src={logoUrl || 'https://picsum.photos/seed/pflogo-blue-silver/400/400'} 
                 alt="PrimeFunded Logo"
                 width={30}
                 height={30}
                 className="rounded-full"
+                data-ai-hint="PF logo"
               />
               <span className="font-headline font-bold text-2xl tracking-tight text-white">PrimeFunded</span>
             </div>

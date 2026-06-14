@@ -101,7 +101,7 @@ export const Navigation = memo(function Navigation() {
     <div className="w-64 bg-card border-r border-border h-screen sticky top-0 flex flex-col p-6 overflow-y-auto shrink-0 custom-scrollbar">
       <Link href="/dashboard" className="flex items-center gap-3 mb-10 px-2 cursor-pointer transition-opacity hover:opacity-80">
         <Image 
-          src={logoUrl} 
+          src={logoUrl || 'https://picsum.photos/seed/pflogo-blue-silver/400/400'} 
           alt="PrimeFunded Logo"
           width={40}
           height={40}

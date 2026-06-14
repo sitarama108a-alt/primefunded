@@ -12,7 +12,7 @@ export default function RootLoading() {
         <div className="w-20 h-20 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
           <Image 
-            src={logoUrl} 
+            src={logoUrl || 'https://picsum.photos/seed/pflogo-blue-silver/400/400'} 
             alt="PrimeFunded" 
             width={50} 
             height={50} 

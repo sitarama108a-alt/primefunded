@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from 'next/link';
@@ -15,7 +14,7 @@ import {
 import { Mail, MessageSquare, Clock, ShieldCheck, HelpCircle, TrendingUp } from 'lucide-react';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 
-const logoUrl = PlaceHolderImages.find(img => img.id === 'app-logo')?.imageUrl || '';
+const logoUrl = PlaceHolderImages.find(img => img.id === 'app-logo')?.imageUrl || 'https://picsum.photos/seed/pflogo-blue-silver/400/400';
 
 const FAQS = [
   {
@@ -68,7 +67,7 @@ export default function SupportPage() {
         <div className="max-w-7xl mx-auto px-4 h-20 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3 cursor-pointer">
             <Image 
-              src={logoUrl} 
+              src={logoUrl || 'https://picsum.photos/seed/pflogo-blue-silver/400/400'} 
               alt="PrimeFunded Logo"
               width={40}
               height={40}
@@ -166,7 +165,7 @@ export default function SupportPage() {
         <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-12">
           <div className="flex flex-col items-center md:items-start gap-4">
             <div className="flex items-center gap-3">
-              <Image src={logoUrl} alt="Logo" width={30} height={30} className="rounded-full" />
+              <Image src={logoUrl || 'https://picsum.photos/seed/pflogo-blue-silver/400/400'} alt="Logo" width={30} height={30} className="rounded-full" data-ai-hint="PF logo" />
               <span className="font-headline font-bold text-2xl tracking-tight text-white">PrimeFunded</span>
             </div>
             <p className="text-xs text-muted-foreground">© 2024 PrimeFunded Global. All rights reserved.</p>
