@@ -14,7 +14,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
-  Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Send, User, History, Award, BarChart3, Search, ExternalLink, RefreshCw, Copy, Loader2, Image as ImageIcon, Settings, Upload, Save, Instagram, MessageCircle, Phone
+  Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Send, User, History, Award, BarChart3, Search, ExternalLink, RefreshCw, Copy, Loader2, Image as ImageIcon, Settings, Upload, Save, Instagram, MessageCircle, Phone, SearchX, AlertTriangle
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
@@ -138,6 +138,31 @@ export default function AdminPage() {
     }
   };
 
+  const filteredUsers = useMemo(() => {
+    if (!adminData?.users) return [];
+    const query = searchTerm.toLowerCase();
+    return adminData.users.filter((u: any) => 
+      u.name?.toLowerCase().includes(query) ||
+      u.email?.toLowerCase().includes(query) ||
+      u.phone?.includes(searchTerm) ||
+      u.id?.includes(searchTerm) ||
+      u.traderId?.includes(searchTerm) ||
+      u.referralCode?.toLowerCase().includes(query)
+    );
+  }, [adminData?.users, searchTerm]);
+
+  const filteredOrders = useMemo(() => {
+    if (!adminData?.orders) return [];
+    const query = searchTerm.toLowerCase();
+    return adminData.orders.filter((o: any) => 
+      o.email?.toLowerCase().includes(query) ||
+      o.txHash?.toLowerCase().includes(query) ||
+      o.id?.toLowerCase().includes(query) ||
+      o.plan?.toLowerCase().includes(query) ||
+      o.size?.toLowerCase().includes(query)
+    );
+  }, [adminData?.orders, searchTerm]);
+
   const handleLogoUpload = async () => {
     if (!logoFile) return;
     setUploadingLogo(true);
@@ -187,18 +212,40 @@ export default function AdminPage() {
     }
   };
 
-  const orders = adminData?.orders || [];
-  const traders = adminData?.users || [];
-  const payouts = adminData?.payouts || [];
+  const handleVerifyOrder = async (orderId: string) => {
+    setActionLoading(true);
+    const result = await verifyOrderAction(orderId);
+    if (result.success) {
+      toast({ title: "Order Verified", description: "MT5 account generated and sent." });
+      loadData();
+    } else {
+      toast({ variant: "destructive", title: "Verification Failed", description: result.error });
+    }
+    setActionLoading(false);
+  };
+
+  const handleKycAction = async (userId: string, action: 'verified' | 'rejected') => {
+    setActionLoading(true);
+    const result = await processKycAction(userId, action, action === 'rejected' ? rejectionReason : undefined);
+    if (result.success) {
+      toast({ title: `KYC ${action}`, description: `User profile has been updated.` });
+      setIsKycReviewOpen(false);
+      setRejectionReason('');
+      loadData();
+    } else {
+      toast({ variant: "destructive", title: "Action Failed", description: result.error });
+    }
+    setActionLoading(false);
+  };
 
   const stats = useMemo(() => {
     if (!adminData) return null;
-    const totalRevenue = orders.filter((o: any) => o.status === 'verified').reduce((acc: number, o: any) => acc + parseFloat(o.price?.replace('$', '') || 0), 0) || 0;
-    const pendingKyc = traders.filter((t: any) => t.kycStatus === 'pending').length || 0;
-    const pendingPayouts = payouts.filter((p: any) => p.status === 'pending').length || 0;
-    const activeChallenges = orders.filter((o: any) => o.status === 'verified').length || 0;
+    const totalRevenue = adminData.orders.filter((o: any) => o.status === 'verified').reduce((acc: number, o: any) => acc + parseFloat(o.price?.replace('$', '') || 0), 0) || 0;
+    const pendingKyc = adminData.users.filter((t: any) => t.kycStatus === 'pending').length || 0;
+    const pendingPayouts = adminData.payouts.filter((p: any) => p.status === 'pending').length || 0;
+    const activeChallenges = adminData.orders.filter((o: any) => o.status === 'verified').length || 0;
 
-    return { totalUsers: traders.length, revenue: totalRevenue, pendingKyc, pendingPayouts, activeChallenges };
+    return { totalUsers: adminData.users.length, revenue: totalRevenue, pendingKyc, pendingPayouts, activeChallenges };
   }, [adminData]);
 
   if (previewUserId) {
@@ -250,17 +297,22 @@ export default function AdminPage() {
       <Navigation />
       <main className="flex-1 flex flex-col min-h-0">
         <div className="p-8 pb-4 shrink-0">
-          <div className="flex justify-between items-start mb-6">
+          <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
             <div>
               <h1 className="text-4xl font-headline font-bold mb-1 text-white">Administrative Terminal</h1>
               <p className="text-muted-foreground">Monitor performance and manage institutional capital deployment.</p>
             </div>
-            <div className="flex gap-4">
-               <div className="relative">
+            <div className="flex items-center gap-4 w-full md:w-auto">
+               <div className="relative flex-1 md:w-64">
                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                 <Input placeholder="Search trader..." className="pl-10 w-64 h-10 bg-secondary/50 text-white" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                 <Input 
+                   placeholder="Quick search user/order..." 
+                   className="pl-10 h-10 bg-secondary/50 text-white border-border/50" 
+                   value={searchTerm} 
+                   onChange={e => setSearchTerm(e.target.value)} 
+                 />
                </div>
-               <Button variant="outline" size="icon" onClick={loadData} disabled={isLoading} className="bg-secondary/50">
+               <Button variant="outline" size="icon" onClick={loadData} disabled={isLoading} className="bg-secondary/50 border-border/50">
                  <RefreshCw className={cn("w-4 h-4 text-white", isLoading && "animate-spin")} />
                </Button>
             </div>
@@ -269,8 +321,8 @@ export default function AdminPage() {
           <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
             <TabsList className="bg-secondary/50 p-1 h-12 w-full justify-start rounded-xl border border-border/50 shrink-0">
               <TabsTrigger value="overview" className="px-6 font-bold cursor-pointer"><Activity className="w-4 h-4 mr-2" /> Overview</TabsTrigger>
-              <TabsTrigger value="orders" className="px-6 font-bold cursor-pointer"><ShoppingCart className="w-4 h-4 mr-2" /> Orders</TabsTrigger>
-              <TabsTrigger value="users" className="px-6 font-bold cursor-pointer"><Users className="w-4 h-4 mr-2" /> Users</TabsTrigger>
+              <TabsTrigger value="users" className="px-6 font-bold cursor-pointer"><Users className="w-4 h-4 mr-2" /> User Directory</TabsTrigger>
+              <TabsTrigger value="orders" className="px-6 font-bold cursor-pointer"><ShoppingCart className="w-4 h-4 mr-2" /> Order Journal</TabsTrigger>
               <TabsTrigger value="kyc" className="px-6 font-bold cursor-pointer"><Fingerprint className="w-4 h-4 mr-2" /> KYC Hub</TabsTrigger>
               <TabsTrigger value="settings" className="px-6 font-bold cursor-pointer"><Settings className="w-4 h-4 mr-2" /> Branding</TabsTrigger>
             </TabsList>
@@ -279,6 +331,7 @@ export default function AdminPage() {
 
         <div className="flex-1 overflow-y-auto p-8 pt-0 custom-scrollbar">
           
+          {/* OVERVIEW TAB */}
           <div className={cn("space-y-8", activeTab === 'overview' ? "block" : "hidden")}>
             {isLoading && !adminData ? <LoadingGrid /> : !stats ? <div className="text-center py-20 text-muted-foreground">Sync required.</div> : (
               <>
@@ -292,6 +345,182 @@ export default function AdminPage() {
             )}
           </div>
 
+          {/* USERS TAB */}
+          <div className={cn("space-y-6", activeTab === 'users' ? "block" : "hidden")}>
+            <div className="flex justify-between items-center mb-4">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
+                Showing {filteredUsers.length} of {adminData?.users?.length || 0} users
+              </p>
+            </div>
+            <Card className="border-border/50 bg-card/30">
+              <CardContent className="p-0">
+                {isLoading ? <LoadingTable /> : filteredUsers.length === 0 ? (
+                  <EmptyState message="No users found matching your search." />
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
+                        <tr>
+                          <th className="py-4 px-6">Trader Name</th>
+                          <th className="py-4 px-6">Email / Phone</th>
+                          <th className="py-4 px-6">Referral Code</th>
+                          <th className="py-4 px-6 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/30">
+                        {filteredUsers.map((u: any) => (
+                          <tr key={u.id} className="hover:bg-primary/5 transition-colors group">
+                            <td className="py-4 px-6">
+                              <div className="font-bold text-white">{u.name}</div>
+                              <div className="text-[10px] text-muted-foreground font-mono">{u.id}</div>
+                            </td>
+                            <td className="py-4 px-6">
+                              <div className="text-white">{u.email}</div>
+                              <div className="text-xs text-muted-foreground">{u.phone || 'No Phone'}</div>
+                            </td>
+                            <td className="py-4 px-6">
+                              <Badge variant="outline" className="font-mono text-xs border-primary/20 text-primary">
+                                {u.referralCode}
+                              </Badge>
+                            </td>
+                            <td className="py-4 px-6 text-right">
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setPreviewUserId(u.id)}>
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* ORDERS TAB */}
+          <div className={cn("space-y-6", activeTab === 'orders' ? "block" : "hidden")}>
+             <div className="flex justify-between items-center mb-4">
+               <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
+                 Showing {filteredOrders.length} of {adminData?.orders?.length || 0} orders
+               </p>
+             </div>
+             <Card className="border-border/50 bg-card/30">
+               <CardContent className="p-0">
+                 {isLoading ? <LoadingTable /> : filteredOrders.length === 0 ? (
+                   <EmptyState message="No orders found matching your search." />
+                 ) : (
+                   <div className="overflow-x-auto max-h-[600px] custom-scrollbar">
+                     <table className="w-full text-sm text-left">
+                       <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest sticky top-0 z-10">
+                         <tr>
+                           <th className="py-4 px-6">Trader</th>
+                           <th className="py-4 px-6">Challenge</th>
+                           <th className="py-4 px-6">TXID / Network</th>
+                           <th className="py-4 px-6">Status</th>
+                           <th className="py-4 px-6 text-right">Verification</th>
+                         </tr>
+                       </thead>
+                       <tbody className="divide-y divide-border/30">
+                         {filteredOrders.map((o: any) => (
+                           <tr key={o.id} className="hover:bg-primary/5 transition-colors">
+                             <td className="py-4 px-6 font-bold text-white">{o.email}</td>
+                             <td className="py-4 px-6 font-mono text-xs">
+                               <div className="text-white">{o.plan}</div>
+                               <div className="text-muted-foreground">{o.size} - {o.price}</div>
+                             </td>
+                             <td className="py-4 px-6">
+                               <div className="flex items-center gap-2">
+                                 <span className="font-mono text-[10px] text-muted-foreground truncate max-w-[120px]">{o.txHash}</span>
+                                 <TooltipProvider>
+                                   <Tooltip>
+                                     <TooltipTrigger asChild>
+                                       <button className="text-muted-foreground hover:text-primary transition-colors" onClick={() => { navigator.clipboard.writeText(o.txHash); toast({ title: "Copied" }); }}>
+                                          <Copy className="w-3 h-3" />
+                                       </button>
+                                     </TooltipTrigger>
+                                     <TooltipContent className="bg-card border-border"><p className="text-xs">{o.txHash}</p></TooltipContent>
+                                   </Tooltip>
+                                 </TooltipProvider>
+                               </div>
+                               <div className="text-[9px] uppercase font-black text-primary/50">{o.network || 'Unknown Network'}</div>
+                             </td>
+                             <td className="py-4 px-6">
+                               <Badge className={o.status === 'verified' ? "bg-accent text-accent-foreground" : "bg-amber-500 text-white"}>
+                                 {o.status}
+                               </Badge>
+                             </td>
+                             <td className="py-4 px-6 text-right">
+                               {o.status === 'pending' && (
+                                 <Button 
+                                   size="sm" 
+                                   className="h-8 font-bold bg-accent hover:bg-accent/90" 
+                                   onClick={() => handleVerifyOrder(o.id)}
+                                   disabled={actionLoading}
+                                 >
+                                   {actionLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : "Verify Payment"}
+                                 </Button>
+                               )}
+                             </td>
+                           </tr>
+                         ))}
+                       </tbody>
+                     </table>
+                   </div>
+                 )}
+               </CardContent>
+             </Card>
+          </div>
+
+          {/* KYC HUB TAB */}
+          <div className={cn("space-y-8", activeTab === 'kyc' ? "block" : "hidden")}>
+             <Card className="border-border/50 bg-card/30">
+               <CardHeader>
+                 <CardTitle className="text-white flex items-center gap-2">
+                   <Fingerprint className="w-5 h-5 text-amber-500" /> Pending Verification
+                 </CardTitle>
+                 <CardDescription>Traders awaiting identity approval to unlock payouts.</CardDescription>
+               </CardHeader>
+               <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
+                        <tr>
+                          <th className="py-4 px-6">User</th>
+                          <th className="py-4 px-6">Submitted At</th>
+                          <th className="py-4 px-6">Status</th>
+                          <th className="py-4 px-6 text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/30">
+                        {adminData?.users?.filter((u: any) => u.kycStatus === 'pending').map((u: any) => (
+                          <tr key={u.id} className="hover:bg-amber-500/5 transition-colors">
+                            <td className="py-4 px-6">
+                              <div className="font-bold text-white">{u.name}</div>
+                              <div className="text-xs text-muted-foreground">{u.email}</div>
+                            </td>
+                            <td className="py-4 px-6 text-muted-foreground text-xs">{new Date(u.kycSubmittedAt).toLocaleString()}</td>
+                            <td className="py-4 px-6"><Badge className="bg-amber-500 text-white">PENDING</Badge></td>
+                            <td className="py-4 px-6 text-right">
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                className="h-8 font-bold border-amber-500/20 text-amber-500 hover:bg-amber-500 hover:text-white"
+                                onClick={() => { setSelectedUser(u); setIsKycReviewOpen(true); }}
+                              >
+                                Review Documents
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+               </CardContent>
+             </Card>
+          </div>
+
+          {/* SETTINGS TAB */}
           <div className={cn("space-y-8 pb-20", activeTab === 'settings' ? "block" : "hidden")}>
             <div className="max-w-3xl grid gap-8">
               <Card className="border-border/50 bg-card/30 backdrop-blur-sm">
@@ -418,37 +647,55 @@ export default function AdminPage() {
               </Card>
             </div>
           </div>
-
-          <div className={cn(activeTab === 'orders' ? "block" : "hidden")}>
-             <Card className="border-border/50 bg-card/30">
-               <CardContent className="p-0">
-                 {isLoading && !adminData ? <LoadingTable /> : (
-                   <div className="overflow-x-auto max-h-[600px] custom-scrollbar">
-                     <table className="w-full text-sm text-left">
-                       <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest sticky top-0 z-10">
-                         <tr>
-                           <th className="py-4 px-6">User</th>
-                           <th className="py-4 px-6">Challenge</th>
-                           <th className="py-4 px-6">Status</th>
-                         </tr>
-                       </thead>
-                       <tbody className="divide-y divide-border/30">
-                         {orders?.map((o: any) => (
-                           <tr key={o.id} className="hover:bg-primary/5 transition-colors">
-                             <td className="py-4 px-6 font-bold text-white">{o.email}</td>
-                             <td className="py-4 px-6 font-mono text-xs">{o.plan} {o.size}</td>
-                             <td className="py-4 px-6"><Badge className={o.status === 'verified' ? "bg-accent text-accent-foreground" : "bg-amber-500 text-white"}>{o.status}</Badge></td>
-                           </tr>
-                         ))}
-                       </tbody>
-                     </table>
-                   </div>
-                 )}
-               </CardContent>
-             </Card>
-          </div>
         </div>
       </main>
+
+      {/* KYC REVIEW DIALOG */}
+      <Dialog open={isKycReviewOpen} onOpenChange={setIsKycReviewOpen}>
+        <DialogContent className="bg-card border-primary/20 max-w-2xl overflow-y-auto max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle className="text-white text-2xl font-headline">Review Identity Verification</DialogTitle>
+            <DialogDescription>Review documents for {selectedUser?.name}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-8 py-4">
+             <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                   <Label className="text-xs uppercase font-bold text-muted-foreground">ID Proof</Label>
+                   <div className="aspect-[4/3] rounded-xl border border-border overflow-hidden bg-background relative flex items-center justify-center">
+                     {selectedUser?.idProofUrl ? (
+                       <Image src={selectedUser.idProofUrl} alt="ID Proof" fill className="object-contain" />
+                     ) : <p className="text-xs text-muted-foreground">No document uploaded</p>}
+                   </div>
+                </div>
+                <div className="space-y-2">
+                   <Label className="text-xs uppercase font-bold text-muted-foreground">Address Proof</Label>
+                   <div className="aspect-[4/3] rounded-xl border border-border overflow-hidden bg-background relative flex items-center justify-center">
+                     {selectedUser?.addressProofUrl ? (
+                       <Image src={selectedUser.addressProofUrl} alt="Address Proof" fill className="object-contain" />
+                     ) : <p className="text-xs text-muted-foreground">No document uploaded</p>}
+                   </div>
+                </div>
+             </div>
+             <div className="space-y-3">
+               <Label className="text-white text-xs font-bold uppercase">Rejection Reason (Optional)</Label>
+               <Textarea 
+                 placeholder="State specifically why the documents were rejected..." 
+                 className="bg-secondary/30 min-h-[100px]"
+                 value={rejectionReason}
+                 onChange={e => setRejectionReason(e.target.value)}
+               />
+             </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+             <Button variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive/10" onClick={() => handleKycAction(selectedUser?.id, 'rejected')} disabled={actionLoading}>
+               {actionLoading ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <XCircle className="w-4 h-4 mr-2" />} Reject KYC
+             </Button>
+             <Button className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => handleKycAction(selectedUser?.id, 'verified')} disabled={actionLoading}>
+               {actionLoading ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />} Approve & Verify
+             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -458,6 +705,20 @@ function DiscordIcon(props: any) {
     <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
       <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993.023.03.07.039.084.028a19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.419-2.157 2.419zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.419-2.157 2.419z" />
     </svg>
+  );
+}
+
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div className="py-20 text-center flex flex-col items-center justify-center space-y-4">
+      <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center border border-border">
+        <SearchX className="w-8 h-8 text-muted-foreground opacity-30" />
+      </div>
+      <div>
+        <h4 className="text-white font-bold">No results found</h4>
+        <p className="text-sm text-muted-foreground max-w-xs mx-auto">{message}</p>
+      </div>
+    </div>
   );
 }
 
