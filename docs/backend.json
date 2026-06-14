@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "UserProfile": {
@@ -24,6 +25,8 @@
         "kycStatus": { "type": "string", "enum": ["none", "pending", "verified", "rejected"] },
         "kycRejectionReason": { "type": "string" },
         "kycSubmittedAt": { "type": "string", "format": "date-time" },
+        "idProofUrl": { "type": "string" },
+        "addressProofUrl": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["name", "email"]
