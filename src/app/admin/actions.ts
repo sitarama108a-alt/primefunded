@@ -14,7 +14,7 @@ function getAdminDb() {
     const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
     
     if (!serviceAccountKey) {
-      console.error('[Admin-SDK] FIREBASE_SERVICE_ACCOUNT_KEY is missing from environment variables.');
+      console.error('[Admin-SDK] FIREBASE_SERVICE_ACCOUNT_KEY is missing.');
       throw new Error('Administrative terminal requires FIREBASE_SERVICE_ACCOUNT_KEY to be configured in .env');
     }
 
@@ -26,7 +26,7 @@ function getAdminDb() {
       console.log('[Admin-SDK] Initialized successfully via Server Action');
     } catch (e: any) {
       console.error('[Admin-SDK] Initialization failed:', e.message);
-      throw new Error('Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY. Ensure it is valid stringified JSON.');
+      throw new Error(`Admin SDK Config Error: ${e.message}. Ensure .env key is valid single-line JSON.`);
     }
   }
   return getFirestore();
@@ -36,12 +36,27 @@ export async function fetchAdminTerminalData() {
   try {
     const db = getAdminDb();
 
-    const [usersSnap, ordersSnap, payoutsSnap, referralsSnap, broadcastsSnap] = await Promise.all([
-      db.collection('users').get(),
-      db.collection('orders').orderBy('date', 'desc').limit(200).get(),
-      db.collection('payouts').orderBy('date', 'desc').limit(200).get(),
-      db.collection('referrals').orderBy('createdAt', 'desc').limit(100).get(),
-      db.collection('broadcasts').orderBy('sentAt', 'desc').limit(20).get(),
+    // Fetch collections individually to prevent one failure blocking all stats
+    const fetchCollection = async (name: string, limitCount = 100, orderByField?: string) => {
+      try {
+        let q = db.collection(name);
+        if (orderByField) {
+          q = q.orderBy(orderByField, 'desc') as any;
+        }
+        const snap = await q.limit(limitCount).get();
+        return snap.docs;
+      } catch (err) {
+        console.warn(`[Admin-Action] Failed to fetch collection: ${name}`, err);
+        return [];
+      }
+    };
+
+    const [usersDocs, ordersDocs, payoutsDocs, referralsDocs, broadcastsDocs] = await Promise.all([
+      db.collection('users').get().then(s => s.docs).catch(() => []),
+      fetchCollection('orders', 200, 'date'),
+      fetchCollection('payouts', 200, 'date'),
+      fetchCollection('referrals', 100, 'createdAt'),
+      fetchCollection('broadcasts', 20, 'sentAt'),
     ]);
 
     const serialize = (doc: any) => ({
@@ -54,16 +69,16 @@ export async function fetchAdminTerminalData() {
     });
 
     return {
-      users: usersSnap.docs.map(serialize),
-      orders: ordersSnap.docs.map(serialize),
-      payouts: payoutsSnap.docs.map(serialize),
-      referrals: referralsSnap.docs.map(serialize),
-      broadcasts: broadcastsSnap.docs.map(serialize),
+      users: usersDocs.map(serialize),
+      orders: ordersDocs.map(serialize),
+      payouts: payoutsDocs.map(serialize),
+      referrals: referralsDocs.map(serialize),
+      broadcasts: broadcastsDocs.map(serialize),
       success: true
     };
   } catch (error: any) {
-    console.error('[Admin-Action] Fetch error:', error.message);
-    return { success: false, error: error.message };
+    console.error('[Admin-Action] Critical fetch error:', error.message);
+    return { success: false, error: `Critical Sync Failure: ${error.message}` };
   }
 }
 
