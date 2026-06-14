@@ -11,7 +11,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 function getAdminDb() {
   if (!getApps().length) {
-    const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+    let serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
     
     if (!serviceAccountKey) {
       console.error('[Admin-SDK] FIREBASE_SERVICE_ACCOUNT_KEY is missing.');
@@ -19,7 +19,13 @@ function getAdminDb() {
     }
 
     try {
-      // Ensure the key is parsed correctly. If it has raw newlines, it might fail.
+      // Clean up string if it was wrapped in quotes by some .env parsers
+      if (serviceAccountKey.startsWith("'") && serviceAccountKey.endsWith("'")) {
+        serviceAccountKey = serviceAccountKey.slice(1, -1);
+      } else if (serviceAccountKey.startsWith('"') && serviceAccountKey.endsWith('"')) {
+        serviceAccountKey = serviceAccountKey.slice(1, -1);
+      }
+
       const serviceAccount = JSON.parse(serviceAccountKey);
       initializeApp({
         credential: cert(serviceAccount),
@@ -27,6 +33,8 @@ function getAdminDb() {
       console.log('[Admin-SDK] Initialized successfully via Server Action');
     } catch (e: any) {
       console.error('[Admin-SDK] Initialization failed:', e.message);
+      // Log the first few chars of the key for debugging without exposing secrets
+      console.error('[Admin-SDK] Key Preview:', serviceAccountKey.substring(0, 20) + '...');
       throw new Error(`Admin SDK Config Error: ${e.message}. Ensure .env key is valid single-line JSON with escaped newlines.`);
     }
   }
