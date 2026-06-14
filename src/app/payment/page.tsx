@@ -9,11 +9,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/context/AuthContext';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { Copy, CheckCircle2, AlertTriangle, QrCode, Wallet, Mail, Hash, Loader2 } from 'lucide-react';
+import { Copy, CheckCircle2, AlertTriangle, QrCode, Wallet, Mail, Hash, Loader2, Globe } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { motion } from 'framer-motion';
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -24,6 +25,7 @@ import { z } from 'zod';
 const PaymentSchema = z.object({
   email: z.string().email("Invalid email format"),
   txHash: z.string().min(10, "Transaction hash is too short").max(100, "Transaction hash is too long"),
+  network: z.string().min(1, "Please select a network"),
 });
 
 const cryptoWallets = [
@@ -61,6 +63,7 @@ function PaymentContent() {
   
   const [txHash, setTxHash] = useState('');
   const [email, setEmail] = useState(user?.email || '');
+  const [selectedNetwork, setSelectedNetwork] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
@@ -83,7 +86,7 @@ function PaymentContent() {
     }
 
     // Validation
-    const validation = PaymentSchema.safeParse({ email, txHash });
+    const validation = PaymentSchema.safeParse({ email, txHash, network: selectedNetwork });
     if (!validation.success) {
       toast({
         variant: "destructive",
@@ -104,6 +107,7 @@ function PaymentContent() {
       size,
       price,
       txHash: sanitizedHash,
+      network: selectedNetwork,
       status: 'pending',
       date: new Date().toISOString(),
       createdAt: serverTimestamp(),
@@ -227,6 +231,23 @@ function PaymentContent() {
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-2">
+                  <Label className="flex items-center gap-2 text-white">
+                    <Globe className="w-3 h-3 text-primary" /> Select Network
+                  </Label>
+                  <Select value={selectedNetwork} onValueChange={setSelectedNetwork} required>
+                    <SelectTrigger className="bg-secondary/30 h-12 rounded-xl text-white">
+                      <SelectValue placeholder="Choose payment network" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Ethereum">Ethereum (ERC20)</SelectItem>
+                      <SelectItem value="Tron (TRC20)">Tron (TRC20)</SelectItem>
+                      <SelectItem value="BNB Smart Chain">BNB Smart Chain (BEP20)</SelectItem>
+                      <SelectItem value="Polygon">Polygon (MATIC)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="email" className="flex items-center gap-2 text-white">
                     <Mail className="w-3 h-3 text-primary" /> Notification Email
                   </Label>
@@ -258,7 +279,7 @@ function PaymentContent() {
                 <Button 
                   type="submit" 
                   className="w-full h-14 font-bold text-lg rounded-xl cyan-box-glow cursor-pointer" 
-                  disabled={loading || !txHash || !email}
+                  disabled={loading || !txHash || !email || !selectedNetwork}
                 >
                   {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}
                   {loading ? 'Processing...' : 'Submit for Verification'}

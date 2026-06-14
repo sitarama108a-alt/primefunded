@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect, memo } from 'react';
@@ -10,10 +11,11 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
-  Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Send, User, History, Award, BarChart3, Search, ExternalLink, RefreshCw
+  Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Send, User, History, Award, BarChart3, Search, ExternalLink, RefreshCw, Copy
 } from 'lucide-react';
 import { useFirestore } from '@/firebase';
 import { doc, updateDoc, setDoc, serverTimestamp, getDoc, addDoc, collection, writeBatch } from 'firebase/firestore';
@@ -90,7 +92,6 @@ export default function AdminPage() {
     const saved = localStorage.getItem('admin_active_tab');
     if (saved) setActiveTab(saved);
     
-    // Check if session password is saved (optional for DX)
     const savedPass = sessionStorage.getItem('admin_master_key');
     if (savedPass && savedPass === (process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "93463962569392846256")) {
       setIsAuthenticated(true);
@@ -106,6 +107,21 @@ export default function AdminPage() {
   const handleTabChange = (val: string) => {
     setActiveTab(val);
     localStorage.setItem('admin_active_tab', val);
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast({ title: "Copied", description: "Value copied to clipboard." });
+  };
+
+  const getExplorerLink = (hash: string, network: string) => {
+    if (!hash) return "#";
+    const net = network?.toLowerCase() || "";
+    if (net.includes("ethereum")) return `https://etherscan.io/tx/${hash}`;
+    if (net.includes("tron")) return `https://tronscan.org/#/transaction/${hash}`;
+    if (net.includes("bnb") || net.includes("bsc")) return `https://bscscan.com/tx/${hash}`;
+    if (net.includes("polygon")) return `https://polygonscan.com/tx/${hash}`;
+    return `https://etherscan.io/tx/${hash}`; // Default
   };
 
   const orders = adminData?.orders || [];
@@ -186,7 +202,7 @@ export default function AdminPage() {
       }
       
       toast({ title: "Order Verified", description: "Account created successfully." });
-      loadData(); // Refresh terminal data
+      loadData(); 
     } catch (err) {
       toast({ variant: "destructive", title: "Verification Failed" });
     }
@@ -438,13 +454,41 @@ export default function AdminPage() {
                               </div>
                             </td>
                             <td className="py-4 px-6">
-                              <Badge variant="outline" className="text-[10px] uppercase font-bold border-white/10 text-white">{o.plan} {o.size}</Badge>
+                              <div className="flex flex-col gap-1">
+                                <Badge variant="outline" className="text-[10px] uppercase font-bold border-white/10 text-white w-fit">{o.plan} {o.size}</Badge>
+                                {o.network && <span className="text-[9px] text-muted-foreground font-bold uppercase">{o.network}</span>}
+                              </div>
                             </td>
                             <td className="py-4 px-6 font-bold text-primary">{o.price}</td>
                             <td className="py-4 px-6">
-                               <div className="flex items-center gap-1 group">
-                                 <span className="font-mono text-[10px] truncate max-w-[80px] text-muted-foreground">{o.txHash}</span>
-                                 <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white" />
+                               <div className="flex items-center gap-2 group">
+                                 <TooltipProvider>
+                                   <Tooltip>
+                                     <TooltipTrigger asChild>
+                                       <span className="font-mono text-[10px] truncate max-w-[100px] text-muted-foreground cursor-help">{o.txHash}</span>
+                                     </TooltipTrigger>
+                                     <TooltipContent className="bg-popover border-border max-w-xs break-all text-[10px] font-mono">
+                                       {o.txHash}
+                                     </TooltipContent>
+                                   </Tooltip>
+                                 </TooltipProvider>
+                                 
+                                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                   <button 
+                                     onClick={() => copyToClipboard(o.txHash)}
+                                     className="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-white transition-colors"
+                                   >
+                                     <Copy className="w-3 h-3" />
+                                   </button>
+                                   <a 
+                                     href={getExplorerLink(o.txHash, o.network)} 
+                                     target="_blank" 
+                                     rel="noopener noreferrer"
+                                     className="p-1 hover:bg-secondary rounded text-primary transition-colors"
+                                   >
+                                     <ExternalLink className="w-3 h-3" />
+                                   </a>
+                                 </div>
                                </div>
                             </td>
                             <td className="py-4 px-6">
