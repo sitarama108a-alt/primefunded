@@ -1,8 +1,8 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, setDoc, getDoc, serverTimestamp, collection, addDoc } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, getDoc, serverTimestamp, collection, addDoc, Timestamp } from 'firebase/firestore';
 
 /**
- * @fileOverview MT5 Update API with Automated Breach Detection
+ * @fileOverview MT5 Update API with Automated Breach Detection & Plan Progression
  * Handles real-time metric syncing and enforces prop firm rules.
  */
 
@@ -20,16 +20,14 @@ export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
   try {
-    // 1. Validate Configuration
     if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
-      return new Response('Firebase Configuration Missing', { status: 500 });
+      return new Response('Config Missing', { status: 500, headers: { 'Content-Type': 'text/plain' } });
     }
 
-    // 2. Initialize Firebase (Client SDK on Node.js)
     const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // 3. Robust Body Parsing
+    // Robust Body Parsing
     let payload: any = {};
     const contentType = request.headers.get('content-type') || '';
     
@@ -41,100 +39,127 @@ export async function POST(request: Request) {
         payload = Object.fromEntries(formData.entries());
       }
     } catch (e) {
-      return new Response('Malformed Request Body', { status: 400 });
+      return new Response('Payload Error', { status: 400 });
     }
 
-    // 4. Identify Account
-    const accountId = payload.accountId || payload.login;
-    if (!accountId) {
+    const accountId = String(payload.accountId || payload.login || '');
+    if (!accountId || accountId === 'undefined') {
       return new Response('Missing accountId', { status: 400 });
     }
 
-    // 5. Sanitize Metric Inputs
+    // Sanitize Metrics
     const currBalance = parseFloat(String(payload.balance)) || 0;
     const currEquity = parseFloat(String(payload.equity)) || 0;
     const currProfit = parseFloat(String(payload.profit)) || 0;
     const login = String(payload.login || accountId);
 
-    const accRef = doc(db, 'mt5_accounts', String(accountId));
+    const accRef = doc(db, 'mt5_accounts', accountId);
     const accSnap = await getDoc(accRef);
     
+    let accountData: any = {};
+    
     if (!accSnap.exists()) {
-      // First-time sync: Provision basic account structure
-      await setDoc(accRef, {
+      // First-time provision
+      accountData = {
         login,
         balance: currBalance,
         equity: currEquity,
         profit: currProfit,
         status: 'active',
         startingBalance: currBalance > 0 ? currBalance : 100000,
+        planType: '1-step-pro',
+        phase: 'evaluation',
+        tradingDays: 0,
         updatedAt: serverTimestamp(),
-      }, { merge: true });
+      };
+      await setDoc(accRef, accountData, { merge: true });
       return new Response('OK', { status: 200 });
     }
 
-    const accountData = accSnap.data();
+    accountData = accSnap.data();
     const startingBalance = parseFloat(String(accountData.startingBalance)) || currBalance || 100000;
-    const planType = accountData.planType || '1-step-pro';
-    const phase = accountData.phase || 'evaluation';
+    const planType = String(accountData.planType || '1-step-pro');
+    const phase = String(accountData.phase || 'evaluation');
     const userId = accountData.userId;
-    const currentStatus = accountData.status || 'active';
+    const currentStatus = String(accountData.status || 'active');
 
-    // Skip monitoring for terminal accounts
     if (currentStatus === 'terminated' || currentStatus === 'passed') {
       return new Response('OK', { status: 200 });
     }
 
-    // 6. Calculate Compliance Metrics
+    // 1. Calculate Core Metrics
     const profitPct = startingBalance !== 0 ? ((currEquity - startingBalance) / startingBalance) * 100 : 0;
     const floatingLossPct = currBalance !== 0 ? ((currBalance - currEquity) / currBalance) * 100 : 0;
     const dailyDrawdownPct = startingBalance !== 0 ? ((startingBalance - currEquity) / startingBalance) * 100 : 0;
     const maxDrawdownPct = dailyDrawdownPct; 
 
     let newStatus = 'active';
+    let newPhase = phase;
     let breachType: 'hard' | 'soft' | null = null;
     let breachReason = '';
 
-    const checkHardBreach = (rules: { daily: number, max: number, float?: number }) => {
-      if (dailyDrawdownPct > rules.daily) return `Daily drawdown limit exceeded (${dailyDrawdownPct.toFixed(2)}% > ${rules.daily}%)`;
-      if (maxDrawdownPct > rules.max) return `Maximum drawdown limit exceeded (${maxDrawdownPct.toFixed(2)}% > ${rules.max}%)`;
-      if (rules.float && floatingLossPct > rules.float) return `Floating loss limit exceeded (${floatingLossPct.toFixed(2)}% > ${rules.float}%)`;
-      return null;
+    const triggerHardBreach = (reason: string) => {
+      newStatus = 'terminated';
+      breachType = 'hard';
+      breachReason = reason;
     };
 
-    // 7. Rule Engine
+    // 2. Risk Engine
     if (planType === '1-step-pro') {
-      const reason = checkHardBreach(phase === 'funded' ? { daily: 3, max: 6, float: 1 } : { daily: 3, max: 6 });
-      if (reason) { breachReason = reason; breachType = 'hard'; }
-      else if (phase === 'evaluation' && profitPct >= 10 && (accountData.tradingDays || 0) >= 5) newStatus = 'passed';
+      if (phase === 'funded') {
+        if (floatingLossPct > 1) triggerHardBreach(`Floating loss limit exceeded (1%)`);
+        if (dailyDrawdownPct > 3) triggerHardBreach(`Daily drawdown limit exceeded (3%)`);
+        if (maxDrawdownPct > 6) triggerHardBreach(`Maximum drawdown limit exceeded (6%)`);
+      } else {
+        if (dailyDrawdownPct > 3) triggerHardBreach(`Evaluation daily drawdown exceeded (3%)`);
+        if (maxDrawdownPct > 6) triggerHardBreach(`Evaluation max drawdown exceeded (6%)`);
+        else if (profitPct >= 10 && (accountData.tradingDays || 0) >= 5) newStatus = 'passed';
+      }
     } 
     else if (planType === '2-step-classic') {
-      const reason = checkHardBreach(phase === 'funded' ? { daily: 5, max: 10, float: 1 } : { daily: 5, max: 10 });
-      if (reason) { breachReason = reason; breachType = 'hard'; }
-      else if (phase === 'phase1' && profitPct >= 8 && (accountData.tradingDays || 0) >= 5) newStatus = 'passed';
-      else if (phase === 'phase2' && profitPct >= 5 && (accountData.tradingDays || 0) >= 5) newStatus = 'passed';
+      const dailyLimit = 5;
+      const maxLimit = 10;
+      
+      if (phase === 'funded' && floatingLossPct > 1) triggerHardBreach(`Floating loss limit exceeded (1%)`);
+      if (dailyDrawdownPct > dailyLimit) triggerHardBreach(`Daily drawdown exceeded (${dailyLimit}%)`);
+      if (maxDrawdownPct > maxLimit) triggerHardBreach(`Max drawdown exceeded (${maxLimit}%)`);
+      
+      if (newStatus === 'active') {
+        if (phase === 'phase1' && profitPct >= 8 && (accountData.tradingDays || 0) >= 5) {
+          newPhase = 'phase2';
+          newStatus = 'active'; // Move to next phase
+        } else if (phase === 'phase2' && profitPct >= 5 && (accountData.tradingDays || 0) >= 5) {
+          newStatus = 'passed';
+        }
+      }
     }
     else if (planType === '3-step-classic') {
-      const reason = checkHardBreach(phase === 'funded' ? { daily: 4, max: 8, float: 1 } : { daily: 4, max: 8 });
-      if (reason) { breachReason = reason; breachType = 'hard'; }
-      else if (phase === 'phase1' && profitPct >= 10 && (accountData.tradingDays || 0) >= 7) newStatus = 'passed';
-      else if (phase === 'phase2' && profitPct >= 8 && (accountData.tradingDays || 0) >= 6) newStatus = 'passed';
-      else if (phase === 'phase3' && profitPct >= 5 && (accountData.tradingDays || 0) >= 5) newStatus = 'passed';
+      const dailyLimit = 4;
+      const maxLimit = 8;
+      
+      if (phase === 'funded' && floatingLossPct > 1) triggerHardBreach(`Floating loss limit exceeded (1%)`);
+      if (dailyDrawdownPct > dailyLimit) triggerHardBreach(`Daily drawdown exceeded (${dailyLimit}%)`);
+      if (maxDrawdownPct > maxLimit) triggerHardBreach(`Max drawdown exceeded (${maxLimit}%)`);
+      
+      if (newStatus === 'active') {
+        if (phase === 'phase1' && profitPct >= 10 && (accountData.tradingDays || 0) >= 7) newPhase = 'phase2';
+        else if (phase === 'phase2' && profitPct >= 8 && (accountData.tradingDays || 0) >= 6) newPhase = 'phase3';
+        else if (phase === 'phase3' && profitPct >= 5 && (accountData.tradingDays || 0) >= 5) newStatus = 'passed';
+      }
     }
     else if (planType === 'instant-funding') {
-      const reason = checkHardBreach({ daily: 2, max: 4, float: 1 });
-      if (reason) { breachReason = reason; breachType = 'hard'; }
+      if (dailyDrawdownPct > 2) triggerHardBreach(`Instant account daily drawdown exceeded (2%)`);
+      if (maxDrawdownPct > 4) triggerHardBreach(`Instant account max drawdown exceeded (4%)`);
+      if (floatingLossPct > 1) triggerHardBreach(`Instant account floating loss exceeded (1%)`);
     }
 
-    if (breachType === 'hard') newStatus = 'terminated';
-
-    // 8. Trigger Notifications on Status Change
+    // 3. Status Change Notifications
     if (newStatus !== currentStatus && userId) {
       const notifRef = collection(db, 'users', String(userId), 'notifications');
       if (newStatus === 'terminated') {
         await addDoc(notifRef, {
           title: "🚨 Account Terminated",
-          message: `Your account PF-${login} has been terminated. Reason: ${breachReason}`,
+          message: `Account PF-${login} breached: ${breachReason}`,
           type: 'challenge_failed',
           isRead: false,
           createdAt: serverTimestamp()
@@ -142,7 +167,7 @@ export async function POST(request: Request) {
       } else if (newStatus === 'passed') {
         await addDoc(notifRef, {
           title: "🎉 Challenge Passed!",
-          message: `Congratulations! Account PF-${login} has reached the target. Advancement pending review.`,
+          message: `Congratulations! Account PF-${login} reached the target. Advancement pending.`,
           type: 'challenge_passed',
           isRead: false,
           createdAt: serverTimestamp()
@@ -150,7 +175,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 9. Persist Metrics
+    // 4. Persistence
     const updatePayload: any = {
       login,
       balance: currBalance,
@@ -161,6 +186,7 @@ export async function POST(request: Request) {
       dailyDrawdownPct: dailyDrawdownPct || 0,
       maxDrawdownPct: maxDrawdownPct || 0,
       status: newStatus,
+      phase: newPhase,
       updatedAt: serverTimestamp(),
     };
 
@@ -175,7 +201,7 @@ export async function POST(request: Request) {
     return new Response('OK', { status: 200, headers: { 'Content-Type': 'text/plain' } });
 
   } catch (error: any) {
-    console.error('[MT5-API] Global Error:', error);
+    console.error('[MT5-API] Crash:', error);
     return new Response(`Error: ${error.message}`, { status: 500 });
   }
 }
