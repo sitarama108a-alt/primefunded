@@ -23,7 +23,7 @@ import { Textarea } from '@/components/ui/textarea';
 import DashboardPage from '@/app/dashboard/page';
 import { fetchAdminTerminalData, processKycAction, verifyOrderAction } from './actions';
 import Image from 'next/image';
-import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { doc, updateDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useFirebaseApp } from '@/firebase';
@@ -191,27 +191,23 @@ export default function AdminPage() {
 
     try {
       const storageRef = ref(storage, 'brand/logo.png');
-      const uploadTask = uploadBytesResumable(storageRef, logoFile);
-
-      uploadTask.on(
-        'state_changed',
-        null,
-        (error) => {
-          toast({ variant: "destructive", title: "Upload Failed", description: error.message });
-          setUploadingLogo(false);
-        },
-        async () => {
-          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-          const brandRef = doc(db, 'settings', 'brand');
-          await setDoc(brandRef, { logoUrl: downloadURL }, { merge: true });
-          
-          toast({ title: "Logo Updated!", description: "The platform branding has been updated." });
-          setUploadingLogo(false);
-          setLogoFile(null);
-        }
-      );
-    } catch (err) {
-      console.error(err);
+      const snapshot = await uploadBytes(storageRef, logoFile);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      
+      const brandRef = doc(db, 'settings', 'brand');
+      await setDoc(brandRef, { logoUrl: downloadURL }, { merge: true });
+      
+      toast({ title: "Logo Updated!", description: "The platform branding has been updated." });
+      setLogoFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    } catch (err: any) {
+      console.error('[Admin] Logo upload error:', err);
+      toast({ 
+        variant: "destructive", 
+        title: "Upload Failed", 
+        description: err.message || "An unexpected error occurred during the logo upload." 
+      });
+    } finally {
       setUploadingLogo(false);
     }
   };
