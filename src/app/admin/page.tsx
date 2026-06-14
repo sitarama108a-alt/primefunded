@@ -13,10 +13,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
-  Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Send, User, History, Award, BarChart3, Search, ExternalLink, Plus
+  Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Send, User, History, Award, BarChart3, Search, ExternalLink, RefreshCw
 } from 'lucide-react';
-import { useFirestore, useCollection } from '@/firebase';
-import { doc, updateDoc, setDoc, serverTimestamp, getDoc, addDoc, collection, writeBatch, limit, orderBy, query } from 'firebase/firestore';
+import { useFirestore } from '@/firebase';
+import { doc, updateDoc, setDoc, serverTimestamp, getDoc, addDoc, collection, writeBatch } from 'firebase/firestore';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { sendKycApprovalEmail, sendKycRejectionEmail, sendBroadcastEmail, sendFreeAccountGrantEmail, sendReferralCommissionEmail, sendPayoutProcessedEmail } from '@/lib/email';
@@ -24,8 +24,7 @@ import { Textarea } from '@/components/ui/textarea';
 import DashboardPage from '@/app/dashboard/page';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
-
-const PAGE_SIZE = 20;
+import { fetchAdminTerminalData } from './actions';
 
 const StatCard = memo(function StatCard({ title, value, icon, color }: { title: string, value: string | number, icon: any, color: string }) {
   const colors: any = {
@@ -56,9 +55,8 @@ export default function AdminPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [previewUserId, setPreviewUserId] = useState<string | null>(null);
   
-  const [ordersLimit, setOrdersLimit] = useState(PAGE_SIZE);
-  const [usersLimit, setUsersLimit] = useState(PAGE_SIZE);
-  const [payoutsLimit, setPayoutsLimit] = useState(PAGE_SIZE);
+  const [adminData, setAdminData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(false);
   
   const { toast } = useToast();
   const db = useFirestore();
@@ -77,35 +75,52 @@ export default function AdminPage() {
   const [notifTarget, setNotifTarget] = useState('all');
   const [isSendingNotif, setIsSendingNotif] = useState(false);
 
+  const loadData = async () => {
+    setIsLoading(true);
+    const result = await fetchAdminTerminalData();
+    if (result.success) {
+      setAdminData(result);
+    } else {
+      toast({ variant: "destructive", title: "Sync Failed", description: result.error });
+    }
+    setIsLoading(false);
+  };
+
   useEffect(() => {
     const saved = localStorage.getItem('admin_active_tab');
     if (saved) setActiveTab(saved);
+    
+    // Check if session password is saved (optional for DX)
+    const savedPass = sessionStorage.getItem('admin_master_key');
+    if (savedPass && savedPass === (process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "93463962569392846256")) {
+      setIsAuthenticated(true);
+    }
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadData();
+    }
+  }, [isAuthenticated]);
 
   const handleTabChange = (val: string) => {
     setActiveTab(val);
     localStorage.setItem('admin_active_tab', val);
   };
 
-  const ordersConstraints = useMemo(() => [orderBy('date', 'desc'), limit(ordersLimit)], [ordersLimit]);
-  const usersConstraints = useMemo(() => [limit(usersLimit)], [usersLimit]);
-  const payoutsConstraints = useMemo(() => [orderBy('date', 'desc'), limit(payoutsLimit)], [payoutsLimit]);
-  const referralsConstraints = useMemo(() => [orderBy('createdAt', 'desc'), limit(PAGE_SIZE)], []);
-  const broadcastsConstraints = useMemo(() => [orderBy('sentAt', 'desc'), limit(10)], []);
-
-  const { data: orders, loading: ordersLoading } = useCollection<any>('orders', ordersConstraints);
-  const { data: traders, loading: tradersLoading } = useCollection<any>('users', usersConstraints);
-  const { data: payouts, loading: payoutsLoading } = useCollection<any>('payouts', payoutsConstraints);
-  const { data: referrals } = useCollection<any>('referrals', referralsConstraints);
-  const { data: broadcasts } = useCollection<any>('broadcasts', broadcastsConstraints);
+  const orders = adminData?.orders || [];
+  const traders = adminData?.users || [];
+  const payouts = adminData?.payouts || [];
+  const referrals = adminData?.referrals || [];
+  const broadcasts = adminData?.broadcasts || [];
 
   const stats = useMemo(() => {
-    if (!orders || !traders || !payouts) return null;
+    if (!adminData) return null;
     
-    const totalRevenue = orders.filter(o => o.status === 'verified').reduce((acc, o) => acc + parseFloat(o.price?.replace('$', '') || 0), 0) || 0;
-    const pendingKyc = traders.filter(t => t.kycStatus === 'pending').length || 0;
-    const pendingPayouts = payouts.filter(p => p.status === 'pending').length || 0;
-    const activeChallenges = orders.filter(o => o.status === 'verified').length || 0;
+    const totalRevenue = orders.filter((o: any) => o.status === 'verified').reduce((acc: number, o: any) => acc + parseFloat(o.price?.replace('$', '') || 0), 0) || 0;
+    const pendingKyc = traders.filter((t: any) => t.kycStatus === 'pending').length || 0;
+    const pendingPayouts = payouts.filter((p: any) => p.status === 'pending').length || 0;
+    const activeChallenges = orders.filter((o: any) => o.status === 'verified').length || 0;
 
     return {
       totalUsers: traders.length,
@@ -115,14 +130,14 @@ export default function AdminPage() {
       pendingPayouts,
       activeChallenges
     };
-  }, [traders, orders, payouts]);
+  }, [adminData]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    // Use environment variable for admin security in production
     const masterKey = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "93463962569392846256";
     if (password === masterKey) {
       setIsAuthenticated(true);
+      sessionStorage.setItem('admin_master_key', password);
       toast({ title: "Admin Access Granted" });
     } else {
       toast({ variant: "destructive", title: "Access Denied" });
@@ -149,23 +164,16 @@ export default function AdminPage() {
       createdAt: serverTimestamp(),
     };
 
-    updateDoc(orderRef, { status: 'verified' })
-      .catch(async (err) => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: orderRef.path, operation: 'update', requestResourceData: { status: 'verified' } }));
-      });
-      
-    setDoc(doc(db, 'users', order.userId, 'accounts', accountId), accountData)
-      .catch(async (err) => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `users/${order.userId}/accounts/${accountId}`, operation: 'create', requestResourceData: accountData }));
-      });
-
     try {
+      await updateDoc(orderRef, { status: 'verified' });
+      await setDoc(doc(db, 'users', order.userId, 'accounts', accountId), accountData);
+      
       const userSnap = await getDoc(doc(db, 'users', order.userId));
       const referredBy = userSnap.data()?.referredBy;
       if (referredBy) {
         const amount = Math.min(parseFloat(order.price?.replace('$', '') || 0) * 0.10, 50);
         const referralId = Math.random().toString(36).substring(7);
-        setDoc(doc(db, 'referrals', referralId), {
+        await setDoc(doc(db, 'referrals', referralId), {
           referrerId: referredBy,
           referredUserId: order.userId,
           referredUserEmail: order.email,
@@ -175,31 +183,16 @@ export default function AdminPage() {
           status: 'pending',
           createdAt: serverTimestamp()
         });
-        
-        const referrerSnap = await getDoc(doc(db, 'users', referredBy));
-        if (referrerSnap.exists()) {
-          const rData = referrerSnap.data();
-          const prefs = rData.notificationPreferences || { inApp: true, email: true, referral: true };
-          if (prefs.inApp && prefs.referral) {
-            addDoc(collection(db, 'users', referredBy, 'notifications'), {
-              title: "👥 Referral Earned!",
-              message: `Your referral just purchased a challenge. You earned $${amount.toFixed(2)} commission!`,
-              type: 'referral_earned',
-              isRead: false,
-              createdAt: serverTimestamp()
-            });
-          }
-          if (prefs.email && prefs.referral) {
-            sendReferralCommissionEmail(rData.email, amount, order.email);
-          }
-        }
       }
-    } catch (err) {}
-
-    toast({ title: "Order Verified", description: "Account created and user notified." });
+      
+      toast({ title: "Order Verified", description: "Account created successfully." });
+      loadData(); // Refresh terminal data
+    } catch (err) {
+      toast({ variant: "destructive", title: "Verification Failed" });
+    }
   };
 
-  const handleKycAction = (user: any, action: 'verified' | 'rejected') => {
+  const handleKycAction = async (user: any, action: 'verified' | 'rejected') => {
     const userRef = doc(db, 'users', user.id);
     const updates: any = { 
       kycStatus: action,
@@ -207,65 +200,26 @@ export default function AdminPage() {
       kycRejectionReason: action === 'rejected' ? rejectionReason : null
     };
 
-    updateDoc(userRef, updates)
-      .catch(async (err) => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: updates }));
-      });
-
-    const prefs = user.notificationPreferences || { inApp: true, email: true };
-    if (prefs.inApp) {
-      addDoc(collection(db, 'users', user.id, 'notifications'), {
+    try {
+      await updateDoc(userRef, updates);
+      await addDoc(collection(db, 'users', user.id, 'notifications'), {
         title: action === 'verified' ? "✅ KYC Approved" : "❌ KYC Rejected",
         message: action === 'verified' ? "Your documents were verified! Payouts unlocked." : `Your KYC was rejected. Reason: ${rejectionReason}`,
         type: action === 'verified' ? 'kyc_approved' : 'kyc_rejected',
         isRead: false,
         createdAt: serverTimestamp()
       });
+
+      if (action === 'verified') sendKycApprovalEmail(user.email);
+      else sendKycRejectionEmail(user.email, rejectionReason);
+
+      toast({ title: `KYC ${action.charAt(0).toUpperCase() + action.slice(1)}` });
+      setIsKycReviewOpen(false);
+      setRejectionReason('');
+      loadData();
+    } catch (err) {
+      toast({ variant: "destructive", title: "Action Failed" });
     }
-
-    if (action === 'verified') sendKycApprovalEmail(user.email);
-    else sendKycRejectionEmail(user.email, rejectionReason);
-
-    toast({ title: `KYC ${action.charAt(0).toUpperCase() + action.slice(1)}` });
-    setIsKycReviewOpen(false);
-    setRejectionReason('');
-  };
-
-  const handleGrantFreeAccount = () => {
-    if (!selectedUser) return;
-    const accountId = Math.random().toString(36).substring(7).toUpperCase();
-    const login = Math.floor(1000000 + Math.random() * 9000000).toString();
-    const pass = Math.random().toString(36).substring(2, 12);
-    
-    const accountData = {
-      userId: selectedUser.id,
-      email: selectedUser.email,
-      plan: provisionPlan,
-      size: provisionSize,
-      mt5Login: login,
-      mt5Password: pass,
-      mt5Server: "PrimeFunded-Live",
-      balance: parseFloat(provisionSize.replace('$', '').replace(',', '').replace('k', '000')),
-      status: "active",
-      startDate: new Date().toISOString(),
-      paymentStatus: "free_grant",
-      grantedBy: "admin",
-      createdAt: serverTimestamp(),
-    };
-
-    setDoc(doc(db, 'users', selectedUser.id, 'accounts', accountId), accountData);
-    
-    addDoc(collection(db, 'users', selectedUser.id, 'notifications'), {
-      title: "🎁 Free Account Granted",
-      message: `An admin has granted you a free ${provisionSize} ${provisionPlan} account.`,
-      type: 'admin_direct',
-      isRead: false,
-      createdAt: serverTimestamp()
-    });
-
-    sendFreeAccountGrantEmail(selectedUser.email, provisionPlan, provisionSize);
-    toast({ title: "Account Granted Successfully" });
-    setIsFreeAccountOpen(false);
   };
 
   const handleSendBroadcast = () => {
@@ -273,32 +227,24 @@ export default function AdminPage() {
     setIsSendingNotif(true);
     
     let targetUsers = traders;
-    if (notifTarget === 'kyc_pending') targetUsers = traders.filter(t => t.kycStatus === 'pending');
-    if (notifTarget === 'funded') targetUsers = traders.filter(t => t.kycVerified === true);
+    if (notifTarget === 'kyc_pending') targetUsers = traders.filter((t: any) => t.kycStatus === 'pending');
+    if (notifTarget === 'funded') targetUsers = traders.filter((t: any) => t.kycVerified === true);
     
     const batch = writeBatch(db);
     let sentCount = 0;
 
-    targetUsers.slice(0, 500).forEach(u => {
-      const prefs = u.notificationPreferences || { inApp: true, email: true, announcements: true };
-      if (prefs.announcements) {
-        if (prefs.inApp) {
-          const notifRef = doc(collection(db, 'users', u.id, 'notifications'));
-          batch.set(notifRef, {
-            title: notifTitle,
-            message: notifMessage,
-            type: 'broadcast',
-            priority: notifPriority,
-            isRead: false,
-            sentByAdmin: true,
-            createdAt: serverTimestamp()
-          });
-        }
-        if (prefs.email) {
-          sendBroadcastEmail(u.email, notifTitle, notifMessage, u.name);
-        }
-        sentCount++;
-      }
+    targetUsers.slice(0, 500).forEach((u: any) => {
+      const notifRef = doc(collection(db, 'users', u.id, 'notifications'));
+      batch.set(notifRef, {
+        title: notifTitle,
+        message: notifMessage,
+        type: 'broadcast',
+        priority: notifPriority,
+        isRead: false,
+        sentByAdmin: true,
+        createdAt: serverTimestamp()
+      });
+      sentCount++;
     });
 
     addDoc(collection(db, 'broadcasts'), {
@@ -316,6 +262,7 @@ export default function AdminPage() {
         setNotifTitle('');
         setNotifMessage('');
         setIsSendingNotif(false);
+        loadData();
       })
       .catch(() => {
         toast({ variant: "destructive", title: "Broadcast Failed" });
@@ -387,6 +334,9 @@ export default function AdminPage() {
                    onChange={e => setSearchTerm(e.target.value)}
                  />
                </div>
+               <Button variant="outline" size="icon" onClick={loadData} disabled={isLoading} className="bg-secondary/50">
+                 <RefreshCw className={cn("w-4 h-4 text-white", isLoading && "animate-spin")} />
+               </Button>
             </div>
           </div>
 
@@ -406,7 +356,7 @@ export default function AdminPage() {
         <div className="flex-1 overflow-y-auto p-8 pt-0 custom-scrollbar">
           
           <div className={cn("space-y-8 animate-in fade-in duration-300", activeTab === 'overview' ? "block" : "hidden")}>
-            {!stats ? <LoadingGrid /> : (
+            {isLoading && !adminData ? <LoadingGrid /> : !stats ? <div className="text-center py-20 text-muted-foreground">No data available. Use refresh button.</div> : (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   <StatCard title="Total Revenue" value={`$${stats.revenue.toLocaleString()}`} icon={<Wallet />} color="blue" />
@@ -440,8 +390,8 @@ export default function AdminPage() {
                                <ShoppingCart className="w-4 h-4 text-primary" />
                              </div>
                              <div>
-                               <p className="text-xs font-bold text-white">{o.email.split('@')[0]} purchased {o.size}</p>
-                               <p className="text-[10px] text-muted-foreground">{new Date(o.date).toLocaleString()}</p>
+                               <p className="text-xs font-bold text-white">{o.email?.split('@')[0]} purchased {o.size}</p>
+                               <p className="text-[10px] text-muted-foreground">{o.date ? new Date(o.date).toLocaleString() : 'N/A'}</p>
                              </div>
                            </div>
                          ))}
@@ -463,7 +413,7 @@ export default function AdminPage() {
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                {ordersLoading && orders?.length === 0 ? <LoadingTable /> : (
+                {isLoading && !adminData ? <LoadingTable /> : (
                   <div className="overflow-x-auto max-h-[600px] custom-scrollbar">
                     <table className="w-full text-sm text-left">
                       <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest sticky top-0 z-10">
@@ -509,11 +459,6 @@ export default function AdminPage() {
                         ))}
                       </tbody>
                     </table>
-                    <div className="p-4 border-t border-border/30 text-center">
-                      <Button variant="ghost" className="text-xs font-bold uppercase tracking-widest text-primary hover:text-white cursor-pointer" onClick={() => setOrdersLimit(l => l + PAGE_SIZE)}>
-                        <Plus className="w-3 h-3 mr-2" /> Load More Orders
-                      </Button>
-                    </div>
                   </div>
                 )}
               </CardContent>
@@ -529,7 +474,7 @@ export default function AdminPage() {
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                {tradersLoading && traders?.length === 0 ? <LoadingTable /> : (
+                {isLoading && !adminData ? <LoadingTable /> : (
                   <div className="overflow-x-auto max-h-[600px] custom-scrollbar">
                     <table className="w-full text-sm text-left">
                       <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest sticky top-0 z-10">
@@ -544,7 +489,7 @@ export default function AdminPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border/30">
-                        {traders?.filter(t => !searchTerm || t.email?.toLowerCase().includes(searchTerm.toLowerCase())).map((t: any) => (
+                        {traders?.filter((t: any) => !searchTerm || t.email?.toLowerCase().includes(searchTerm.toLowerCase())).map((t: any) => (
                           <tr key={t.id} className="hover:bg-primary/5 transition-colors">
                             <td className="py-4 px-6 font-mono text-xs text-muted-foreground">
                               {t.traderId || 'N/A'}
@@ -584,11 +529,6 @@ export default function AdminPage() {
                         ))}
                       </tbody>
                     </table>
-                    <div className="p-4 border-t border-border/30 text-center">
-                      <Button variant="ghost" className="text-xs font-bold uppercase tracking-widest text-primary hover:text-white cursor-pointer" onClick={() => setUsersLimit(l => l + PAGE_SIZE)}>
-                        <Plus className="w-3 h-3 mr-2" /> Load More Users
-                      </Button>
-                    </div>
                   </div>
                 )}
               </CardContent>
@@ -597,9 +537,9 @@ export default function AdminPage() {
 
           <div className={cn("animate-in fade-in duration-300 space-y-8", activeTab === 'kyc' ? "block" : "hidden")}>
             <div className="grid grid-cols-3 gap-6">
-              <StatCard title="Pending Review" value={traders?.filter(t => t.kycStatus === 'pending').length || 0} icon={<Fingerprint />} color="amber" />
-              <StatCard title="Verified Traders" value={traders?.filter(t => t.kycVerified).length || 0} icon={<CheckCircle2 />} color="green" />
-              <StatCard title="Rejected Requests" value={traders?.filter(t => t.kycStatus === 'rejected').length || 0} icon={<XCircle />} color="red" />
+              <StatCard title="Pending Review" value={traders?.filter((t: any) => t.kycStatus === 'pending').length || 0} icon={<Fingerprint />} color="amber" />
+              <StatCard title="Verified Traders" value={traders?.filter((t: any) => t.kycVerified).length || 0} icon={<CheckCircle2 />} color="green" />
+              <StatCard title="Rejected Requests" value={traders?.filter((t: any) => t.kycStatus === 'rejected').length || 0} icon={<XCircle />} color="red" />
             </div>
 
             <Card className="border-border/50 bg-card/30">
@@ -619,7 +559,7 @@ export default function AdminPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/30">
-                      {traders?.filter(t => t.kycStatus === 'pending').map((t: any) => (
+                      {traders?.filter((t: any) => t.kycStatus === 'pending').map((t: any) => (
                         <tr key={t.id} className="hover:bg-primary/5 transition-colors">
                           <td className="py-4 px-6 text-xs text-muted-foreground">{t.kycSubmittedAt ? new Date(t.kycSubmittedAt).toLocaleDateString() : 'Unknown'}</td>
                           <td className="py-4 px-6 font-bold text-white">{t.name}</td>
@@ -633,7 +573,7 @@ export default function AdminPage() {
                           </td>
                         </tr>
                       ))}
-                      {traders?.filter(t => t.kycStatus === 'pending').length === 0 && (
+                      {traders?.filter((t: any) => t.kycStatus === 'pending').length === 0 && (
                         <tr><td colSpan={5} className="py-12 text-center text-muted-foreground italic">No pending KYC applications</td></tr>
                       )}
                     </tbody>
@@ -645,9 +585,9 @@ export default function AdminPage() {
 
           <div className={cn("animate-in fade-in duration-300 space-y-8", activeTab === 'referrals' ? "block" : "hidden")}>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <StatCard title="Total Commissions" value={`$${referrals?.reduce((acc, r) => acc + (r.amount || 0), 0).toFixed(2)}`} icon={<TrendingUp />} color="blue" />
-              <StatCard title="Paid Earnings" value={`$${referrals?.filter(r => r.status === 'paid').reduce((acc, r) => acc + (r.amount || 0), 0).toFixed(2)}`} icon={<CheckCircle2 />} color="green" />
-              <StatCard title="Outstanding" value={`$${referrals?.filter(r => r.status === 'pending').reduce((acc, r) => acc + (r.amount || 0), 0).toFixed(2)}`} icon={<Clock />} color="amber" />
+              <StatCard title="Total Commissions" value={`$${referrals?.reduce((acc: number, r: any) => acc + (r.amount || 0), 0).toFixed(2)}`} icon={<TrendingUp />} color="blue" />
+              <StatCard title="Paid Earnings" value={`$${referrals?.filter((r: any) => r.status === 'paid').reduce((acc: number, r: any) => acc + (r.amount || 0), 0).toFixed(2)}`} icon={<CheckCircle2 />} color="green" />
+              <StatCard title="Outstanding" value={`$${referrals?.filter((r: any) => r.status === 'pending').reduce((acc: number, r: any) => acc + (r.amount || 0), 0).toFixed(2)}`} icon={<Clock />} color="amber" />
             </div>
 
             <Card className="border-border/50 bg-card/30">
@@ -698,7 +638,7 @@ export default function AdminPage() {
                 <CardDescription>Review and approve profit split requests.</CardDescription>
               </CardHeader>
               <CardContent className="p-0">
-                {payoutsLoading && payouts?.length === 0 ? <LoadingTable /> : (
+                {isLoading && !adminData ? <LoadingTable /> : (
                   <div className="overflow-x-auto max-h-[600px] custom-scrollbar">
                     <table className="w-full text-sm text-left">
                       <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest sticky top-0 z-10">
@@ -715,7 +655,7 @@ export default function AdminPage() {
                       <tbody className="divide-y divide-border/30">
                         {payouts?.map((p: any) => (
                           <tr key={p.id} className="hover:bg-primary/5 transition-colors">
-                            <td className="py-4 px-6 text-xs text-muted-foreground">{new Date(p.date).toLocaleDateString()}</td>
+                            <td className="py-4 px-6 text-xs text-muted-foreground">{p.date ? new Date(p.date).toLocaleDateString() : 'N/A'}</td>
                             <td className="py-4 px-6">
                               <div className="flex flex-col">
                                 <span className="font-bold text-white">{p.email}</span>
@@ -724,7 +664,7 @@ export default function AdminPage() {
                             </td>
                             <td className="py-4 px-6 font-bold text-accent">${p.amount}</td>
                             <td className="py-4 px-6">
-                              <KycBadge status={traders?.find(t => t.id === p.userId)?.kycStatus} />
+                              <KycBadge status={traders?.find((t: any) => t.id === p.userId)?.kycStatus} />
                             </td>
                             <td className="py-4 px-6 text-xs uppercase font-bold text-muted-foreground">{p.method}</td>
                             <td className="py-4 px-6">
@@ -733,18 +673,20 @@ export default function AdminPage() {
                             <td className="py-4 px-6 text-right space-x-2">
                               {p.status === 'pending' && (
                                 <>
-                                  <Button size="sm" className="h-8 cursor-pointer font-bold" onClick={() => {
-                                    updateDoc(doc(db, 'payouts', p.id), { status: 'approved' });
+                                  <Button size="sm" className="h-8 cursor-pointer font-bold" onClick={async () => {
+                                    await updateDoc(doc(db, 'payouts', p.id), { status: 'approved' });
                                     toast({ title: "Payout Approved" });
+                                    loadData();
                                   }}>Approve</Button>
                                   <Button size="sm" variant="destructive" className="h-8 cursor-pointer font-bold">Reject</Button>
                                 </>
                               )}
                               {p.status === 'approved' && (
-                                <Button size="sm" className="h-8 bg-accent text-accent-foreground cursor-pointer font-bold" onClick={() => {
-                                  updateDoc(doc(db, 'payouts', p.id), { status: 'done' });
+                                <Button size="sm" className="h-8 bg-accent text-accent-foreground cursor-pointer font-bold" onClick={async () => {
+                                  await updateDoc(doc(db, 'payouts', p.id), { status: 'done' });
                                   sendPayoutProcessedEmail(p.email, p.amount);
                                   toast({ title: "Payout marked as Complete" });
+                                  loadData();
                                 }}>Mark as Sent</Button>
                               )}
                             </td>
@@ -752,11 +694,6 @@ export default function AdminPage() {
                         ))}
                       </tbody>
                     </table>
-                    <div className="p-4 border-t border-border/30 text-center">
-                      <Button variant="ghost" className="text-xs font-bold uppercase tracking-widest text-primary hover:text-white cursor-pointer" onClick={() => setPayoutsLimit(l => l + PAGE_SIZE)}>
-                        <Plus className="w-3 h-3 mr-2" /> Load More Payouts
-                      </Button>
-                    </div>
                   </div>
                 )}
               </CardContent>
@@ -875,7 +812,29 @@ export default function AdminPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" className="cursor-pointer font-bold" onClick={() => setIsFreeAccountOpen(false)}>Cancel</Button>
-            <Button className="cursor-pointer font-bold" onClick={handleGrantFreeAccount}>Confirm Grant</Button>
+            <Button className="cursor-pointer font-bold" onClick={async () => {
+              const accountId = Math.random().toString(36).substring(7).toUpperCase();
+              const login = Math.floor(1000000 + Math.random() * 9000000).toString();
+              const pass = Math.random().toString(36).substring(2, 12);
+              
+              await setDoc(doc(db, 'users', selectedUser.id, 'accounts', accountId), {
+                userId: selectedUser.id,
+                email: selectedUser.email,
+                plan: provisionPlan,
+                size: provisionSize,
+                mt5Login: login,
+                mt5Password: pass,
+                mt5Server: "PrimeFunded-Live",
+                balance: parseFloat(provisionSize.replace('$', '').replace(',', '').replace('k', '000')),
+                status: "active",
+                startDate: new Date().toISOString(),
+                createdAt: serverTimestamp(),
+              });
+              
+              toast({ title: "Account Granted" });
+              setIsFreeAccountOpen(false);
+              loadData();
+            }}>Confirm Grant</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
