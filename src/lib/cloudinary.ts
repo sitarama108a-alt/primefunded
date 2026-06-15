@@ -1,38 +1,34 @@
 'use client';
 
 /**
- * Proxies file uploads through our local Next.js API route to bypass CORS 
- * restrictions when communicating with Cloudinary from the browser.
- * 
- * Returns the secure URL of the uploaded asset.
+ * Uploads a file directly to Cloudinary using an unsigned upload preset.
+ * This bypasses the need for server-side API keys and avoids CORS proxy issues.
  */
 export const uploadToCloudinary = async (file: File): Promise<string> => {
   const formData = new FormData();
   formData.append('file', file);
+  formData.append('upload_preset', 'primefunded_uploads');
+  formData.append('cloud_name', 'dkws10vkj');
 
   try {
-    // Call our local server-side API route instead of direct Cloudinary fetch
-    const response = await fetch('/api/upload', {
-      method: 'POST',
-      body: formData,
-    });
+    const response = await fetch(
+      'https://api.cloudinary.com/v1_1/dkws10vkj/image/upload',
+      {
+        method: 'POST',
+        body: formData,
+      }
+    );
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || 'The server-side upload proxy failed. Check API logs.');
+      throw new Error(errorData.error?.message || 'Upload failed. Ensure the upload preset is set to Unsigned in Cloudinary settings.');
     }
 
     const data = await response.json();
-    return data.url;
+    return data.secure_url;
 
   } catch (error: any) {
-    console.error('[Cloudinary-Proxy] Client-side trigger failure:', error);
-    
-    // Provide user-friendly feedback for network vs application errors
-    if (error instanceof TypeError) {
-      throw new Error("Connection failed: Could not reach the local upload server.");
-    }
-    
-    throw error;
+    console.error('[Cloudinary-Direct] Upload failure:', error);
+    throw new Error(error.message || "Connection failed: Could not reach Cloudinary servers.");
   }
 };

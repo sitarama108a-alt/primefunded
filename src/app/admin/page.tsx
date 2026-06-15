@@ -242,24 +242,24 @@ export default function AdminPage() {
     setIsUploadDone(false);
 
     try {
-      // Use Cloudinary for branding asset
+      // Use Direct Unsigned Cloudinary Upload
       const secureUrl = await uploadToCloudinary(logoFile);
       
       const brandRef = doc(db, 'settings', 'branding');
       await setDoc(brandRef, { logoUrl: secureUrl }, { merge: true });
       
-      toast({ title: "Logo Updated!", description: "✅ The platform branding has been updated successfully!" });
+      toast({ title: "Logo Updated!", description: "✅ The platform branding has been updated successfully via direct upload!" });
       setUploadingLogo(false);
       setIsUploadDone(true);
       setLogoFile(null);
       setLogoPreview(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
     } catch (err: any) {
-      console.error('[Admin] Logo upload error:', err);
+      console.error('[Admin] Direct logo upload error:', err);
       toast({ 
         variant: "destructive", 
         title: "Upload Failed", 
-        description: "❌ Upload failed. Please check your connection and try again." 
+        description: err.message || "❌ Upload failed. Ensure the upload preset is configured." 
       });
       setUploadingLogo(false);
     }
@@ -764,7 +764,7 @@ export default function AdminPage() {
                   <CardTitle className="text-white flex items-center gap-2">
                     <ImageIcon className="w-5 h-5 text-primary" /> Brand Identity
                   </CardTitle>
-                  <CardDescription>Update the platform logo and visual assets via Cloudinary.</CardDescription>
+                  <CardDescription>Update the platform logo and visual assets via direct Cloudinary upload.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-8">
                   <div className="flex flex-col md:flex-row items-center gap-8 p-6 bg-background/50 rounded-2xl border border-white/5">
@@ -814,7 +814,7 @@ export default function AdminPage() {
                       
                       {uploadingLogo && (
                         <div className="w-full mt-4 space-y-2">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-primary animate-pulse">Uploading to CDN...</p>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-primary animate-pulse">Uploading directly to CDN...</p>
                           <Progress value={undefined} className="h-1.5 bg-secondary" />
                         </div>
                       )}
