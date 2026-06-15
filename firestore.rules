@@ -1,7 +1,22 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow authenticated users to read everything to ensure terminal consistency
+    // Allow public read for site-wide settings and branding
+    match /settings/{document} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Allow public read for leaderboard and rankings
+    match /leaderboard/{document} {
+      allow read: if true;
+    }
+
+    match /ranking/{document} {
+      allow read: if true;
+    }
+    
+    // Allow authenticated users to read everything else
     match /{document=**} {
       allow read: if request.auth != null;
     }
@@ -16,11 +31,6 @@ service cloud.firestore {
       }
     }
     
-    // Allow any authenticated user to write settings (Simplified Admin access for Studio)
-    match /settings/{document} {
-      allow write: if request.auth != null;
-    }
-    
     // Allow users to submit their own orders for verification
     match /orders/{orderId} {
       allow write: if request.auth != null;
@@ -29,15 +39,6 @@ service cloud.firestore {
     // Allow MT5 sync accounts to be readable/writable for performance updates
     match /mt5_accounts/{accountId} {
       allow read, write: if request.auth != null;
-    }
-    
-    // Allow public read for leaderboard and rankings
-    match /leaderboard/{document} {
-      allow read: if true;
-    }
-
-    match /ranking/{document} {
-      allow read: if true;
     }
   }
 }

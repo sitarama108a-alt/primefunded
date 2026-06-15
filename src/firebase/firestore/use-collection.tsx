@@ -24,12 +24,9 @@ export function useCollection<T = DocumentData>(
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    // 1. Ensure path exists AND user is authenticated
-    if (!path || !auth.currentUser) {
+    // Ensure path exists. Security rules handle authentication requirements.
+    if (!path) {
       setLoading(false);
-      if (path && !auth.currentUser) {
-        console.warn(`[useCollection] Blocked query to ${path}: User not authenticated.`);
-      }
       return;
     }
 
@@ -61,7 +58,7 @@ export function useCollection<T = DocumentData>(
     );
 
     return () => unsubscribe();
-  }, [db, auth.currentUser, path, JSON.stringify(constraints)]);
+  }, [db, path, JSON.stringify(constraints)]);
 
   return { data, loading, error };
 }
