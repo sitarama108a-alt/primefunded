@@ -68,6 +68,7 @@ export default function AdminPage() {
   const [rejectionReason, setRejectionReason] = useState('');
 
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [isUploadDone, setIsUploadDone] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -90,6 +91,19 @@ export default function AdminPage() {
       });
     }
   }, [branding]);
+
+  // Handle Logo Selection Preview
+  useEffect(() => {
+    if (logoFile) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLogoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(logoFile);
+    } else {
+      setLogoPreview(null);
+    }
+  }, [logoFile]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -231,20 +245,21 @@ export default function AdminPage() {
       // Use Cloudinary for branding asset
       const secureUrl = await uploadToCloudinary(logoFile);
       
-      const brandRef = doc(db, 'settings', 'brand');
+      const brandRef = doc(db, 'settings', 'branding');
       await setDoc(brandRef, { logoUrl: secureUrl }, { merge: true });
       
-      toast({ title: "Logo Updated!", description: "The platform branding has been updated via Cloudinary." });
+      toast({ title: "Logo Updated!", description: "✅ The platform branding has been updated successfully!" });
       setUploadingLogo(false);
       setIsUploadDone(true);
       setLogoFile(null);
+      setLogoPreview(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
     } catch (err: any) {
       console.error('[Admin] Logo upload error:', err);
       toast({ 
         variant: "destructive", 
         title: "Upload Failed", 
-        description: err.message || "An unexpected error occurred during the logo upload." 
+        description: "❌ Upload failed. Please check your connection and try again." 
       });
       setUploadingLogo(false);
     }
@@ -253,7 +268,7 @@ export default function AdminPage() {
   const handleSaveSocialLinks = async () => {
     setSavingLinks(true);
     try {
-      const brandRef = doc(db, 'settings', 'brand');
+      const brandRef = doc(db, 'settings', 'branding');
       await setDoc(brandRef, {
         discordUrl: socialLinks.discord,
         instagramUrl: socialLinks.instagram,
@@ -755,8 +770,8 @@ export default function AdminPage() {
                   <div className="flex flex-col md:flex-row items-center gap-8 p-6 bg-background/50 rounded-2xl border border-white/5">
                     <div className="relative group">
                       <div className="w-24 h-24 rounded-full border-2 border-primary/20 bg-secondary/50 flex items-center justify-center overflow-hidden shadow-2xl">
-                        {branding.logoUrl ? (
-                          <Image src={branding.logoUrl} alt="Platform Logo" width={96} height={96} className="object-cover" />
+                        {logoPreview || branding.logoUrl ? (
+                          <Image src={logoPreview || branding.logoUrl || ''} alt="Platform Logo" width={96} height={96} className="object-cover" />
                         ) : (
                           <ImageIcon className="w-10 h-10 text-muted-foreground opacity-20" />
                         )}
@@ -764,7 +779,7 @@ export default function AdminPage() {
                     </div>
                     <div className="flex-1 space-y-4 text-center md:text-left">
                       <div>
-                        <h4 className="font-bold text-white">Current Logo</h4>
+                        <h4 className="font-bold text-white">{logoFile ? 'Review Selected Logo' : 'Current Logo'}</h4>
                         <p className="text-xs text-muted-foreground">Displayed in navbar, auth screens, and loading sequence.</p>
                       </div>
                       <div className="flex flex-wrap gap-3 justify-center md:justify-start">
@@ -810,7 +825,9 @@ export default function AdminPage() {
                         </div>
                       )}
 
-                      {logoFile && !uploadingLogo && !isUploadDone && <p className="text-[10px] text-accent font-bold uppercase tracking-widest">Selected: {logoFile.name}</p>}
+                      {logoFile && !uploadingLogo && !isUploadDone && (
+                        <p className="text-[10px] text-accent font-bold uppercase tracking-widest">Selected: {logoFile.name}</p>
+                      )}
                     </div>
                   </div>
                 </CardContent>

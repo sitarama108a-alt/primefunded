@@ -14,10 +14,10 @@ export interface BrandSettings {
 
 /**
  * Hook to retrieve global branding and community settings from Firestore.
- * Defaults to institutional PrimeFunded branding if no custom settings exist.
+ * Standardized to the 'settings/branding' document.
  */
 export function useBrandSettings() {
-  const { data, loading } = useDoc<BrandSettings>('settings/brand');
+  const { data, loading } = useDoc<BrandSettings>('settings/branding');
 
   const branding = useMemo(() => {
     return {
