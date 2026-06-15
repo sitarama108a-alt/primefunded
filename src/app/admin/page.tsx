@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect, memo, useRef } from 'react';
@@ -13,15 +14,16 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
-  Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, Award, Search, RefreshCw, Copy, Loader2, Image as ImageIcon, Settings, Upload, Save, Instagram, Phone, SearchX, Megaphone, DollarSign, Lock, ChevronLeft, LayoutDashboard, XCircle, CheckCircle2, Clock
+  Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, Award, Search, RefreshCw, Copy, Loader2, Image as ImageIcon, Settings, Upload, Save, Instagram, Phone, SearchX, Megaphone, DollarSign, Lock, ChevronLeft, LayoutDashboard, XCircle, CheckCircle2, Clock, ShieldCheck, AlertTriangle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import DashboardPage from '@/app/dashboard/page';
 import { processKycAction, verifyOrderAction } from './actions';
 import Image from 'next/image';
-import { doc, setDoc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { doc, setDoc, collection, getDocs, query, orderBy, limit, where, updateDoc, writeBatch, serverTimestamp, addDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useBrandSettings } from '@/hooks/use-brand-settings';
 import { uploadImageAsBase64 } from '@/lib/imageUpload';
@@ -71,6 +73,19 @@ export default function AdminPage() {
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [isKycReviewOpen, setIsKycReviewOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+
+  // Action States for User Preview
+  const [isBreachModalOpen, setIsBreachModalOpen] = useState(false);
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [breachReasonInput, setBreachReasonInput] = useState('');
+  const [assignForm, setAssignForm] = useState({
+    plan: '1-Step Pro',
+    size: '$100k',
+    login: '',
+    password: '',
+    server: 'PrimeFunded-Live'
+  });
 
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -297,21 +312,245 @@ export default function AdminPage() {
     setActionLoading(false);
   };
 
+  // High-Privilege Actions Handlers
+  const handleBreachAccount = async () => {
+    if (!previewUserId || !breachReasonInput) {
+      toast({ variant: "destructive", title: "Reason Required", description: "Please provide a reason for the breach." });
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const accRef = collection(db, 'users', previewUserId, 'accounts');
+      const q = query(accRef, where('status', '==', 'active'));
+      const snap = await getDocs(q);
+      
+      if (snap.empty) {
+        toast({ variant: "destructive", title: "No Active Account", description: "No active account was found to breach." });
+      } else {
+        const batch = writeBatch(db);
+        snap.docs.forEach(d => {
+          batch.update(d.ref, {
+            status: 'terminated',
+            balance: 0,
+            accountActive: false,
+            breachType: 'hard',
+            breachedAt: serverTimestamp(),
+            breachReason: breachReasonInput,
+            updatedAt: serverTimestamp()
+          });
+        });
+        await batch.commit();
+        toast({ title: "Account Terminated", description: "The trading account has been marked as breached." });
+        setIsBreachModalOpen(false);
+        setBreachReasonInput('');
+      }
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Action Failed", description: err.message });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleResetAccount = async () => {
+    if (!previewUserId) return;
+    setActionLoading(true);
+    try {
+      const accRef = collection(db, 'users', previewUserId, 'accounts');
+      const q = query(accRef, orderBy('createdAt', 'desc'), limit(1));
+      const snap = await getDocs(q);
+      
+      if (snap.empty) {
+        toast({ variant: "destructive", title: "Error", description: "No account found for this user." });
+      } else {
+        const accDoc = snap.docs[0];
+        const data = accDoc.data();
+        await updateDoc(accDoc.ref, {
+          status: 'active',
+          balance: data.startingBalance || 100000,
+          equity: data.startingBalance || 100000,
+          accountActive: true,
+          breachType: null,
+          breachedAt: null,
+          breachReason: null,
+          updatedAt: serverTimestamp()
+        });
+        toast({ title: "Account Restored", description: "The account has been reset to active status." });
+        setIsResetModalOpen(false);
+      }
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Action Failed", description: err.message });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleAssignAccount = async () => {
+    if (!previewUserId || !assignForm.login || !assignForm.password) {
+      toast({ variant: "destructive", title: "Missing Fields", description: "MT5 Login and Password are required." });
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const accRef = collection(db, 'users', previewUserId, 'accounts');
+      const startBalance = parseFloat(assignForm.size.replace('$', '').replace(',', '').replace('k', '000')) || 100000;
+      
+      await addDoc(accRef, {
+        plan: assignForm.plan,
+        size: assignForm.size,
+        mt5Login: assignForm.login,
+        mt5Password: assignForm.password,
+        mt5Server: assignForm.server,
+        status: 'active',
+        accountActive: true,
+        balance: startBalance,
+        startingBalance: startBalance,
+        equity: startBalance,
+        userId: previewUserId,
+        createdAt: serverTimestamp(),
+        startDate: new Date().toISOString()
+      });
+      toast({ title: "Account Assigned", description: "New trading credentials linked successfully." });
+      setIsAssignModalOpen(false);
+      setAssignForm({ plan: '1-Step Pro', size: '$100k', login: '', password: '', server: 'PrimeFunded-Live' });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Action Failed", description: err.message });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   if (previewUserId) {
     return (
       <div className="min-h-screen bg-background relative">
-        <div className="fixed top-0 left-0 w-full z-[100] bg-primary h-12 flex items-center justify-between px-6 shadow-lg">
-          <div className="flex items-center gap-2">
-            <LayoutDashboard className="w-4 h-4 text-primary-foreground" />
-            <span className="text-xs font-black uppercase tracking-widest text-primary-foreground">Previewing: {previewUserId}</span>
+        <div className="fixed top-0 left-0 w-full z-[100] bg-primary h-14 flex items-center justify-between px-6 shadow-xl">
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
+              <LayoutDashboard className="w-4 h-4 text-primary-foreground" />
+              <span className="text-xs font-black uppercase tracking-widest text-primary-foreground">Previewing: {previewUserId}</span>
+            </div>
+            
+            <div className="h-8 w-px bg-primary-foreground/20" />
+            
+            {/* Quick Actions Control Bar */}
+            <div className="flex items-center gap-3">
+               <Button size="sm" variant="destructive" className="h-9 text-[10px] font-black uppercase tracking-widest border border-white/20" onClick={() => setIsBreachModalOpen(true)}>
+                 <XCircle className="w-3.5 h-3.5 mr-1.5" /> Breach Account
+               </Button>
+               <Button size="sm" className="h-9 text-[10px] font-black uppercase tracking-widest bg-orange-600 hover:bg-orange-700 text-white border border-white/20" onClick={() => setIsResetModalOpen(true)}>
+                 <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Reset Account
+               </Button>
+               <Button size="sm" className="h-9 text-[10px] font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white border border-white/20" onClick={() => setIsAssignModalOpen(true)}>
+                 <ShieldCheck className="w-3.5 h-3.5 mr-1.5" /> Assign Account
+               </Button>
+            </div>
           </div>
-          <Button variant="secondary" size="sm" className="h-8 text-xs font-bold cursor-pointer" onClick={() => setPreviewUserId(null)}>
-            <ChevronLeft className="w-3 h-3 mr-1" /> Back to Terminal
+          <Button variant="secondary" size="sm" className="h-9 px-6 text-xs font-bold cursor-pointer" onClick={() => setPreviewUserId(null)}>
+            <ChevronLeft className="w-3 h-3 mr-1" /> Exit Preview
           </Button>
         </div>
-        <div className="pt-12">
+        <div className="pt-14">
           <DashboardPage adminViewMode={true} targetUid={previewUserId} />
         </div>
+
+        {/* Action Modal: Breach */}
+        <Dialog open={isBreachModalOpen} onOpenChange={setIsBreachModalOpen}>
+          <DialogContent className="bg-card border-destructive/20 text-white">
+            <DialogHeader>
+              <DialogTitle className="text-destructive flex items-center gap-2"><AlertTriangle className="w-5 h-5" /> Confirm Hard Breach</DialogTitle>
+              <DialogDescription className="text-muted-foreground">This will terminate the user's active challenge and set balance to zero. This action is irreversible without a manual reset.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label className="text-xs uppercase font-bold text-muted-foreground">Reason for Termination</Label>
+                <Textarea 
+                  placeholder="e.g. Max Daily Drawdown hit (5.2%)" 
+                  className="bg-secondary/30 min-h-[100px]"
+                  value={breachReasonInput}
+                  onChange={e => setBreachReasonInput(e.target.value)}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setIsBreachModalOpen(false)} disabled={actionLoading}>Cancel</Button>
+              <Button variant="destructive" onClick={handleBreachAccount} disabled={actionLoading}>
+                {actionLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <XCircle className="w-4 h-4 mr-2" />} Terminate Account
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Action Modal: Reset */}
+        <Dialog open={isResetModalOpen} onOpenChange={setIsResetModalOpen}>
+          <DialogContent className="bg-card border-orange-500/20 text-white">
+            <DialogHeader>
+              <DialogTitle className="text-orange-500">Restore Account Status</DialogTitle>
+              <DialogDescription>Reset this account to "Active" and restore the original starting balance? Any breach records will be cleared.</DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="mt-6">
+              <Button variant="ghost" onClick={() => setIsResetModalOpen(false)} disabled={actionLoading}>Cancel</Button>
+              <Button className="bg-orange-600 hover:bg-orange-700 text-white font-bold" onClick={handleResetAccount} disabled={actionLoading}>
+                {actionLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />} Yes, Reset Account
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Action Modal: Assign */}
+        <Dialog open={isAssignModalOpen} onOpenChange={setIsAssignModalOpen}>
+          <DialogContent className="bg-card border-emerald-500/20 text-white max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-emerald-500">Assign Institutional Capital</DialogTitle>
+              <DialogDescription>Provision a new trading account for this trader.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-6 py-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Plan Type</Label>
+                  <Select value={assignForm.plan} onValueChange={v => setAssignForm({...assignForm, plan: v})}>
+                    <SelectTrigger className="bg-secondary/30"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1-Step Pro">1-Step Pro</SelectItem>
+                      <SelectItem value="2-Step Classic">2-Step Classic</SelectItem>
+                      <SelectItem value="Instant Funding">Instant Funding</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Account Size</Label>
+                  <Select value={assignForm.size} onValueChange={v => setAssignForm({...assignForm, size: v})}>
+                    <SelectTrigger className="bg-secondary/30"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="$5k">$5,000</SelectItem>
+                      <SelectItem value="$10k">$10,000</SelectItem>
+                      <SelectItem value="$25k">$25,000</SelectItem>
+                      <SelectItem value="$50k">$50,000</SelectItem>
+                      <SelectItem value="$100k">$100,000</SelectItem>
+                      <SelectItem value="$200k">$200,000</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>MT5 Login ID</Label>
+                <Input placeholder="Enter login number" className="bg-secondary/30" value={assignForm.login} onChange={e => setAssignForm({...assignForm, login: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label>MT5 Master Password</Label>
+                <Input placeholder="Enter password" type="text" className="bg-secondary/30" value={assignForm.password} onChange={e => setAssignForm({...assignForm, password: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label>MT5 Trading Server</Label>
+                <Input placeholder="PrimeFunded-Live" className="bg-secondary/30" value={assignForm.server} onChange={e => setAssignForm({...assignForm, server: e.target.value})} />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setIsAssignModalOpen(false)} disabled={actionLoading}>Cancel</Button>
+              <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold" onClick={handleAssignAccount} disabled={actionLoading}>
+                {actionLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <ShieldCheck className="w-4 h-4 mr-2" />} Assign Credentials
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
@@ -341,7 +580,7 @@ export default function AdminPage() {
                <div className="relative flex-1 md:w-64">
                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                  <Input 
-                   placeholder="Quick search user/order..." 
+                   placeholder="Quick search user/order/UID..." 
                    className="pl-10 h-10 bg-secondary/50 text-white border-border/50" 
                    value={searchTerm} 
                    onChange={e => setSearchTerm(e.target.value)} 
@@ -736,7 +975,7 @@ export default function AdminPage() {
             </>
           ) : (
             <div className="h-full flex items-center justify-center">
-               <div className="text-center space-y-6 max-w-sm">
+               <div className="text-center space-y-6 max-sm">
                   <div className="w-20 h-20 bg-secondary/50 rounded-full flex items-center justify-center mx-auto border border-border">
                     <Shield className="w-10 h-10 text-muted-foreground" />
                   </div>
