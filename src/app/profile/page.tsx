@@ -31,7 +31,8 @@ import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 import { cn, sanitizeInput } from '@/lib/utils';
 import { z } from 'zod';
-import { uploadToCloudinary } from '@/lib/cloudinary';
+import { uploadImageAsBase64 } from '@/lib/imageUpload';
+import Image from 'next/image';
 
 const ProfileSchema = z.object({
   name: z.string().min(2, "Name is too short").max(100, "Name must be under 100 characters"),
@@ -83,8 +84,8 @@ export default function ProfilePage() {
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast({ variant: "destructive", title: "File too large", description: "Max photo size is 5MB." });
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ variant: "destructive", title: "File too large", description: "Max database photo size is 2MB." });
       return;
     }
 
@@ -96,14 +97,14 @@ export default function ProfilePage() {
     setUploading(true);
 
     try {
-      // Use Cloudinary for profile photo
-      const secureUrl = await uploadToCloudinary(file);
+      // Use Firestore Base64 storage
+      const base64 = await uploadImageAsBase64(file);
       
       const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, { photoURL: secureUrl });
+      await updateDoc(userRef, { photoURL: base64 });
       
       setUploading(false);
-      toast({ title: "Photo Updated", description: "Your profile picture has been synced via Cloudinary." });
+      toast({ title: "Photo Updated", description: "Your profile picture has been synchronized." });
     } catch (error: any) {
       setUploading(false);
       toast({ variant: "destructive", title: "Upload Failed", description: error.message });
@@ -181,7 +182,9 @@ export default function ProfilePage() {
               <CardContent className="pt-10 flex flex-col items-center text-center">
                 <div className="relative group mb-6">
                   <Avatar className="w-32 h-32 border-4 border-primary/20 shadow-[0_0_30px_rgba(17,179,245,0.15)] transition-transform duration-300 group-hover:scale-105">
-                    <AvatarImage src={userData?.photoURL} className="object-cover" />
+                    {userData?.photoURL ? (
+                      <AvatarImage src={userData.photoURL} className="object-cover" />
+                    ) : null}
                     <AvatarFallback className="text-4xl bg-gradient-to-br from-primary to-blue-600 text-white font-bold">
                       {getInitials(userData?.name)}
                     </AvatarFallback>

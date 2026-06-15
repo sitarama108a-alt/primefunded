@@ -13,12 +13,13 @@ import { useAuth } from '@/context/AuthContext';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { Copy, CheckCircle2, AlertTriangle, QrCode, Wallet, Mail, Hash, Loader2, Globe } from 'lucide-react';
+import { Copy, CheckCircle2, AlertTriangle, QrCode, Wallet, Mail, Hash, Loader2, Globe, Upload, FileImage } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { motion } from 'framer-motion';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 import { sanitizeInput } from '@/lib/utils';
+import { uploadImageAsBase64 } from '@/lib/imageUpload';
 import { z } from 'zod';
 
 const PaymentSchema = z.object({
@@ -63,6 +64,7 @@ function PaymentContent() {
   const [txHash, setTxHash] = useState('');
   const [email, setEmail] = useState(user?.email || '');
   const [selectedNetwork, setSelectedNetwork] = useState('');
+  const [proofFile, setProofFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
@@ -75,6 +77,17 @@ function PaymentContent() {
     if (id === '2-step') return '2-Step Classic';
     if (id === '3-step') return '3-Step Classic';
     return 'Instant Funding';
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        toast({ variant: "destructive", title: "File too large", description: "Proof image must be under 2MB." });
+        return;
+      }
+      setProofFile(file);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -99,39 +112,36 @@ function PaymentContent() {
     const sanitizedEmail = sanitizeInput(email);
     const sanitizedHash = sanitizeInput(txHash);
 
-    const orderData = {
-      userId: user.uid,
-      email: sanitizedEmail,
-      plan: getDisplayName(plan),
-      size,
-      price,
-      txHash: sanitizedHash,
-      network: selectedNetwork,
-      status: 'pending',
-      date: new Date().toISOString(),
-      createdAt: serverTimestamp(),
-    };
-
     try {
+      let paymentProofBase64 = null;
+      if (proofFile) {
+        paymentProofBase64 = await uploadImageAsBase64(proofFile);
+      }
+
+      const orderData = {
+        userId: user.uid,
+        email: sanitizedEmail,
+        plan: getDisplayName(plan),
+        size,
+        price,
+        txHash: sanitizedHash,
+        network: selectedNetwork,
+        paymentProof: paymentProofBase64,
+        status: 'pending',
+        date: new Date().toISOString(),
+        createdAt: serverTimestamp(),
+      };
+
       const ordersRef = collection(db, 'orders');
-      addDoc(ordersRef, orderData)
-        .then(() => {
-          setSubmitted(true);
-          toast({
-            title: "Order Submitted",
-            description: "Your payment verification is being processed.",
-          });
-        })
-        .catch(async (err) => {
-          const permissionError = new FirestorePermissionError({
-            path: 'orders',
-            operation: 'create',
-            requestResourceData: orderData
-          } satisfies SecurityRuleContext);
-          errorEmitter.emit('permission-error', permissionError);
-        });
+      await addDoc(ordersRef, orderData);
+      setSubmitted(true);
+      toast({
+        title: "Order Submitted",
+        description: "Your payment verification is being processed.",
+      });
     } catch (err: any) {
       toast({ variant: "destructive", title: "Submission Error", description: err.message });
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -154,7 +164,7 @@ function PaymentContent() {
         </div>
         <h2 className="text-4xl font-headline font-bold mb-4 text-white">Verification Pending</h2>
         <p className="text-muted-foreground text-lg mb-10 leading-relaxed">
-          Thank you! We&apos;ve received your transaction details. Our compliance team will verify your payment within 1-4 hours. 
+          Thank you! We've received your transaction details. Our compliance team will verify your payment within 1-4 hours. 
           Your MT5 credentials will be emailed to <span className="text-primary font-bold">{email}</span> as soon as verification is complete.
         </p>
         <div className="flex gap-4">
@@ -273,6 +283,23 @@ function PaymentContent() {
                     required
                     className="bg-secondary/30 h-12 rounded-xl font-mono text-xs text-white"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2 text-white">
+                    <FileImage className="w-3 h-3 text-primary" /> Proof Screenshot (Optional)
+                  </Label>
+                  <div className="relative h-12 border-2 border-dashed border-border rounded-xl flex items-center justify-center bg-secondary/20 hover:bg-secondary/40 transition-colors cursor-pointer group">
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="absolute inset-0 opacity-0 cursor-pointer" 
+                      onChange={handleFileChange}
+                    />
+                    <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground group-hover:text-primary">
+                      {proofFile ? <><CheckCircle2 className="w-4 h-4" /> {proofFile.name}</> : <><Upload className="w-3.5 h-3.5" /> Attach Screenshot</>}
+                    </div>
+                  </div>
                 </div>
 
                 <Button 

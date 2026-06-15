@@ -10,9 +10,7 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { doc, updateDoc, serverTimestamp, addDoc, collection } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
-import { uploadToCloudinary } from '@/lib/cloudinary';
+import { uploadImageAsBase64 } from '@/lib/imageUpload';
 import Link from 'next/link';
 
 export default function KYCPage() {
@@ -28,14 +26,14 @@ export default function KYCPage() {
     if (!file) return;
 
     // Validation
-    const maxSize = 5 * 1024 * 1024; // 5MB
-    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+    const maxSize = 2 * 1024 * 1024; // 2MB for Firestore Base64
+    const allowedTypes = ['image/jpeg', 'image/png'];
 
     if (file.size > maxSize) {
       toast({
         variant: "destructive",
         title: "File Too Large",
-        description: "Max file size is 5MB.",
+        description: "Max file size is 2MB for direct upload. Please optimize your image.",
       });
       return;
     }
@@ -44,7 +42,7 @@ export default function KYCPage() {
       toast({
         variant: "destructive",
         title: "Invalid File Type",
-        description: "Only PDF, JPG, and PNG are allowed.",
+        description: "Only JPG and PNG are allowed for base64 storage.",
       });
       return;
     }
@@ -63,9 +61,9 @@ export default function KYCPage() {
     setLoading(true);
     
     try {
-      // Upload both documents to Cloudinary
-      const idUrl = await uploadToCloudinary(idFile);
-      const addressUrl = await uploadToCloudinary(addressFile);
+      // Encode both documents as Base64 for database storage
+      const idBase64 = await uploadImageAsBase64(idFile);
+      const addressBase64 = await uploadImageAsBase64(addressFile);
 
       const userRef = doc(db, 'users', user.uid);
       const updates = {
@@ -73,15 +71,15 @@ export default function KYCPage() {
         kycSubmittedAt: new Date().toISOString(),
         kycVerified: false,
         kycRejectionReason: null,
-        idProofUrl: idUrl,
-        addressProofUrl: addressUrl
+        idProofUrl: idBase64,
+        addressProofUrl: addressBase64
       };
 
       await updateDoc(userRef, updates);
       
       await addDoc(collection(db, 'users', user.uid, 'notifications'), {
         title: "⏳ KYC Under Review",
-        message: "Your documents have been uploaded to our secure CDN and submitted successfully. We will notify you once review is complete.",
+        message: "Your documents have been encrypted and submitted successfully to our secure vault. We will notify you once review is complete.",
         type: 'kyc_submitted',
         isRead: false,
         createdAt: serverTimestamp()
@@ -106,7 +104,7 @@ export default function KYCPage() {
       <main className="flex-1 p-8">
         <header className="mb-10 text-center">
           <h1 className="text-3xl font-headline font-bold mb-1 text-white">Verify Your Identity</h1>
-          <p className="text-muted-foreground">Secure document verification via Cloudinary is required for all withdrawals.</p>
+          <p className="text-muted-foreground">Secure identity verification is required for all withdrawals.</p>
         </header>
 
         <div className="max-w-2xl mx-auto">
@@ -128,7 +126,7 @@ export default function KYCPage() {
                   <div className="relative p-12 border-2 border-dashed border-border rounded-2xl flex flex-col items-center justify-center bg-background/30 hover:border-primary/50 transition-colors cursor-pointer group">
                     <input 
                       type="file" 
-                      accept=".pdf,.jpg,.jpeg,.png" 
+                      accept=".jpg,.jpeg,.png" 
                       className="absolute inset-0 opacity-0 cursor-pointer" 
                       onChange={(e) => handleFileChange(e, 'id')}
                     />
@@ -141,7 +139,7 @@ export default function KYCPage() {
                       <>
                         <Upload className="w-12 h-12 text-muted-foreground mb-4 group-hover:text-primary transition-colors" />
                         <p className="text-sm font-bold text-white">Click to upload ID</p>
-                        <p className="text-xs text-muted-foreground mt-2">PDF, JPG, PNG (Max 5MB)</p>
+                        <p className="text-xs text-muted-foreground mt-2">JPG, PNG (Max 2MB)</p>
                       </>
                     )}
                   </div>
@@ -160,7 +158,7 @@ export default function KYCPage() {
                   <div className="relative p-12 border-2 border-dashed border-border rounded-2xl flex flex-col items-center justify-center bg-background/30 hover:border-primary/50 transition-colors cursor-pointer group">
                     <input 
                       type="file" 
-                      accept=".pdf,.jpg,.jpeg,.png" 
+                      accept=".jpg,.jpeg,.png" 
                       className="absolute inset-0 opacity-0 cursor-pointer" 
                       onChange={(e) => handleFileChange(e, 'address')}
                     />
@@ -206,7 +204,7 @@ export default function KYCPage() {
                     </div>
                     <h3 className="text-3xl font-headline font-bold mb-3 text-white">Application Received</h3>
                     <p className="text-muted-foreground max-w-sm mb-10 leading-relaxed">
-                      Verification typically takes 12-24 hours. Your documents are securely stored on our CDN. We'll alert you once processed.
+                      Verification typically takes 12-24 hours. Your documents are securely stored in our vault. We'll alert you once processed.
                     </p>
                   </>
                 )}

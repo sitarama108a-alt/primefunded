@@ -25,6 +25,7 @@ import Image from 'next/image';
 import { doc, setDoc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useBrandSettings } from '@/hooks/use-brand-settings';
+import { uploadImageAsBase64 } from '@/lib/imageUpload';
 
 const StatCard = memo(function StatCard({ title, value, icon, color }: { title: string, value: string | number, icon: any, color: string }) {
   const colors: any = {
@@ -90,19 +91,6 @@ export default function AdminPage() {
       });
     }
   }, [branding]);
-
-  // Handle Logo Selection Preview
-  useEffect(() => {
-    if (logoFile) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setLogoPreview(reader.result as string);
-      };
-      reader.readAsDataURL(logoFile);
-    } else {
-      setLogoPreview(null);
-    }
-  }, [logoFile]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -240,37 +228,29 @@ export default function AdminPage() {
     setUploadingLogo(true);
     setIsUploadDone(false);
 
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        const base64 = reader.result as string;
-        const brandRef = doc(db, 'settings', 'branding');
-        await setDoc(brandRef, { 
-          logoUrl: base64,
-          updatedAt: new Date().toISOString() 
-        }, { merge: true });
-        
-        toast({ title: "Logo Updated!", description: "✅ The platform branding has been updated successfully via direct storage!" });
-        setUploadingLogo(false);
-        setIsUploadDone(true);
-        setLogoFile(null);
-        setLogoPreview(null);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-      } catch (err: any) {
-        console.error('[Admin] Firestore save error:', err);
-        toast({ 
-          variant: "destructive", 
-          title: "Update Failed", 
-          description: err.message || "❌ Failed to save branding to database." 
-        });
-        setUploadingLogo(false);
-      }
-    };
-    reader.onerror = () => {
-      toast({ variant: "destructive", title: "Error", description: "File read failed." });
+    try {
+      const base64 = await uploadImageAsBase64(logoFile);
+      const brandRef = doc(db, 'settings', 'branding');
+      await setDoc(brandRef, { 
+        logoUrl: base64,
+        updatedAt: new Date().toISOString() 
+      }, { merge: true });
+      
+      toast({ title: "Logo Updated!", description: "✅ The platform branding has been updated successfully!" });
       setUploadingLogo(false);
-    };
-    reader.readAsDataURL(logoFile);
+      setIsUploadDone(true);
+      setLogoFile(null);
+      setLogoPreview(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    } catch (err: any) {
+      console.error('[Admin] Firestore save error:', err);
+      toast({ 
+        variant: "destructive", 
+        title: "Update Failed", 
+        description: err.message || "❌ Failed to save branding to database." 
+      });
+      setUploadingLogo(false);
+    }
   };
 
   const handleSaveSocialLinks = async () => {
@@ -287,6 +267,12 @@ export default function AdminPage() {
     } catch (err) {
       toast({ variant: "destructive", title: "Save Failed" });
     } finally {
+      setSocialLinks({
+        discord: socialLinks.discord,
+        instagram: socialLinks.instagram,
+        telegram: socialLinks.telegram,
+        whatsapp: socialLinks.whatsapp
+      });
       setSavingLinks(false);
     }
   };
@@ -339,7 +325,7 @@ export default function AdminPage() {
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="w-full max-w-md border-primary/20 bg-card/50 backdrop-blur-xl">
+        <Card className="w-full max-md border-primary/20 bg-card/50 backdrop-blur-xl">
           <CardHeader className="text-center">
             <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-primary/20">
               <Shield className="text-primary w-8 h-8" />
@@ -772,13 +758,13 @@ export default function AdminPage() {
                   <CardTitle className="text-white flex items-center gap-2">
                     <ImageIcon className="w-5 h-5 text-primary" /> Brand Identity
                   </CardTitle>
-                  <CardDescription>Update the platform logo via direct storage in Firestore.</CardDescription>
+                  <CardDescription>Update the platform logo via direct storage in Firestore (Base64).</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-8">
                   <div className="flex flex-col md:flex-row items-center gap-8 p-6 bg-background/50 rounded-2xl border border-white/5">
                     <div className="relative group">
                       <div className="w-24 h-24 rounded-full border-2 border-primary/20 bg-secondary/50 flex items-center justify-center overflow-hidden shadow-2xl">
-                        {logoPreview || branding.logoUrl ? (
+                        {(logoPreview || branding.logoUrl) ? (
                           <Image src={logoPreview || branding.logoUrl || ''} alt="Platform Logo" width={96} height={96} className="object-cover" />
                         ) : (
                           <ImageIcon className="w-10 h-10 text-muted-foreground opacity-20" />
@@ -805,7 +791,15 @@ export default function AdminPage() {
                           ref={fileInputRef} 
                           className="hidden" 
                           accept=".png,.jpg,.jpeg,.svg" 
-                          onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setLogoFile(file);
+                              const reader = new FileReader();
+                              reader.onloadend = () => setLogoPreview(reader.result as string);
+                              reader.readAsDataURL(file);
+                            }
+                          }}
                         />
                         {logoFile && (
                           <Button 
