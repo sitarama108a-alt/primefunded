@@ -3,29 +3,35 @@
 /**
  * Uploads a file to Cloudinary using an unsigned upload preset.
  * 
- * IMPORTANT: You must enable "Unsigned" mode for your upload preset 
- * in the Cloudinary Dashboard (Settings -> Upload -> Upload presets).
- * Also, ensure your "Allowed Origins" include your application URL or '*' for development.
+ * IMPORTANT: Requires NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME and 
+ * NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET to be defined in .env
  */
 export const uploadToCloudinary = async (file: File): Promise<string> => {
-  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "dkws10vkj";
-  const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "primefunded_uploads";
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+  const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+
+  // 1. Configuration Check
+  if (!cloudName || !uploadPreset) {
+    console.error('[Cloudinary] Missing configuration:', { cloudName, uploadPreset });
+    throw new Error('Cloudinary not configured. Please ensure NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME and NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET are set in your .env file.');
+  }
 
   const formData = new FormData();
   formData.append('file', file);
   formData.append('upload_preset', uploadPreset);
 
   try {
+    // 2. Perform Upload
     const response = await fetch(
       `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
       {
         method: 'POST',
         body: formData,
-        // Using 'cors' mode explicitly though it is the default for cross-origin fetches
         mode: 'cors'
       }
     );
 
+    // 3. Handle Server Errors
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.error?.message || "Cloudinary Upload Failed");
@@ -33,12 +39,13 @@ export const uploadToCloudinary = async (file: File): Promise<string> => {
 
     const data = await response.json();
     return data.secure_url;
+
   } catch (error: any) {
-    console.error("Cloudinary upload error:", error);
+    console.error("Cloudinary upload catch block:", error);
     
-    // Check if the error is a TypeError which often indicates a CORS or Network issue
+    // 4. Handle Network/CORS Errors
     if (error.name === 'TypeError' || error.message.includes('fetch')) {
-      throw new Error("Upload Failed: Network error or CORS block. Please verify Cloudinary Dashboard 'Allowed Origins' settings.");
+      throw new Error("Upload Failed: Network error or CORS block. Ensure 'Allowed Origins' in Cloudinary Settings (Upload Tab) is set to '*' or your current domain.");
     }
     
     throw error;
