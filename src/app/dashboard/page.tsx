@@ -23,7 +23,10 @@ import {
   AlertTriangle,
   ExternalLink,
   Users,
-  DollarSign
+  DollarSign,
+  Skull,
+  Flame,
+  Info
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -34,7 +37,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { aiComplianceMonitorAlerts } from '@/ai/flows/ai-compliance-monitor-alerts';
 import { useFirestore, useCollection, useDoc } from '@/firebase';
-import { where, doc, updateDoc, setDoc, serverTimestamp, limit, orderBy } from 'firebase/firestore';
+import { where, doc, updateDoc, setDoc, serverTimestamp, limit, orderBy, onSnapshot } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -81,64 +84,38 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   const { toast } = useToast();
   const db = useFirestore();
 
-  // Secret Admin Access State
-  const [adminClickCount, setAdminClickCount] = useState(0);
-  const [showAdminModal, setShowAdminModal] = useState(false);
-  const [adminPasswordInput, setAdminPasswordInput] = useState('');
-  const [adminError, setAdminError] = useState('');
-  const adminClickTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // Breach Alert State
+  const [softBreachWarning, setSoftBreachWarning] = useState<string | null>(null);
 
   useEffect(() => {
-    const handleLogoClick = () => {
-      setAdminClickCount((prev) => {
-        const nextCount = prev + 1;
-        
-        if (adminClickTimerRef.current) clearTimeout(adminClickTimerRef.current);
-        
-        if (nextCount >= 5) {
-          setShowAdminModal(true);
-          setAdminError('');
-          setAdminPasswordInput('');
-          return 0;
-        }
+    if (!effectiveUid || !db) return;
 
-        adminClickTimerRef.current = setTimeout(() => {
-          setAdminClickCount(0);
-        }, 3000);
+    // Listen for MT5 metric updates to trigger breach check
+    const unsubscribeMt5 = onSnapshot(doc(db, 'mt5_accounts', effectiveUid), (snapshot) => {
+      if (snapshot.exists() && !adminViewMode) {
+        fetch('/api/breach-check', {
+          method: 'POST',
+          body: JSON.stringify({ userId: effectiveUid, mt5Data: snapshot.data() })
+        });
+      }
+    });
 
-        return nextCount;
-      });
-    };
-
-    // Attach to the logo with specific hint
-    const logo = document.querySelector('img[data-ai-hint="site logo"]');
-    if (logo) {
-      logo.addEventListener('click', handleLogoClick);
-    }
+    // Listen for soft breach notifications
+    const q = query(collection(db, 'users', effectiveUid, 'notifications'), where('type', '==', 'soft_breach_warning'), where('isRead', '==', false), limit(1));
+    const unsubscribeNotif = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        setSoftBreachWarning(snapshot.docs[0].data().message);
+      } else {
+        setSoftBreachWarning(null);
+      }
+    });
 
     return () => {
-      if (logo) logo.removeEventListener('click', handleLogoClick);
-      if (adminClickTimerRef.current) clearTimeout(adminClickTimerRef.current);
+      unsubscribeMt5();
+      unsubscribeNotif();
     };
-  }, []);
+  }, [effectiveUid, db, adminViewMode]);
 
-  const handleAdminEnter = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (adminPasswordInput === "93463962569392846256") {
-      setShowAdminModal(false);
-      router.push('/admin');
-    } else {
-      setAdminError("Access Denied");
-      setAdminPasswordInput('');
-    }
-  };
-
-  const [showProfilePrompt, setShowProfilePrompt] = useState(false);
-  const [completingPhone, setCompletingPhone] = useState('');
-  const [completingCountry, setCompletingCountry] = useState('');
-  const [savingProfile, setSavingProfile] = useState(false);
-
-  // Referral Stats Listener
   const referralConstraints = useMemo(() => [
     where('referrerId', '==', effectiveUid || 'none'),
     orderBy('createdAt', 'desc')
@@ -161,58 +138,6 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     }
   }, [user, authLoading, router, adminViewMode]);
 
-  useEffect(() => {
-    if (userData && effectiveUid && !adminViewMode && db) {
-      const updates: any = {};
-      if (!userData.uid || userData.uid.length > 10) {
-        const numericUid = Math.floor(10000000 + Math.random() * 90000000).toString();
-        updates.uid = numericUid;
-        updates.traderId = numericUid;
-      }
-      if (!userData.referralCode) {
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        let result = '';
-        for (let i = 0; i < 8; i++) {
-          result += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        updates.referralCode = result;
-        updates.codeChangesCount = 0;
-        const codeRegRef = doc(db, 'referralCodes', result);
-        setDoc(codeRegRef, {
-          code: result,
-          userId: effectiveUid,
-          active: true,
-          createdAt: serverTimestamp()
-        });
-      }
-      if (Object.keys(updates).length > 0) {
-        updateDoc(doc(db, 'users', effectiveUid), updates);
-      }
-    }
-  }, [userData, effectiveUid, db, adminViewMode]);
-
-  useEffect(() => {
-    if (!adminViewMode && userData && (!userData.phone || !userData.country)) {
-      setShowProfilePrompt(true);
-    } else {
-      setShowProfilePrompt(false);
-    }
-  }, [userData, adminViewMode]);
-
-  const handleCompleteProfile = () => {
-    if (!effectiveUid || !db) return;
-    setSavingProfile(true);
-    
-    updateDoc(doc(db, 'users', effectiveUid), {
-      phone: completingPhone,
-      country: completingCountry
-    });
-    
-    toast({ title: "Profile Completed", description: "Thank you for updating your information." });
-    setShowProfilePrompt(false);
-    setSavingProfile(false);
-  };
-
   const accountConstraints = useMemo(() => {
     if (!effectiveUid) return [];
     return [where('status', '==', 'active'), limit(1)];
@@ -224,27 +149,6 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   );
 
   const activeAccount = accounts?.[0];
-
-  useEffect(() => {
-    if (activeAccount) {
-      let isMounted = true;
-      const fetchCompliance = async () => {
-        try {
-          const result = await aiComplianceMonitorAlerts({
-            plan: (activeAccount.plan as any) || "1-Step Pro",
-            dailyLoss: 0,
-            totalLoss: 0,
-            profit: 0,
-            tradingDays: 0,
-            hasOpenTrades: false
-          });
-          if (isMounted) setCompliance(result);
-        } catch (err) {}
-      };
-      fetchCompliance();
-      return () => { isMounted = false; };
-    }
-  }, [activeAccount?.id, activeAccount?.plan]);
 
   const metrics = useMemo(() => {
     if (!activeAccount) {
@@ -295,19 +199,38 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
       {!adminViewMode && <Navigation />}
       
       <main className="flex-1 p-8 overflow-y-auto custom-scrollbar">
-        {adminViewMode && (
-          <div className="mb-8 p-4 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <ShieldAlert className="w-5 h-5 text-primary" />
-              <div>
-                <p className="text-sm font-bold">Admin Read-Only View</p>
-                <p className="text-xs text-muted-foreground">You are viewing the dashboard for user: {userData?.email}</p>
+        {/* HARD BREACH BANNER */}
+        {userData?.accountStatus === 'breached' && (
+          <div className="mb-6 p-6 rounded-2xl bg-destructive/20 border border-destructive/40 flex items-center justify-between shadow-2xl animate-pulse">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-full bg-destructive/30 flex items-center justify-center text-destructive">
+                <Skull className="w-8 h-8" />
               </div>
+              <div>
+                <h3 className="text-xl font-headline font-bold text-white uppercase tracking-tighter">Account Terminated (Hard Breach)</h3>
+                <p className="text-sm text-destructive-foreground font-medium">Termination Reason: <span className="font-bold underline">{userData.breachReason || 'Rule Violation'}</span></p>
+              </div>
+            </div>
+            <Button variant="destructive" className="font-bold px-8 h-12" asChild>
+              <Link href="/support">Appeal Decision</Link>
+            </Button>
+          </div>
+        )}
+
+        {/* SOFT BREACH WARNING */}
+        {softBreachWarning && (
+          <div className="mb-6 p-4 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center gap-4">
+            <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-500">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-white uppercase tracking-tight">Active Strategy Warning</p>
+              <p className="text-xs text-amber-200/70">{softBreachWarning}</p>
             </div>
           </div>
         )}
 
-        {!adminViewMode && userData && !userData.kycVerified && (
+        {!adminViewMode && userData && !userData.kycVerified && userData.accountStatus !== 'breached' && (
           <div className="mb-6 p-4 rounded-xl bg-destructive/10 border border-destructive/20 flex items-center justify-between shadow-lg shadow-destructive/5">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-destructive/20 flex items-center justify-center text-destructive">
@@ -350,9 +273,6 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
               <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-accent live-indicator' : 'bg-destructive'}`} />
               <span className="text-xs font-semibold uppercase tracking-wider text-white">{isConnected ? 'LIVE DATA' : 'DISCONNECTED'}</span>
             </div>
-            <Button variant="outline" size="icon" className="cursor-pointer" onClick={() => setIsConnected(!isConnected)}>
-              <RefreshCw className={`w-4 h-4 ${isConnected ? 'animate-spin-slow' : ''}`} />
-            </Button>
           </div>
         </header>
 
@@ -403,16 +323,6 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                    </Button>
                  </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                 <div className="p-4 rounded-xl bg-secondary/30 border border-border text-center">
-                    <p className="text-[10px] font-black uppercase text-muted-foreground mb-1">Signups</p>
-                    <p className="text-2xl font-bold text-white">{refStats.total}</p>
-                 </div>
-                 <div className="p-4 rounded-xl bg-secondary/30 border border-border text-center">
-                    <p className="text-[10px] font-black uppercase text-muted-foreground mb-1">Purchases</p>
-                    <p className="text-2xl font-bold text-accent">{referrals?.filter((r: any) => r.amount > 0).length || 0}</p>
-                 </div>
-              </div>
               <Button variant="outline" className="w-full font-bold h-12 border-primary/20 text-primary cursor-pointer" asChild>
                 <Link href="/referral">View Detailed History <ExternalLink className="ml-2 w-4 h-4" /></Link>
               </Button>
@@ -431,22 +341,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                   <DetailItem label="Plan" value={activeAccount?.plan || 'None'} />
                   <DetailItem label="Size" value={activeAccount?.size || 'N/A'} />
                   <DetailItem label="Tier" value={userData?.tier || 'Bronze'} />
-                  <DetailItem label="Status" value={activeAccount?.status || 'N/A'} />
-                </div>
-                <div className="pt-4 border-t border-primary/10">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Progress</span>
-                    <Badge className={activeAccount ? "bg-accent text-accent-foreground font-bold px-2 py-0.5 text-[9px]" : "bg-muted text-muted-foreground font-bold px-2 py-0.5 text-[9px]"}>
-                      {activeAccount ? 'ACTIVE' : 'INACTIVE'}
-                    </Badge>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider">
-                      <span className="text-white">Profit Target</span>
-                      <span className="text-accent">{metrics.currentProfitPercent}% / {metrics.profitTarget}%</span>
-                    </div>
-                    <Progress value={metrics.profitTarget > 0 ? (metrics.currentProfitPercent / metrics.profitTarget) * 100 : 0} className="h-2 bg-secondary" />
-                  </div>
+                  <DetailItem label="Status" value={userData?.accountStatus || 'N/A'} />
                 </div>
               </CardContent>
             </Card>
@@ -458,95 +353,26 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Suspense fallback={<div className="h-24 flex items-center justify-center"><RefreshCw className="w-6 h-6 animate-spin text-primary" /></div>}>
-                  {compliance ? (
-                    <div className={`p-4 rounded-xl border ${compliance.status === 'at-risk' ? 'bg-destructive/10 border-destructive/20' : 'bg-primary/10 border-primary/20'}`}>
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-2 text-primary flex items-center gap-1.5">
-                        <Clock className="w-3 h-3" /> System Insight
-                      </p>
-                      <p className="text-sm font-medium leading-relaxed mb-3 text-white">{compliance.message}</p>
-                    </div>
-                  ) : (
-                    <div className="h-24 flex items-center justify-center text-muted-foreground text-xs italic">
-                      Monitoring disabled: Connect account to MT5 server.
-                    </div>
-                  )}
-                </Suspense>
+                {userData?.accountStatus === 'breached' ? (
+                  <div className="p-4 rounded-xl border bg-destructive/10 border-destructive/20">
+                    <p className="text-xs font-bold text-destructive flex items-center gap-2 uppercase">
+                      <Skull className="w-4 h-4" /> Monitoring Disabled
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">Evaluation halted due to rule violation.</p>
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-xl border bg-primary/10 border-primary/20">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-2 text-primary flex items-center gap-1.5">
+                      <Clock className="w-3 h-3" /> System Insight
+                    </p>
+                    <p className="text-sm font-medium leading-relaxed text-white">Institutional risk guard is active. Monitoring for drawdown and strategy compliance.</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
         </div>
-
-        <Card className="border-border/50 bg-card/40 backdrop-blur-sm overflow-hidden">
-          <CardHeader>
-            <CardTitle className="text-xl font-headline text-white">Recent Executions</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto max-h-[300px] custom-scrollbar">
-              <table className="w-full text-sm text-left">
-                <thead className="sticky top-0 z-10">
-                  <tr className="border-b border-border bg-secondary/30 text-muted-foreground uppercase text-[10px] font-bold tracking-widest">
-                    <th className="py-4 px-6">Symbol</th>
-                    <th className="py-4 px-4">Direction</th>
-                    <th className="py-4 px-4 text-right">Lot Size</th>
-                    <th className="py-4 px-4 text-right">P&L</th>
-                    <th className="py-4 px-6 text-right">Time</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/50">
-                   <tr>
-                     <td colSpan={5} className="py-10 text-center text-muted-foreground italic">No live trades detected. Start trading on MT5 to see your executions here.</td>
-                   </tr>
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
       </main>
-
-      {/* Secret Admin Access Modal */}
-      <Dialog open={showAdminModal} onOpenChange={setShowAdminModal}>
-        <DialogContent className="bg-card border-primary/20 text-white sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-headline font-bold text-primary">Admin Access</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleAdminEnter} className="space-y-6 pt-4">
-            <div className="space-y-2">
-              <Label htmlFor="admin-pass" className="text-xs font-black uppercase tracking-widest text-muted-foreground">Terminal Key</Label>
-              <Input 
-                id="admin-pass"
-                type="password" 
-                value={adminPasswordInput} 
-                onChange={(e) => setAdminPasswordInput(e.target.value)}
-                placeholder="••••••••••••"
-                className="bg-secondary/50 border-border/50 text-white focus:border-primary/50 h-12"
-                autoFocus
-              />
-              {adminError && (
-                <p className="text-[10px] font-bold text-destructive uppercase tracking-widest animate-pulse">
-                  {adminError}
-                </p>
-              )}
-            </div>
-            <DialogFooter className="gap-2 sm:gap-0">
-              <Button 
-                type="button" 
-                variant="ghost" 
-                onClick={() => setShowAdminModal(false)}
-                className="font-bold text-muted-foreground hover:text-white"
-              >
-                Cancel
-              </Button>
-              <Button 
-                type="submit" 
-                className="bg-primary hover:bg-primary/90 font-bold cyan-box-glow"
-              >
-                Enter Terminal
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
