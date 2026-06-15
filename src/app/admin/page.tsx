@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Progress } from '@/components/ui/progress';
 import { 
   Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Send, User, History, Award, BarChart3, Search, ExternalLink, RefreshCw, Copy, Loader2, Image as ImageIcon, Settings, Upload, Save, Instagram, MessageCircle, Phone, SearchX, AlertTriangle, Megaphone, DollarSign
 } from 'lucide-react';
@@ -21,7 +22,7 @@ import { Textarea } from '@/components/ui/textarea';
 import DashboardPage from '@/app/dashboard/page';
 import { processKycAction, verifyOrderAction } from './actions';
 import Image from 'next/image';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { doc, updateDoc, setDoc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useFirebaseApp } from '@/firebase';
@@ -71,6 +72,8 @@ export default function AdminPage() {
 
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploadDone, setIsUploadDone] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [socialLinks, setSocialLinks] = useState({
@@ -226,26 +229,47 @@ export default function AdminPage() {
   const handleLogoUpload = async () => {
     if (!logoFile) return;
     setUploadingLogo(true);
+    setUploadProgress(0);
+    setIsUploadDone(false);
 
     try {
       const storageRef = ref(storage, 'brand/logo.png');
-      const snapshot = await uploadBytes(storageRef, logoFile);
-      const downloadURL = await getDownloadURL(snapshot.ref);
+      const uploadTask = uploadBytesResumable(storageRef, logoFile);
       
-      const brandRef = doc(db, 'settings', 'brand');
-      await setDoc(brandRef, { logoUrl: downloadURL }, { merge: true });
-      
-      toast({ title: "Logo Updated!", description: "The platform branding has been updated." });
-      setLogoFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      uploadTask.on(
+        'state_changed',
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          setUploadProgress(progress);
+        },
+        (error) => {
+          console.error('[Admin] Logo upload error:', error);
+          toast({ 
+            variant: "destructive", 
+            title: "Upload Failed", 
+            description: error.message || "An unexpected error occurred during the logo upload." 
+          });
+          setUploadingLogo(false);
+        },
+        async () => {
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          const brandRef = doc(db, 'settings', 'brand');
+          await setDoc(brandRef, { logoUrl: downloadURL }, { merge: true });
+          
+          toast({ title: "Logo Updated!", description: "The platform branding has been updated." });
+          setUploadingLogo(false);
+          setIsUploadDone(true);
+          setLogoFile(null);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+      );
     } catch (err: any) {
-      console.error('[Admin] Logo upload error:', err);
+      console.error('[Admin] Logo upload setup error:', err);
       toast({ 
         variant: "destructive", 
-        title: "Upload Failed", 
-        description: err.message || "An unexpected error occurred during the logo upload." 
+        title: "Upload Error", 
+        description: err.message 
       });
-    } finally {
       setUploadingLogo(false);
     }
   };
@@ -772,7 +796,7 @@ export default function AdminPage() {
                           variant="secondary" 
                           size="sm" 
                           className="font-bold cursor-pointer"
-                          onClick={() => fileInputRef.current?.click()}
+                          onClick={() => { fileInputRef.current?.click(); setIsUploadDone(false); }}
                           disabled={uploadingLogo}
                         >
                           <Upload className="w-4 h-4 mr-2" /> {logoFile ? 'Change Selection' : 'Select New Logo'}
@@ -796,7 +820,24 @@ export default function AdminPage() {
                           </Button>
                         )}
                       </div>
-                      {logoFile && <p className="text-[10px] text-accent font-bold uppercase tracking-widest">Selected: {logoFile.name}</p>}
+                      
+                      {uploadingLogo && (
+                        <div className="w-full mt-4 space-y-2">
+                          <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-primary">
+                            <span>Uploading Asset...</span>
+                            <span>{Math.round(uploadProgress)}%</span>
+                          </div>
+                          <Progress value={uploadProgress} className="h-1.5 bg-secondary" />
+                        </div>
+                      )}
+
+                      {isUploadDone && !uploadingLogo && (
+                        <div className="mt-4 flex items-center justify-center md:justify-start gap-2 text-accent text-[10px] font-black uppercase tracking-[0.2em] animate-in fade-in slide-in-from-top-1">
+                          <CheckCircle2 className="w-4 h-4" /> Branding Synchronized
+                        </div>
+                      )}
+
+                      {logoFile && !uploadingLogo && !isUploadDone && <p className="text-[10px] text-accent font-bold uppercase tracking-widest">Selected: {logoFile.name}</p>}
                     </div>
                   </div>
                 </CardContent>
