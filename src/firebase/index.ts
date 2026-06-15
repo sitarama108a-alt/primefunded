@@ -1,10 +1,19 @@
 'use client';
 
-import { initializeApp, getApps, type FirebaseApp, FirebaseError } from 'firebase/app';
+import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore, enableIndexedDbPersistence } from 'firebase/firestore';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 import { firebaseConfig } from './config';
+
+/**
+ * Singleton state to ensure Firebase is only initialized once.
+ */
+let cachedFirebase: {
+  firebaseApp: FirebaseApp | null;
+  firestore: Firestore | null;
+  auth: Auth | null;
+} | null = null;
 
 /**
  * Initializes the Firebase Client App Instance with production services.
@@ -15,6 +24,9 @@ export function initializeFirebase(): {
   firestore: Firestore | null;
   auth: Auth | null;
 } {
+  // Return cached instance if it exists to prevent multiple initialization attempts
+  if (cachedFirebase) return cachedFirebase;
+
   // Enhanced validation for production readiness
   const isConfigMissing = !firebaseConfig.apiKey || 
                           firebaseConfig.apiKey === '' || 
@@ -33,12 +45,15 @@ export function initializeFirebase(): {
     const firestore = getFirestore(firebaseApp);
     
     // Enable offline persistence for better UX in unstable networks
+    // This MUST be called before any other Firestore methods
     if (typeof window !== 'undefined') {
       enableIndexedDbPersistence(firestore).catch((err) => {
         if (err.code === 'failed-precondition') {
           // Multiple tabs open, persistence can only be enabled in one tab at a time.
+          console.warn('[Firestore] Persistence failed: Multiple tabs open.');
         } else if (err.code === 'unimplemented') {
           // The current browser does not support persistence.
+          console.warn('[Firestore] Persistence failed: Browser not supported.');
         }
       });
     }
@@ -55,7 +70,8 @@ export function initializeFirebase(): {
       }
     }
 
-    return { firebaseApp, firestore, auth };
+    cachedFirebase = { firebaseApp, firestore, auth };
+    return cachedFirebase;
   } catch (error) {
     console.error('[Firebase] Critical Initialization Error:', error);
     return { firebaseApp: null, firestore: null, auth: null };
