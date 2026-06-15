@@ -162,7 +162,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   }, [user, authLoading, router, adminViewMode]);
 
   useEffect(() => {
-    if (userData && effectiveUid && !adminViewMode) {
+    if (userData && effectiveUid && !adminViewMode && db) {
       const updates: any = {};
       if (!userData.uid || userData.uid.length > 10) {
         const numericUid = Math.floor(10000000 + Math.random() * 90000000).toString();
@@ -200,7 +200,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   }, [userData, adminViewMode]);
 
   const handleCompleteProfile = () => {
-    if (!effectiveUid) return;
+    if (!effectiveUid || !db) return;
     setSavingProfile(true);
     
     updateDoc(doc(db, 'users', effectiveUid), {

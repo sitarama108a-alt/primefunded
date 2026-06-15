@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -18,32 +19,38 @@ export function useDoc<T = DocumentData>(path: string | null) {
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    if (!path) {
+    if (!path || !db) {
       setLoading(false);
       return;
     }
 
-    const docRef = doc(db, path) as DocumentReference<T>;
+    try {
+      const docRef = doc(db, path) as DocumentReference<T>;
 
-    const unsubscribe = onSnapshot(
-      docRef,
-      (snapshot) => {
-        setData(snapshot.exists() ? snapshot.data() : null);
-        setLoading(false);
-      },
-      async (serverError) => {
-        const permissionError = new FirestorePermissionError({
-          path: docRef.path,
-          operation: 'get',
-        } satisfies SecurityRuleContext);
+      const unsubscribe = onSnapshot(
+        docRef,
+        (snapshot) => {
+          setData(snapshot.exists() ? snapshot.data() : null);
+          setLoading(false);
+        },
+        async (serverError) => {
+          const permissionError = new FirestorePermissionError({
+            path: docRef.path,
+            operation: 'get',
+          } satisfies SecurityRuleContext);
 
-        errorEmitter.emit('permission-error', permissionError);
-        setError(permissionError);
-        setLoading(false);
-      }
-    );
+          errorEmitter.emit('permission-error', permissionError);
+          setError(permissionError);
+          setLoading(false);
+        }
+      );
 
-    return () => unsubscribe();
+      return () => unsubscribe();
+    } catch (err: any) {
+      console.error('[useDoc] Initialization Error:', err);
+      setError(err);
+      setLoading(false);
+    }
   }, [db, path]);
 
   return { data, loading, error };

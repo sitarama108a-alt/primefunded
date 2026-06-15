@@ -112,6 +112,10 @@ export default function AdminPage() {
   });
   const [savingLinks, setSavingLinks] = useState(false);
 
+  // Secret Admin Access State for logo clicks
+  const [adminClickCount, setAdminClickCount] = useState(0);
+  const adminClickTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   // Check for existing session on mount
   useEffect(() => {
     const isVerified = localStorage.getItem('adminVerified') === 'true';
@@ -652,7 +656,21 @@ export default function AdminPage() {
       <main className="flex-1 flex flex-col min-h-0">
         <div className="p-8 pb-4 shrink-0">
           <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
-            <div>
+            <div 
+              onClick={() => {
+                setAdminClickCount((prev) => {
+                  const nextCount = prev + 1;
+                  if (adminClickTimerRef.current) clearTimeout(adminClickTimerRef.current);
+                  if (nextCount >= 5) {
+                    setShowAdminModal(true);
+                    return 0;
+                  }
+                  adminClickTimerRef.current = setTimeout(() => setAdminClickCount(0), 3000);
+                  return nextCount;
+                });
+              }}
+              className="cursor-pointer"
+            >
               <h1 className="text-4xl font-headline font-bold mb-1 text-white">Administrative Terminal</h1>
               <p className="text-muted-foreground">Monitor performance and manage institutional capital deployment.</p>
             </div>
