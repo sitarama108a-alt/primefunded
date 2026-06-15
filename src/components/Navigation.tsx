@@ -100,7 +100,7 @@ export const Navigation = memo(function Navigation() {
       if (adminClickTimerRef.current) clearTimeout(adminClickTimerRef.current);
       
       if (nextCount >= 5) {
-        router.push('/admin');
+        setTimeout(() => router.push('/admin'), 0);
         return 0;
       }
 
