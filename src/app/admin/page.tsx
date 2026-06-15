@@ -931,7 +931,7 @@ export default function AdminPage() {
                    <Select value={giftForm.size} onValueChange={v => setGiftForm({...giftForm, size: v})}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                         {['$5,000', '$10,000', '$25,000', '$50,000', '$100,000', '$200,000'].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                         {['$5,000', '$10,000', '$25,000', '$50,000', '$100,000', '$200,000'].map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
                       </SelectContent>
                    </Select>
                 </div>
@@ -1009,4 +1009,3 @@ export default function AdminPage() {
     </div>
   );
 }
-
