@@ -213,7 +213,8 @@ export default function AdminPage() {
       u.email?.toLowerCase().includes(queryStr) ||
       u.phone?.includes(searchTerm) ||
       u.id?.toLowerCase().includes(queryStr) ||
-      u.traderId?.includes(searchTerm) ||
+      u.uid?.toString().includes(searchTerm) ||
+      u.traderId?.toString().includes(searchTerm) ||
       u.referralCode?.toLowerCase().includes(queryStr)
     );
   }, [adminData?.users, searchTerm]);
@@ -468,7 +469,7 @@ export default function AdminPage() {
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
               <LayoutDashboard className="w-4 h-4 text-primary-foreground" />
-              <span className="text-xs font-black uppercase tracking-widest text-primary-foreground">Previewing: {previewUserId}</span>
+              <span className="text-xs font-black uppercase tracking-widest text-primary-foreground">Previewing Auth UID: {previewUserId}</span>
             </div>
             
             <div className="h-8 w-px bg-primary-foreground/20" />
@@ -680,7 +681,7 @@ export default function AdminPage() {
                                   </div>
                                   <div>
                                     <p className="text-sm font-bold text-white">{u.name}</p>
-                                    <p className="text-[10px] text-muted-foreground">{u.email}</p>
+                                    <p className="text-[10px] text-muted-foreground">UID: {u.uid || u.traderId || '--------'}</p>
                                   </div>
                                 </div>
                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => setPreviewUserId(u.id)}>
@@ -747,7 +748,7 @@ export default function AdminPage() {
                               <tr key={u.id} className="hover:bg-primary/5 transition-colors group">
                                 <td className="py-4 px-6">
                                   <div className="font-bold text-white">{u.name}</div>
-                                  <div className="text-[10px] text-muted-foreground font-mono break-all max-w-[200px]" title={u.id}>UID: {u.id}</div>
+                                  <div className="text-[10px] text-muted-foreground font-mono" title={u.uid || u.traderId}>UID: {u.uid || u.traderId || '--------'}</div>
                                 </td>
                                 <td className="py-4 px-6">
                                   <div className="text-white">{u.email}</div>
@@ -1166,7 +1167,7 @@ export default function AdminPage() {
             </div>
             <div className="space-y-2">
               <Label>MT5 Master Password</Label>
-              <Input placeholder="Enter password" type="text" className="bg-secondary/30" value={giftForm.password} onChange={e => setGiftForm({...giftForm, password: e.target.value})} />
+              <Input placeholder="Enter password" type="text" className="bg-secondary/30" value={giftForm.password} onChange={e => setAssignForm({...assignForm, password: e.target.value})} />
             </div>
             <div className="space-y-2">
               <Label>MT5 Trading Server</Label>

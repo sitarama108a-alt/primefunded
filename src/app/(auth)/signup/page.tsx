@@ -113,7 +113,7 @@ function SignupContent() {
       const userCredential = await createUserWithEmailAndPassword(auth, sanitizedEmail, password);
       const user = userCredential.user;
       
-      const traderId = Math.floor(10000000 + Math.random() * 90000000).toString();
+      const numericUid = Math.floor(10000000 + Math.random() * 90000000).toString();
       const referralCode = Math.random().toString(36).substring(2, 10).toUpperCase();
 
       let referredByUid = null;
@@ -137,8 +137,9 @@ function SignupContent() {
       }
 
       const userData = {
-        uid: user.uid,
-        traderId,
+        uid: numericUid,
+        traderId: numericUid,
+        authUid: user.uid,
         referralCode,
         codeChangesCount: 0,
         referredBy: referredByUid,

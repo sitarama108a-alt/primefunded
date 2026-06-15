@@ -25,7 +25,7 @@ import {
   Trash2,
   Image as ImageIcon 
 } from 'lucide-react';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -62,8 +62,19 @@ export default function ProfilePage() {
         phone: userData.phone || '',
         country: userData.country || ''
       });
+      
+      // Auto-repair missing 8-digit numeric UID
+      if (user && (!userData.uid || userData.uid.length > 10)) {
+        const numericUid = Math.floor(10000000 + Math.random() * 90000000).toString();
+        const userRef = doc(db, 'users', user.uid);
+        updateDoc(userRef, { 
+          uid: numericUid,
+          traderId: numericUid,
+          updatedAt: serverTimestamp() 
+        });
+      }
     }
-  }, [userData]);
+  }, [userData, user]);
 
   const getInitials = (name: string) => {
     if (!name) return 'PF';
@@ -98,12 +109,9 @@ export default function ProfilePage() {
     setUploading(true);
 
     try {
-      // Use Firestore Base64 storage
       const base64 = await uploadImageAsBase64(file);
-      
       const userRef = doc(db, 'users', user.uid);
       await updateDoc(userRef, { photoURL: base64 });
-      
       setUploading(false);
       toast({ title: "Photo Updated", description: "Your profile picture has been synchronized." });
     } catch (error: any) {
@@ -114,12 +122,10 @@ export default function ProfilePage() {
 
   const handleRemovePhoto = async () => {
     if (!user || !userData?.photoURL) return;
-    
     setLoading(true);
     try {
       const userRef = doc(db, 'users', user.uid);
       await updateDoc(userRef, { photoURL: null });
-      
       toast({ title: "Photo Removed", description: "Your profile is back to default." });
     } catch (err) {
       console.error(err);
@@ -130,7 +136,6 @@ export default function ProfilePage() {
 
   const handleSave = () => {
     if (!user) return;
-    
     const validation = ProfileSchema.safeParse(formData);
     if (!validation.success) {
       toast({ variant: "destructive", title: "Validation Error", description: validation.error.errors[0].message });
@@ -156,9 +161,10 @@ export default function ProfilePage() {
   };
 
   const copyTraderId = () => {
-    if (user?.uid) {
-      navigator.clipboard.writeText(user.uid);
-      toast({ title: "Copied!", description: "Firebase UID copied to clipboard." });
+    const idToCopy = userData?.uid || userData?.traderId;
+    if (idToCopy) {
+      navigator.clipboard.writeText(idToCopy);
+      toast({ title: "Copied!", description: "Trader UID copied to clipboard." });
     }
   };
 
@@ -190,21 +196,13 @@ export default function ProfilePage() {
                       {getInitials(userData?.name)}
                     </AvatarFallback>
                   </Avatar>
-                  
                   <button 
                     onClick={() => fileInputRef.current?.click()}
                     className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer backdrop-blur-[2px]"
                   >
                     <Camera className="w-8 h-8 text-white" />
                   </button>
-                  
-                  <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    className="hidden" 
-                    accept="image/*" 
-                    onChange={handleFileSelect}
-                  />
+                  <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileSelect} />
                 </div>
 
                 <div className="space-y-1 mb-6">
@@ -214,31 +212,20 @@ export default function ProfilePage() {
                 
                 <div className="flex flex-col gap-3 w-full mb-8">
                    <div className="flex justify-center gap-4">
-                     <button 
-                       onClick={() => fileInputRef.current?.click()}
-                       className="text-[10px] font-black uppercase tracking-widest text-primary hover:text-white transition-colors"
-                     >
-                       Change Photo
-                     </button>
+                     <button onClick={() => fileInputRef.current?.click()} className="text-[10px] font-black uppercase tracking-widest text-primary hover:text-white transition-colors">Change Photo</button>
                      {userData?.photoURL && (
-                       <button 
-                         onClick={handleRemovePhoto}
-                         className="text-[10px] font-black uppercase tracking-widest text-destructive hover:text-white transition-colors"
-                       >
-                         Remove
-                       </button>
+                       <button onClick={handleRemovePhoto} className="text-[10px] font-black uppercase tracking-widest text-destructive hover:text-white transition-colors">Remove</button>
                      )}
                    </div>
-
                    <div 
                     className="flex flex-col gap-2 p-3 bg-secondary border border-primary/20 rounded-lg cursor-pointer hover:border-primary/50 transition-colors group text-left" 
                     onClick={copyTraderId}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-primary">Firebase UID:</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-primary">UID:</span>
                       <Copy className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors" />
                     </div>
-                    <span className="font-mono text-[11px] font-bold text-white break-all">{user?.uid || '--------'}</span>
+                    <span className="font-mono text-sm font-bold text-white">{userData?.uid || userData?.traderId || '--------'}</span>
                   </div>
                 </div>
 
@@ -318,21 +305,11 @@ export default function ProfilePage() {
                     <Label className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
                       <Globe className="w-3.5 h-3.5 text-primary" /> Country
                     </Label>
-                    <Input 
-                      placeholder="United Kingdom" 
-                      value={formData.country}
-                      onChange={(e) => setFormData({...formData, country: e.target.value})}
-                      className="bg-secondary/30 h-11 text-white border-border/50 focus:border-primary/50 transition-all"
-                    />
+                    <Input placeholder="United Kingdom" value={formData.country} onChange={(e) => setFormData({...formData, country: e.target.value})} className="bg-secondary/30 h-11 text-white border-border/50 focus:border-primary/50 transition-all" />
                   </div>
                 </div>
-
                 <div className="pt-8 border-t border-border/50">
-                  <Button 
-                    className="font-bold px-10 h-12 rounded-xl cyan-box-glow transition-all cursor-pointer"
-                    onClick={handleSave}
-                    disabled={loading}
-                  >
+                  <Button className="font-bold px-10 h-12 rounded-xl cyan-box-glow transition-all cursor-pointer" onClick={handleSave} disabled={loading}>
                     {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
                     {loading ? 'Saving Changes...' : 'Save All Changes'}
                   </Button>

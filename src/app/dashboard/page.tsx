@@ -164,8 +164,10 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   useEffect(() => {
     if (userData && effectiveUid && !adminViewMode) {
       const updates: any = {};
-      if (!userData.traderId) {
-        updates.traderId = Math.floor(10000000 + Math.random() * 90000000).toString();
+      if (!userData.uid || userData.uid.length > 10) {
+        const numericUid = Math.floor(10000000 + Math.random() * 90000000).toString();
+        updates.uid = numericUid;
+        updates.traderId = numericUid;
       }
       if (!userData.referralCode) {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -261,8 +263,9 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   }, [activeAccount]);
 
   const copyTraderId = () => {
-    if (userData?.traderId) {
-      navigator.clipboard.writeText(userData.traderId);
+    const idToCopy = userData?.uid || userData?.traderId;
+    if (idToCopy) {
+      navigator.clipboard.writeText(idToCopy);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       toast({ title: "Copied!", description: "Trader UID copied to clipboard." });
@@ -332,7 +335,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                   onClick={copyTraderId}
                 >
                   <span className="text-[10px] font-black uppercase tracking-widest text-primary">UID:</span>
-                  <span className="font-mono text-sm font-bold text-white">{userData?.traderId || '--------'}</span>
+                  <span className="font-mono text-sm font-bold text-white">{userData?.uid || userData?.traderId || '--------'}</span>
                   <button className="text-muted-foreground group-hover:text-primary transition-colors cursor-pointer">
                     {copied ? <Check className="w-3 h-3 text-accent" /> : <Copy className="w-3 h-3" />}
                   </button>
