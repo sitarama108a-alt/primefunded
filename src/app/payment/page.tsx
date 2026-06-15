@@ -17,7 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Copy, CheckCircle2, AlertTriangle, QrCode, Mail, Hash, Loader2, Globe, Upload, FileImage, DollarSign } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { motion } from 'framer-motion';
-import { sanitizeInput } from '@/lib/utils';
+import { cn, sanitizeInput } from '@/lib/utils';
 import { uploadImageAsBase64 } from '@/lib/imageUpload';
 import { z } from 'zod';
 
@@ -30,7 +30,7 @@ const PaymentSchema = z.object({
 
 const cryptoWallets = [
   {
-    network: 'Ethereum',
+    network: 'Ethereum (ERC20)',
     token: 'USDC/USDT',
     address: '0x3ab3ca43dc691f468bea91883f493cabf6da84d4'
   },
@@ -40,9 +40,15 @@ const cryptoWallets = [
     address: 'TMitDXKKnsHKgBVENHdorV4axBou6KC5JM'
   },
   {
-    network: 'BNB Smart Chain',
+    network: 'BNB Smart Chain (BEP20)',
     token: 'USDT',
     address: '0x3ab3ca43dc691f468bea91883f493cabf6da84d4'
+  },
+  {
+    network: 'Polygon',
+    token: 'USDT',
+    address: '0x3ab3ca43dc691f468bea91883f493cabf6da84d4',
+    isPolygon: true
   }
 ];
 
@@ -192,7 +198,14 @@ function PaymentContent() {
                 <CardHeader className="pb-4">
                   <div className="flex justify-between items-center">
                     <CardTitle className="text-sm font-bold text-white">{wallet.network}</CardTitle>
-                    <Badge className="bg-primary/10 text-primary border-primary/20 text-[10px]">{wallet.token}</Badge>
+                    <Badge className={cn(
+                      "text-[10px] font-bold border",
+                      wallet.isPolygon 
+                        ? "bg-purple-500/10 text-purple-400 border-purple-500/20" 
+                        : "bg-primary/10 text-primary border-primary/20"
+                    )}>
+                      {wallet.token}
+                    </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -202,7 +215,11 @@ function PaymentContent() {
                   <div className="space-y-1.5">
                     <Label className="text-[9px] uppercase tracking-widest font-black text-muted-foreground">Wallet Address</Label>
                     <div className="flex gap-2">
-                      <Input readOnly value={wallet.address} className="bg-background/50 font-mono text-[9px] h-9 border-border text-white" />
+                      <Input 
+                        readOnly 
+                        value={wallet.address} 
+                        className="bg-background/50 font-mono text-[8px] h-9 border-border text-white px-2 focus-visible:ring-0" 
+                      />
                       <Button variant="secondary" size="icon" className="h-9 w-9 flex-shrink-0 cursor-pointer" onClick={() => copyToClipboard(wallet.address)}>
                         <Copy className="w-3.5 h-3.5" />
                       </Button>
@@ -323,4 +340,3 @@ export default function PaymentPage() {
     </div>
   );
 }
-
