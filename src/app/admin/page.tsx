@@ -25,7 +25,6 @@ import Image from 'next/image';
 import { doc, setDoc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useBrandSettings } from '@/hooks/use-brand-settings';
-import { uploadToCloudinary } from '@/lib/cloudinary';
 
 const StatCard = memo(function StatCard({ title, value, icon, color }: { title: string, value: string | number, icon: any, color: string }) {
   const colors: any = {
@@ -241,28 +240,37 @@ export default function AdminPage() {
     setUploadingLogo(true);
     setIsUploadDone(false);
 
-    try {
-      // Use Direct Unsigned Cloudinary Upload
-      const secureUrl = await uploadToCloudinary(logoFile);
-      
-      const brandRef = doc(db, 'settings', 'branding');
-      await setDoc(brandRef, { logoUrl: secureUrl }, { merge: true });
-      
-      toast({ title: "Logo Updated!", description: "✅ The platform branding has been updated successfully via direct upload!" });
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64 = reader.result as string;
+        const brandRef = doc(db, 'settings', 'branding');
+        await setDoc(brandRef, { 
+          logoUrl: base64,
+          updatedAt: new Date().toISOString() 
+        }, { merge: true });
+        
+        toast({ title: "Logo Updated!", description: "✅ The platform branding has been updated successfully via direct storage!" });
+        setUploadingLogo(false);
+        setIsUploadDone(true);
+        setLogoFile(null);
+        setLogoPreview(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      } catch (err: any) {
+        console.error('[Admin] Firestore save error:', err);
+        toast({ 
+          variant: "destructive", 
+          title: "Update Failed", 
+          description: err.message || "❌ Failed to save branding to database." 
+        });
+        setUploadingLogo(false);
+      }
+    };
+    reader.onerror = () => {
+      toast({ variant: "destructive", title: "Error", description: "File read failed." });
       setUploadingLogo(false);
-      setIsUploadDone(true);
-      setLogoFile(null);
-      setLogoPreview(null);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    } catch (err: any) {
-      console.error('[Admin] Direct logo upload error:', err);
-      toast({ 
-        variant: "destructive", 
-        title: "Upload Failed", 
-        description: err.message || "❌ Upload failed. Ensure the upload preset is configured." 
-      });
-      setUploadingLogo(false);
-    }
+    };
+    reader.readAsDataURL(logoFile);
   };
 
   const handleSaveSocialLinks = async () => {
@@ -764,7 +772,7 @@ export default function AdminPage() {
                   <CardTitle className="text-white flex items-center gap-2">
                     <ImageIcon className="w-5 h-5 text-primary" /> Brand Identity
                   </CardTitle>
-                  <CardDescription>Update the platform logo and visual assets via direct Cloudinary upload.</CardDescription>
+                  <CardDescription>Update the platform logo via direct storage in Firestore.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-8">
                   <div className="flex flex-col md:flex-row items-center gap-8 p-6 bg-background/50 rounded-2xl border border-white/5">
@@ -807,14 +815,14 @@ export default function AdminPage() {
                             disabled={uploadingLogo}
                           >
                             {uploadingLogo ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-                            Apply Logo (Cloudinary)
+                            Apply Logo (Database)
                           </Button>
                         )}
                       </div>
                       
                       {uploadingLogo && (
                         <div className="w-full mt-4 space-y-2">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-primary animate-pulse">Uploading directly to CDN...</p>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-primary animate-pulse">Syncing with database...</p>
                           <Progress value={undefined} className="h-1.5 bg-secondary" />
                         </div>
                       )}
