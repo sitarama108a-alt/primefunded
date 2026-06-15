@@ -1,46 +1,46 @@
 'use client';
 
 /**
- * Uploads a file to Cloudinary using XMLHttpRequest to bypass common CORS issues 
- * in development environments.
+ * Uploads a file to Cloudinary using an unsigned upload preset.
  * 
- * @param file - The file to upload (Image/PDF)
- * @returns Promise<string> - The secure URL of the uploaded asset
+ * IMPORTANT: You must enable "Unsigned" mode for your upload preset 
+ * in the Cloudinary Dashboard (Settings -> Upload -> Upload presets).
+ * Also, ensure your "Allowed Origins" include your application URL or '*' for development.
  */
-export const uploadToCloudinary = (
-  file: File
-): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("upload_preset", "primefunded_uploads");
+export const uploadToCloudinary = async (file: File): Promise<string> => {
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "dkws10vkj";
+  const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "primefunded_uploads";
 
-    const xhr = new XMLHttpRequest();
-    
-    xhr.open(
-      "POST",
-      "https://api.cloudinary.com/v1_1/dkws10vkj/image/upload",
-      true
-    );
-    
-    xhr.onload = () => {
-      try {
-        if (xhr.status === 200) {
-          const response = JSON.parse(xhr.responseText);
-          resolve(response.secure_url);
-        } else {
-          const error = JSON.parse(xhr.responseText);
-          reject(new Error(error.error?.message || "Upload failed"));
-        }
-      } catch (e) {
-        reject(new Error("Failed to parse Cloudinary response"));
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('upload_preset', uploadPreset);
+
+  try {
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+      {
+        method: 'POST',
+        body: formData,
+        // Using 'cors' mode explicitly though it is the default for cross-origin fetches
+        mode: 'cors'
       }
-    };
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error?.message || "Cloudinary Upload Failed");
+    }
+
+    const data = await response.json();
+    return data.secure_url;
+  } catch (error: any) {
+    console.error("Cloudinary upload error:", error);
     
-    xhr.onerror = () => {
-      reject(new Error("Network error - check internet connection and CORS settings"));
-    };
+    // Check if the error is a TypeError which often indicates a CORS or Network issue
+    if (error.name === 'TypeError' || error.message.includes('fetch')) {
+      throw new Error("Upload Failed: Network error or CORS block. Please verify Cloudinary Dashboard 'Allowed Origins' settings.");
+    }
     
-    xhr.send(formData);
-  });
+    throw error;
+  }
 };
