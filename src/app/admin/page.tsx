@@ -22,11 +22,10 @@ import { Textarea } from '@/components/ui/textarea';
 import DashboardPage from '@/app/dashboard/page';
 import { processKycAction, verifyOrderAction } from './actions';
 import Image from 'next/image';
-import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { doc, updateDoc, setDoc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { doc, setDoc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { useFirebaseApp } from '@/firebase';
 import { useBrandSettings } from '@/hooks/use-brand-settings';
+import { uploadToCloudinary } from '@/lib/cloudinary';
 
 const StatCard = memo(function StatCard({ title, value, icon, color }: { title: string, value: string | number, icon: any, color: string }) {
   const colors: any = {
@@ -62,8 +61,6 @@ export default function AdminPage() {
   const [actionLoading, setActionLoading] = useState(false);
   
   const { toast } = useToast();
-  const app = useFirebaseApp();
-  const storage = getStorage(app);
   const branding = useBrandSettings();
 
   const [selectedUser, setSelectedUser] = useState<any>(null);
@@ -72,7 +69,6 @@ export default function AdminPage() {
 
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploadDone, setIsUploadDone] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -229,46 +225,26 @@ export default function AdminPage() {
   const handleLogoUpload = async () => {
     if (!logoFile) return;
     setUploadingLogo(true);
-    setUploadProgress(0);
     setIsUploadDone(false);
 
     try {
-      const storageRef = ref(storage, 'brand/logo.png');
-      const uploadTask = uploadBytesResumable(storageRef, logoFile);
+      // Use Cloudinary for branding asset
+      const secureUrl = await uploadToCloudinary(logoFile);
       
-      uploadTask.on(
-        'state_changed',
-        (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          setUploadProgress(progress);
-        },
-        (error) => {
-          console.error('[Admin] Logo upload error:', error);
-          toast({ 
-            variant: "destructive", 
-            title: "Upload Failed", 
-            description: error.message || "An unexpected error occurred during the logo upload." 
-          });
-          setUploadingLogo(false);
-        },
-        async () => {
-          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-          const brandRef = doc(db, 'settings', 'brand');
-          await setDoc(brandRef, { logoUrl: downloadURL }, { merge: true });
-          
-          toast({ title: "Logo Updated!", description: "The platform branding has been updated." });
-          setUploadingLogo(false);
-          setIsUploadDone(true);
-          setLogoFile(null);
-          if (fileInputRef.current) fileInputRef.current.value = '';
-        }
-      );
+      const brandRef = doc(db, 'settings', 'brand');
+      await setDoc(brandRef, { logoUrl: secureUrl }, { merge: true });
+      
+      toast({ title: "Logo Updated!", description: "The platform branding has been updated via Cloudinary." });
+      setUploadingLogo(false);
+      setIsUploadDone(true);
+      setLogoFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     } catch (err: any) {
-      console.error('[Admin] Logo upload setup error:', err);
+      console.error('[Admin] Logo upload error:', err);
       toast({ 
         variant: "destructive", 
-        title: "Upload Error", 
-        description: err.message 
+        title: "Upload Failed", 
+        description: err.message || "An unexpected error occurred during the logo upload." 
       });
       setUploadingLogo(false);
     }
@@ -352,7 +328,7 @@ export default function AdminPage() {
             <form onSubmit={handleLogin} className="space-y-6">
               <div className="space-y-2">
                 <Label className="text-white text-xs uppercase font-black tracking-widest">Master Key</Label>
-                <Input type="password" placeholder="••••••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="h-12 bg-secondary/30 text-white" />
+                <input type="password" placeholder="••••••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="flex h-12 w-full rounded-md border border-input bg-secondary/30 px-3 py-2 text-white text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" />
               </div>
               <Button type="submit" className="w-full h-12 font-bold cyan-box-glow cursor-pointer">Access Terminal</Button>
             </form>
@@ -773,7 +749,7 @@ export default function AdminPage() {
                   <CardTitle className="text-white flex items-center gap-2">
                     <ImageIcon className="w-5 h-5 text-primary" /> Brand Identity
                   </CardTitle>
-                  <CardDescription>Update the platform logo and visual assets.</CardDescription>
+                  <CardDescription>Update the platform logo and visual assets via Cloudinary.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-8">
                   <div className="flex flex-col md:flex-row items-center gap-8 p-6 bg-background/50 rounded-2xl border border-white/5">
@@ -816,18 +792,15 @@ export default function AdminPage() {
                             disabled={uploadingLogo}
                           >
                             {uploadingLogo ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-                            Apply Logo
+                            Apply Logo (Cloudinary)
                           </Button>
                         )}
                       </div>
                       
                       {uploadingLogo && (
                         <div className="w-full mt-4 space-y-2">
-                          <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-primary">
-                            <span>Uploading Asset...</span>
-                            <span>{Math.round(uploadProgress)}%</span>
-                          </div>
-                          <Progress value={uploadProgress} className="h-1.5 bg-secondary" />
+                          <p className="text-[10px] font-black uppercase tracking-widest text-primary animate-pulse">Uploading to CDN...</p>
+                          <Progress value={undefined} className="h-1.5 bg-secondary" />
                         </div>
                       )}
 

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
@@ -26,20 +25,13 @@ import {
   Image as ImageIcon 
 } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
-import { 
-  getStorage, 
-  ref, 
-  uploadBytesResumable, 
-  getDownloadURL, 
-  deleteObject 
-} from 'firebase/storage';
 import { db } from '@/lib/firebase';
-import { useFirebaseApp } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 import { cn, sanitizeInput } from '@/lib/utils';
 import { z } from 'zod';
+import { uploadToCloudinary } from '@/lib/cloudinary';
 
 const ProfileSchema = z.object({
   name: z.string().min(2, "Name is too short").max(100, "Name must be under 100 characters"),
@@ -50,13 +42,10 @@ const ProfileSchema = z.object({
 export default function ProfilePage() {
   const { user, userData } = useAuth();
   const { toast } = useToast();
-  const app = useFirebaseApp();
-  const storage = getStorage(app);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -102,34 +91,23 @@ export default function ProfilePage() {
     uploadPhoto(file);
   };
 
-  const uploadPhoto = (file: File) => {
+  const uploadPhoto = async (file: File) => {
     if (!user) return;
     setUploading(true);
-    setUploadProgress(0);
 
-    const storageRef = ref(storage, `profilePhotos/${user.uid}/avatar.jpg`);
-    const uploadTask = uploadBytesResumable(storageRef, file);
-
-    uploadTask.on(
-      'state_changed',
-      (snapshot) => {
-        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        setUploadProgress(progress);
-      },
-      (error) => {
-        setUploading(false);
-        toast({ variant: "destructive", title: "Upload Failed", description: error.message });
-      },
-      async () => {
-        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-        const userRef = doc(db, 'users', user.uid);
-        
-        await updateDoc(userRef, { photoURL: downloadURL });
-        
-        setUploading(false);
-        toast({ title: "Photo Updated", description: "Your profile picture has been synced." });
-      }
-    );
+    try {
+      // Use Cloudinary for profile photo
+      const secureUrl = await uploadToCloudinary(file);
+      
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, { photoURL: secureUrl });
+      
+      setUploading(false);
+      toast({ title: "Photo Updated", description: "Your profile picture has been synced via Cloudinary." });
+    } catch (error: any) {
+      setUploading(false);
+      toast({ variant: "destructive", title: "Upload Failed", description: error.message });
+    }
   };
 
   const handleRemovePhoto = async () => {
@@ -137,9 +115,6 @@ export default function ProfilePage() {
     
     setLoading(true);
     try {
-      const storageRef = ref(storage, `profilePhotos/${user.uid}/avatar.jpg`);
-      await deleteObject(storageRef).catch(() => console.warn("File already deleted from storage"));
-      
       const userRef = doc(db, 'users', user.uid);
       await updateDoc(userRef, { photoURL: null });
       
@@ -199,7 +174,7 @@ export default function ProfilePage() {
             <Card className="border-border/50 bg-card/40 backdrop-blur-sm relative overflow-hidden">
               {uploading && (
                 <div className="absolute top-0 left-0 w-full z-20">
-                  <Progress value={uploadProgress} className="h-1 bg-transparent rounded-none" />
+                  <Progress value={undefined} className="h-1 bg-transparent rounded-none" />
                 </div>
               )}
               

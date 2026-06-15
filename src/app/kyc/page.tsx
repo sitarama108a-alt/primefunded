@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from 'react';
@@ -13,15 +12,18 @@ import { doc, updateDoc, serverTimestamp, addDoc, collection } from 'firebase/fi
 import { db } from '@/lib/firebase';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
+import { uploadToCloudinary } from '@/lib/cloudinary';
+import Link from 'next/link';
 
 export default function KYCPage() {
   const { user, userData } = useAuth();
   const [step, setStep] = useState(userData?.kycStatus === 'pending' || userData?.kycStatus === 'verified' ? 3 : 1);
   const [loading, setLoading] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [idFile, setIdFile] = useState<File | null>(null);
+  const [addressFile, setAddressFile] = useState<File | null>(null);
   const { toast } = useToast();
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'id' | 'address') => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -47,44 +49,55 @@ export default function KYCPage() {
       return;
     }
 
-    setSelectedFile(file);
+    if (type === 'id') setIdFile(file);
+    else setAddressFile(file);
+    
     toast({ title: "File Selected", description: file.name });
   };
 
-  const handleSubmit = () => {
-    if (!user || !selectedFile) {
-      toast({ variant: "destructive", title: "Missing File", description: "Please upload your document first." });
+  const handleSubmit = async () => {
+    if (!user || !idFile || !addressFile) {
+      toast({ variant: "destructive", title: "Missing Files", description: "Please upload both Identity and Address documents." });
       return;
     }
     setLoading(true);
     
-    const userRef = doc(db, 'users', user.uid);
-    const updates = {
-      kycStatus: 'pending',
-      kycSubmittedAt: new Date().toISOString(),
-      kycVerified: false,
-      kycRejectionReason: null
-    };
+    try {
+      // Upload both documents to Cloudinary
+      const idUrl = await uploadToCloudinary(idFile);
+      const addressUrl = await uploadToCloudinary(addressFile);
 
-    updateDoc(userRef, updates)
-      .catch(async (err) => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: updates }));
+      const userRef = doc(db, 'users', user.uid);
+      const updates = {
+        kycStatus: 'pending',
+        kycSubmittedAt: new Date().toISOString(),
+        kycVerified: false,
+        kycRejectionReason: null,
+        idProofUrl: idUrl,
+        addressProofUrl: addressUrl
+      };
+
+      await updateDoc(userRef, updates);
+      
+      await addDoc(collection(db, 'users', user.uid, 'notifications'), {
+        title: "⏳ KYC Under Review",
+        message: "Your documents have been uploaded to our secure CDN and submitted successfully. We will notify you once review is complete.",
+        type: 'kyc_submitted',
+        isRead: false,
+        createdAt: serverTimestamp()
       });
-    
-    addDoc(collection(db, 'users', user.uid, 'notifications'), {
-      title: "⏳ KYC Under Review",
-      message: "Your documents have been submitted successfully. We will notify you once review is complete.",
-      type: 'kyc_submitted',
-      isRead: false,
-      createdAt: serverTimestamp()
-    });
 
-    setStep(3);
-    toast({
-      title: "Documents Submitted",
-      description: "Your KYC application is now being reviewed.",
-    });
-    setLoading(false);
+      setStep(3);
+      toast({
+        title: "Documents Submitted",
+        description: "Your KYC application is now being reviewed.",
+      });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Submission Failed", description: err.message });
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -93,7 +106,7 @@ export default function KYCPage() {
       <main className="flex-1 p-8">
         <header className="mb-10 text-center">
           <h1 className="text-3xl font-headline font-bold mb-1 text-white">Verify Your Identity</h1>
-          <p className="text-muted-foreground">KYC verification is required for all withdrawals.</p>
+          <p className="text-muted-foreground">Secure document verification via Cloudinary is required for all withdrawals.</p>
         </header>
 
         <div className="max-w-2xl mx-auto">
@@ -117,17 +130,17 @@ export default function KYCPage() {
                       type="file" 
                       accept=".pdf,.jpg,.jpeg,.png" 
                       className="absolute inset-0 opacity-0 cursor-pointer" 
-                      onChange={handleFileChange}
+                      onChange={(e) => handleFileChange(e, 'id')}
                     />
-                    {selectedFile ? (
+                    {idFile ? (
                       <div className="text-center">
                         <FileText className="w-12 h-12 text-primary mb-4 mx-auto" />
-                        <p className="text-sm font-bold text-white truncate max-w-[200px]">{selectedFile.name}</p>
+                        <p className="text-sm font-bold text-white truncate max-w-[200px]">{idFile.name}</p>
                       </div>
                     ) : (
                       <>
                         <Upload className="w-12 h-12 text-muted-foreground mb-4 group-hover:text-primary transition-colors" />
-                        <p className="text-sm font-bold text-white">Click to upload or drag & drop</p>
+                        <p className="text-sm font-bold text-white">Click to upload ID</p>
                         <p className="text-xs text-muted-foreground mt-2">PDF, JPG, PNG (Max 5MB)</p>
                       </>
                     )}
@@ -149,12 +162,12 @@ export default function KYCPage() {
                       type="file" 
                       accept=".pdf,.jpg,.jpeg,.png" 
                       className="absolute inset-0 opacity-0 cursor-pointer" 
-                      onChange={handleFileChange}
+                      onChange={(e) => handleFileChange(e, 'address')}
                     />
-                    {selectedFile ? (
+                    {addressFile ? (
                       <div className="text-center">
                         <FileText className="w-12 h-12 text-primary mb-4 mx-auto" />
-                        <p className="text-sm font-bold text-white truncate max-w-[200px]">{selectedFile.name}</p>
+                        <p className="text-sm font-bold text-white truncate max-w-[200px]">{addressFile.name}</p>
                       </div>
                     ) : (
                       <>
@@ -165,7 +178,7 @@ export default function KYCPage() {
                   </div>
                   <div className="flex gap-4">
                     <Button variant="outline" className="flex-1 h-12 rounded-xl font-bold cursor-pointer" onClick={() => setStep(1)}>Back</Button>
-                    <Button className="flex-1 font-bold h-12 rounded-xl bg-primary hover:bg-primary/90 cursor-pointer" onClick={handleSubmit} disabled={loading || !selectedFile}>
+                    <Button className="flex-1 font-bold h-12 rounded-xl bg-primary hover:bg-primary/90 cursor-pointer" onClick={handleSubmit} disabled={loading || !addressFile || !idFile}>
                       {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                       Submit for Review
                     </Button>
@@ -182,7 +195,7 @@ export default function KYCPage() {
                       <CheckCircle2 className="w-12 h-12 text-accent" />
                     </div>
                     <h3 className="text-3xl font-headline font-bold mb-3 text-white">Identity Verified!</h3>
-                    <p className="text-muted-foreground max-w-sm mb-10 leading-relaxed">
+                    <p className="text-muted-foreground max-sm mb-10 leading-relaxed">
                       Your identity has been successfully verified. Payouts are now unlocked.
                     </p>
                   </>
@@ -193,7 +206,7 @@ export default function KYCPage() {
                     </div>
                     <h3 className="text-3xl font-headline font-bold mb-3 text-white">Application Received</h3>
                     <p className="text-muted-foreground max-w-sm mb-10 leading-relaxed">
-                      Verification typically takes 12-24 hours. We'll alert you once processed.
+                      Verification typically takes 12-24 hours. Your documents are securely stored on our CDN. We'll alert you once processed.
                     </p>
                   </>
                 )}
