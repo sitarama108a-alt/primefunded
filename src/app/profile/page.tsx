@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
@@ -155,9 +156,9 @@ export default function ProfilePage() {
   };
 
   const copyTraderId = () => {
-    if (userData?.traderId) {
-      navigator.clipboard.writeText(userData.traderId);
-      toast({ title: "Copied!", description: "Trader UID copied to clipboard." });
+    if (user?.uid) {
+      navigator.clipboard.writeText(user.uid);
+      toast({ title: "Copied!", description: "Firebase UID copied to clipboard." });
     }
   };
 
@@ -234,7 +235,7 @@ export default function ProfilePage() {
                     onClick={copyTraderId}
                   >
                     <span className="text-[10px] font-black uppercase tracking-widest text-primary">UID:</span>
-                    <span className="font-mono text-sm font-bold text-white">{userData?.traderId || '--------'}</span>
+                    <span className="font-mono text-[11px] font-bold text-white truncate max-w-[150px]">{user?.uid || '--------'}</span>
                     <Copy className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors ml-auto" />
                   </div>
                 </div>
