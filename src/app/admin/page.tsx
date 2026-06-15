@@ -16,7 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
-  Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, Award, Search, RefreshCw, Copy, Loader2, Image as ImageIcon, Settings, Upload, Save, Instagram, Phone, SearchX, Megaphone, DollarSign, Lock, ChevronLeft, LayoutDashboard, XCircle, CheckCircle2, Clock, ShieldCheck, AlertTriangle
+  Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, Award, Search, RefreshCw, Copy, Loader2, Image as ImageIcon, Settings, Upload, Save, Instagram, Phone, SearchX, Megaphone, DollarSign, Lock, ChevronLeft, LayoutDashboard, XCircle, CheckCircle2, Clock, ShieldCheck, AlertTriangle, Gift
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
@@ -73,6 +73,17 @@ export default function AdminPage() {
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [isKycReviewOpen, setIsKycReviewOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+
+  // Gift Modal States
+  const [isGiftModalOpen, setIsGiftModalOpen] = useState(false);
+  const [giftForm, setGiftForm] = useState({
+    plan: '1-Step Pro',
+    size: '$100,000',
+    login: '',
+    password: '',
+    server: 'PrimeFunded-Live',
+    note: ''
+  });
 
   // Action States for User Preview
   const [isBreachModalOpen, setIsBreachModalOpen] = useState(false);
@@ -310,6 +321,37 @@ export default function AdminPage() {
       toast({ variant: "destructive", title: "Action Failed", description: result.error });
     }
     setActionLoading(false);
+  };
+
+  // Gift Account Handler
+  const handleGiftAccount = async () => {
+    if (!selectedUser || !giftForm.login || !giftForm.password) {
+      toast({ variant: "destructive", title: "Missing Credentials", description: "MT5 Login and Password are required." });
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const userRef = doc(db, 'users', selectedUser.id);
+      await updateDoc(userRef, {
+        accountPlan: giftForm.plan,
+        accountSize: giftForm.size,
+        accountStatus: "active",
+        mt5Login: giftForm.login,
+        mt5Password: giftForm.password,
+        mt5Server: giftForm.server,
+        giftedAt: serverTimestamp(),
+        giftNote: giftForm.note,
+        isGifted: true
+      });
+      
+      toast({ title: "🎁 Account Gifted!", description: `Success! ${selectedUser.name} has been provisioned with ${giftForm.size} capital.` });
+      setIsGiftModalOpen(false);
+      setGiftForm({ plan: '1-Step Pro', size: '$100,000', login: '', password: '', server: 'PrimeFunded-Live', note: '' });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Gifting Failed", description: err.message });
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   // High-Privilege Actions Handlers
@@ -717,9 +759,21 @@ export default function AdminPage() {
                                   </Badge>
                                 </td>
                                 <td className="py-4 px-6 text-right">
-                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setPreviewUserId(u.id)}>
-                                    <Eye className="w-4 h-4" />
-                                  </Button>
+                                  <div className="flex items-center justify-end gap-2">
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-amber-500 hover:text-amber-400 hover:bg-amber-500/10" onClick={() => { setSelectedUser(u); setIsGiftModalOpen(true); }}>
+                                            <Gift className="w-4 h-4" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>Gift Capital Account</TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setPreviewUserId(u.id)}>
+                                      <Eye className="w-4 h-4" />
+                                    </Button>
+                                  </div>
                                 </td>
                               </tr>
                             ))}
@@ -1065,6 +1119,69 @@ export default function AdminPage() {
              <Button className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={() => handleKycAction(selectedUser?.id, 'verified')} disabled={actionLoading}>
                {actionLoading ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-2" />} Approve & Verify
              </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Gift Account Modal */}
+      <Dialog open={isGiftModalOpen} onOpenChange={setIsGiftModalOpen}>
+        <DialogContent className="bg-card border-amber-500/20 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-amber-500 flex items-center gap-2">
+              <Gift className="w-5 h-5" /> Gift Account to {selectedUser?.name}
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground">Directly provision institutional capital credentials to this trader's profile.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Plan Type</Label>
+                <Select value={giftForm.plan} onValueChange={v => setGiftForm({...giftForm, plan: v})}>
+                  <SelectTrigger className="bg-secondary/30 h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1-Step Pro">1-Step Pro</SelectItem>
+                    <SelectItem value="2-Step Classic">2-Step Classic</SelectItem>
+                    <SelectItem value="Instant Funding">Instant Funding</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Account Size</Label>
+                <Select value={giftForm.size} onValueChange={v => setGiftForm({...giftForm, size: v})}>
+                  <SelectTrigger className="bg-secondary/30 h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="$5,000">$5,000</SelectItem>
+                    <SelectItem value="$10,000">$10,000</SelectItem>
+                    <SelectItem value="$25,000">$25,000</SelectItem>
+                    <SelectItem value="$50,000">$50,000</SelectItem>
+                    <SelectItem value="$100,000">$100,000</SelectItem>
+                    <SelectItem value="$200,000">$200,000</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>MT5 Login ID</Label>
+              <Input placeholder="Enter MT5 account number" className="bg-secondary/30" value={giftForm.login} onChange={e => setGiftForm({...giftForm, login: e.target.value})} />
+            </div>
+            <div className="space-y-2">
+              <Label>MT5 Master Password</Label>
+              <Input placeholder="Enter password" type="text" className="bg-secondary/30" value={giftForm.password} onChange={e => setGiftForm({...giftForm, password: e.target.value})} />
+            </div>
+            <div className="space-y-2">
+              <Label>MT5 Trading Server</Label>
+              <Input placeholder="PrimeFunded-Live" className="bg-secondary/30" value={giftForm.server} onChange={e => setGiftForm({...giftForm, server: e.target.value})} />
+            </div>
+            <div className="space-y-2">
+              <Label>Note to Trader (Optional)</Label>
+              <Textarea placeholder="Congratulations on your free account!" className="bg-secondary/30 min-h-[80px]" value={giftForm.note} onChange={e => setGiftForm({...giftForm, note: e.target.value})} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsGiftModalOpen(false)} disabled={actionLoading}>Cancel</Button>
+            <Button className="bg-amber-500 hover:bg-amber-600 text-black font-bold" onClick={handleGiftAccount} disabled={actionLoading}>
+              {actionLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Gift className="w-4 h-4 mr-2" />} Gift Account
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
