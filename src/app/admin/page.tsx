@@ -747,7 +747,7 @@ export default function AdminPage() {
                               <tr key={u.id} className="hover:bg-primary/5 transition-colors group">
                                 <td className="py-4 px-6">
                                   <div className="font-bold text-white">{u.name}</div>
-                                  <div className="text-[10px] text-muted-foreground font-mono">UID: {u.id}</div>
+                                  <div className="text-[10px] text-muted-foreground font-mono break-all max-w-[200px]" title={u.id}>UID: {u.id}</div>
                                 </td>
                                 <td className="py-4 px-6">
                                   <div className="text-white">{u.email}</div>

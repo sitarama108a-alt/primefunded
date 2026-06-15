@@ -231,12 +231,14 @@ export default function ProfilePage() {
                    </div>
 
                    <div 
-                    className="flex items-center gap-2 px-3 py-1 bg-secondary border border-primary/20 rounded-lg cursor-pointer hover:border-primary/50 transition-colors group" 
+                    className="flex flex-col gap-2 p-3 bg-secondary border border-primary/20 rounded-lg cursor-pointer hover:border-primary/50 transition-colors group text-left" 
                     onClick={copyTraderId}
                   >
-                    <span className="text-[10px] font-black uppercase tracking-widest text-primary">UID:</span>
-                    <span className="font-mono text-[11px] font-bold text-white truncate max-w-[150px]">{user?.uid || '--------'}</span>
-                    <Copy className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors ml-auto" />
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-primary">Firebase UID:</span>
+                      <Copy className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors" />
+                    </div>
+                    <span className="font-mono text-[11px] font-bold text-white break-all">{user?.uid || '--------'}</span>
                   </div>
                 </div>
 
