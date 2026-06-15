@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Suspense, useState, useEffect } from 'react';
@@ -13,11 +14,9 @@ import { useAuth } from '@/context/AuthContext';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { Copy, CheckCircle2, AlertTriangle, QrCode, Wallet, Mail, Hash, Loader2, Globe, Upload, FileImage } from 'lucide-react';
+import { Copy, CheckCircle2, AlertTriangle, QrCode, Mail, Hash, Loader2, Globe, Upload, FileImage, DollarSign } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { motion } from 'framer-motion';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError, type SecurityRuleContext } from '@/firebase/errors';
 import { sanitizeInput } from '@/lib/utils';
 import { uploadImageAsBase64 } from '@/lib/imageUpload';
 import { z } from 'zod';
@@ -26,6 +25,7 @@ const PaymentSchema = z.object({
   email: z.string().email("Invalid email format"),
   txHash: z.string().min(10, "Transaction hash is too short").max(100, "Transaction hash is too long"),
   network: z.string().min(1, "Please select a network"),
+  amountPaid: z.string().min(1, "Amount paid is required"),
 });
 
 const cryptoWallets = [
@@ -43,17 +43,12 @@ const cryptoWallets = [
     network: 'BNB Smart Chain',
     token: 'USDT',
     address: '0x3ab3ca43dc691f468bea91883f493cabf6da84d4'
-  },
-  {
-    network: 'Polygon',
-    token: 'USDT',
-    address: '0x3ab3ca43dc691f468bea91883f493cabf6da84d4'
   }
 ];
 
 function PaymentContent() {
   const searchParams = useSearchParams();
-  const { user } = useAuth();
+  const { user, userData } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
   
@@ -63,6 +58,7 @@ function PaymentContent() {
   
   const [txHash, setTxHash] = useState('');
   const [email, setEmail] = useState(user?.email || '');
+  const [amountPaid, setAmountPaid] = useState(price.replace('$', ''));
   const [selectedNetwork, setSelectedNetwork] = useState('');
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -97,8 +93,7 @@ function PaymentContent() {
       return;
     }
 
-    // Validation
-    const validation = PaymentSchema.safeParse({ email, txHash, network: selectedNetwork });
+    const validation = PaymentSchema.safeParse({ email, txHash, network: selectedNetwork, amountPaid });
     if (!validation.success) {
       toast({
         variant: "destructive",
@@ -120,24 +115,26 @@ function PaymentContent() {
 
       const orderData = {
         userId: user.uid,
+        userName: userData?.name || 'Unknown Trader',
         email: sanitizedEmail,
         plan: getDisplayName(plan),
-        size,
+        accountSize: size,
         price,
         txHash: sanitizedHash,
+        amountPaid: parseFloat(amountPaid),
         network: selectedNetwork,
-        paymentProof: paymentProofBase64,
+        paymentScreenshot: paymentProofBase64,
         status: 'pending',
-        date: new Date().toISOString(),
-        createdAt: serverTimestamp(),
+        submittedAt: serverTimestamp(),
+        date: new Date().toISOString()
       };
 
       const ordersRef = collection(db, 'orders');
       await addDoc(ordersRef, orderData);
       setSubmitted(true);
       toast({
-        title: "Order Submitted",
-        description: "Your payment verification is being processed.",
+        title: "Proof Submitted!",
+        description: "Your verification request has been queued for review.",
       });
     } catch (err: any) {
       toast({ variant: "destructive", title: "Submission Error", description: err.message });
@@ -149,7 +146,7 @@ function PaymentContent() {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast({ title: "Address Copied", description: "The wallet address has been copied to your clipboard." });
+    toast({ title: "Address Copied", description: "Wallet address copied." });
   };
 
   if (submitted) {
@@ -164,8 +161,8 @@ function PaymentContent() {
         </div>
         <h2 className="text-4xl font-headline font-bold mb-4 text-white">Verification Pending</h2>
         <p className="text-muted-foreground text-lg mb-10 leading-relaxed">
-          Thank you! We've received your transaction details. Our compliance team will verify your payment within 1-4 hours. 
-          Your MT5 credentials will be emailed to <span className="text-primary font-bold">{email}</span> as soon as verification is complete.
+          Your payment proof has been submitted. Our compliance team verifies transactions within 1-4 hours during business sessions. 
+          MT5 credentials will be delivered to your dashboard and email once approved.
         </p>
         <div className="flex gap-4">
           <Button size="lg" className="h-14 px-8 rounded-xl font-bold cursor-pointer" onClick={() => router.push('/dashboard')}>
@@ -182,24 +179,10 @@ function PaymentContent() {
   return (
     <div className="max-w-5xl mx-auto pb-20">
       <header className="mb-12 text-center">
-        <Badge variant="outline" className="mb-4 border-primary/30 text-primary px-4 py-1">SECURE CHECKOUT</Badge>
-        <h1 className="text-4xl font-headline font-bold mb-2 text-white">Complete Your Purchase</h1>
-        <p className="text-muted-foreground">You are purchasing a <span className="text-white font-bold">{size} {getDisplayName(plan)}</span> challenge for <span className="text-primary font-bold">{price}</span>.</p>
+        <Badge variant="outline" className="mb-4 border-primary/30 text-primary px-4 py-1">SECURE PAYMENT PORTAL</Badge>
+        <h1 className="text-4xl font-headline font-bold mb-2 text-white">Finalize Challenge</h1>
+        <p className="text-muted-foreground">Purchasing <span className="text-white font-bold">{size} {getDisplayName(plan)}</span> for <span className="text-primary font-bold">{price}</span>.</p>
       </header>
-
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-10 p-6 rounded-2xl bg-destructive/10 border border-destructive/30 flex items-start gap-4"
-      >
-        <AlertTriangle className="text-destructive w-8 h-8 flex-shrink-0" />
-        <div>
-          <h4 className="text-destructive font-bold text-lg mb-1">WARNING: NETWORK ACCURACY REQUIRED</h4>
-          <p className="text-destructive/80 text-sm leading-relaxed font-medium">
-            Send only to the correct network. Sending to the wrong network will result in <span className="underline font-bold">PERMANENT LOSS</span> of funds.
-          </p>
-        </div>
-      </motion.div>
 
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
@@ -208,20 +191,20 @@ function PaymentContent() {
               <Card key={wallet.network} className="bg-secondary/20 border-border/50 hover:border-primary/30 transition-all">
                 <CardHeader className="pb-4">
                   <div className="flex justify-between items-center">
-                    <CardTitle className="text-lg font-bold text-white">{wallet.network}</CardTitle>
-                    <Badge className="bg-primary/10 text-primary border-primary/20">{wallet.token}</Badge>
+                    <CardTitle className="text-sm font-bold text-white">{wallet.network}</CardTitle>
+                    <Badge className="bg-primary/10 text-primary border-primary/20 text-[10px]">{wallet.token}</Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="bg-white p-3 rounded-xl flex justify-center w-fit mx-auto shadow-xl">
-                    <QRCodeSVG value={wallet.address} size={140} />
+                  <div className="bg-white p-2 rounded-xl flex justify-center w-fit mx-auto shadow-xl">
+                    <QRCodeSVG value={wallet.address} size={120} />
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground">Wallet Address</Label>
+                  <div className="space-y-1.5">
+                    <Label className="text-[9px] uppercase tracking-widest font-black text-muted-foreground">Wallet Address</Label>
                     <div className="flex gap-2">
-                      <Input readOnly value={wallet.address} className="bg-background/50 font-mono text-[10px] h-10 border-border text-white" />
-                      <Button variant="secondary" size="icon" className="h-10 w-10 flex-shrink-0 cursor-pointer" onClick={() => copyToClipboard(wallet.address)}>
-                        <Copy className="w-4 h-4" />
+                      <Input readOnly value={wallet.address} className="bg-background/50 font-mono text-[9px] h-9 border-border text-white" />
+                      <Button variant="secondary" size="icon" className="h-9 w-9 flex-shrink-0 cursor-pointer" onClick={() => copyToClipboard(wallet.address)}>
+                        <Copy className="w-3.5 h-3.5" />
                       </Button>
                     </div>
                   </div>
@@ -229,86 +212,95 @@ function PaymentContent() {
               </Card>
             ))}
           </div>
+          
+          <div className="p-6 rounded-2xl bg-destructive/10 border border-destructive/20 flex items-start gap-4">
+            <AlertTriangle className="text-destructive w-6 h-6 flex-shrink-0 mt-1" />
+            <div>
+              <h4 className="text-destructive font-bold text-sm mb-1 uppercase tracking-tight">Important Note</h4>
+              <p className="text-destructive/80 text-xs leading-relaxed font-medium">
+                Ensure you send the correct asset on the correct network. USDT/USDC sent on the wrong network cannot be recovered. Always double-check your TX hash before submitting.
+              </p>
+            </div>
+          </div>
         </div>
 
         <div className="space-y-6">
           <Card className="bg-card border-primary/20 shadow-2xl sticky top-24">
             <CardHeader>
-              <CardTitle className="text-xl font-headline text-white">Verify Payment</CardTitle>
-              <CardDescription>Submit your transaction details for approval.</CardDescription>
+              <CardTitle className="text-xl font-headline text-white">Verification Form</CardTitle>
+              <CardDescription className="text-xs">Submit proof of transaction</CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-5">
                 <div className="space-y-2">
-                  <Label className="flex items-center gap-2 text-white">
-                    <Globe className="w-3 h-3 text-primary" /> Select Network
+                  <Label className="text-xs flex items-center gap-2 text-white font-bold">
+                    <Globe className="w-3.5 h-3.5 text-primary" /> Network Used
                   </Label>
                   <Select value={selectedNetwork} onValueChange={setSelectedNetwork} required>
-                    <SelectTrigger className="bg-secondary/30 h-12 rounded-xl text-white">
-                      <SelectValue placeholder="Choose payment network" />
+                    <SelectTrigger className="bg-secondary/30 h-11 rounded-xl text-white text-xs">
+                      <SelectValue placeholder="Select network" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Ethereum">Ethereum (ERC20)</SelectItem>
-                      <SelectItem value="Tron (TRC20)">Tron (TRC20)</SelectItem>
-                      <SelectItem value="BNB Smart Chain">BNB Smart Chain (BEP20)</SelectItem>
+                      <SelectItem value="ERC20">Ethereum (ERC20)</SelectItem>
+                      <SelectItem value="TRC20">Tron (TRC20)</SelectItem>
+                      <SelectItem value="BEP20">BNB Smart Chain (BEP20)</SelectItem>
                       <SelectItem value="Polygon">Polygon (MATIC)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="flex items-center gap-2 text-white">
-                    <Mail className="w-3 h-3 text-primary" /> Notification Email
+                  <Label htmlFor="amountPaid" className="text-xs flex items-center gap-2 text-white font-bold">
+                    <DollarSign className="w-3.5 h-3.5 text-primary" /> Amount Paid ($)
                   </Label>
                   <Input 
-                    id="email" 
-                    type="email" 
-                    placeholder="your@email.com" 
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    id="amountPaid" 
+                    type="number" 
+                    value={amountPaid}
+                    onChange={(e) => setAmountPaid(e.target.value)}
                     required
-                    className="bg-secondary/30 h-12 rounded-xl text-white"
+                    className="bg-secondary/30 h-11 rounded-xl text-white text-xs"
                   />
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="txHash" className="flex items-center gap-2 text-white">
-                    <Hash className="w-3 h-3 text-primary" /> Transaction Hash (TXID)
+                  <Label htmlFor="txHash" className="text-xs flex items-center gap-2 text-white font-bold">
+                    <Hash className="w-3.5 h-3.5 text-primary" /> Transaction Hash (TXID)
                   </Label>
                   <Input 
                     id="txHash" 
-                    placeholder="Paste TXID here..." 
+                    placeholder="Enter full hash..." 
                     value={txHash}
                     onChange={(e) => setTxHash(e.target.value)}
                     required
-                    className="bg-secondary/30 h-12 rounded-xl font-mono text-xs text-white"
+                    className="bg-secondary/30 h-11 rounded-xl font-mono text-[10px] text-white"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="flex items-center gap-2 text-white">
-                    <FileImage className="w-3 h-3 text-primary" /> Proof Screenshot (Optional)
+                  <Label className="text-xs flex items-center gap-2 text-white font-bold">
+                    <FileImage className="w-3.5 h-3.5 text-primary" /> Payment Screenshot
                   </Label>
-                  <div className="relative h-12 border-2 border-dashed border-border rounded-xl flex items-center justify-center bg-secondary/20 hover:bg-secondary/40 transition-colors cursor-pointer group">
+                  <div className="relative h-11 border-2 border-dashed border-border rounded-xl flex items-center justify-center bg-secondary/20 hover:bg-secondary/40 transition-colors cursor-pointer group">
                     <input 
                       type="file" 
                       accept="image/*" 
                       className="absolute inset-0 opacity-0 cursor-pointer" 
                       onChange={handleFileChange}
                     />
-                    <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground group-hover:text-primary">
-                      {proofFile ? <><CheckCircle2 className="w-4 h-4" /> {proofFile.name}</> : <><Upload className="w-3.5 h-3.5" /> Attach Screenshot</>}
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground group-hover:text-primary">
+                      {proofFile ? <><CheckCircle2 className="w-3.5 h-3.5" /> {proofFile.name}</> : <><Upload className="w-3 h-3" /> Upload Proof</>}
                     </div>
                   </div>
                 </div>
 
                 <Button 
                   type="submit" 
-                  className="w-full h-14 font-bold text-lg rounded-xl cyan-box-glow cursor-pointer" 
-                  disabled={loading || !txHash || !email || !selectedNetwork}
+                  className="w-full h-12 font-bold text-base rounded-xl cyan-box-glow cursor-pointer mt-4" 
+                  disabled={loading || !txHash || !selectedNetwork}
                 >
-                  {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}
-                  {loading ? 'Processing...' : 'Submit for Verification'}
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  {loading ? 'Submitting...' : 'Submit Payment Proof'}
                 </Button>
               </form>
             </CardContent>
@@ -331,3 +323,4 @@ export default function PaymentPage() {
     </div>
   );
 }
+
