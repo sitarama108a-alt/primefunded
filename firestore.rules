@@ -1,7 +1,9 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow public read for site-wide settings and branding
+    
+    // Public read for branding/settings
+    // This allows the logo and site name to load on the landing page
     match /settings/{document} {
       allow read: if true;
       allow write: if request.auth != null;
@@ -16,29 +18,24 @@ service cloud.firestore {
       allow read: if true;
     }
     
-    // Allow authenticated users to read everything else
+    // Allow authenticated users to read and write everything else
+    // In production, you should refine this to enforce ownership (e.g. users/{userId})
     match /{document=**} {
-      allow read: if request.auth != null;
+      allow read, write: if request.auth != null;
     }
     
-    // Allow authenticated users to write their own profile data
+    // Specific user profile rules (already covered by catch-all but kept for clarity)
     match /users/{userId} {
       allow write: if request.auth != null && request.auth.uid == userId;
       
-      // Allow access to subcollections like notifications and accounts
       match /{allSubcollections=**} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }
     
-    // Allow users to submit their own orders for verification
+    // Allow users to submit their own orders
     match /orders/{orderId} {
       allow write: if request.auth != null;
-    }
-
-    // Allow MT5 sync accounts to be readable/writable for performance updates
-    match /mt5_accounts/{accountId} {
-      allow read, write: if request.auth != null;
     }
   }
 }
