@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState, useMemo, Suspense, memo } from 'react';
+import { useEffect, useState, useMemo, Suspense, memo, useRef } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -30,6 +30,8 @@ import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { aiComplianceMonitorAlerts } from '@/ai/flows/ai-compliance-monitor-alerts';
 import { useFirestore, useCollection, useDoc } from '@/firebase';
 import { where, doc, updateDoc, setDoc, serverTimestamp, limit, orderBy } from 'firebase/firestore';
@@ -78,6 +80,58 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   const [linkCopied, setLinkCopied] = useState(false);
   const { toast } = useToast();
   const db = useFirestore();
+
+  // Secret Admin Access State
+  const [adminClickCount, setAdminClickCount] = useState(0);
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [adminPasswordInput, setAdminPasswordInput] = useState('');
+  const [adminError, setAdminError] = useState('');
+  const adminClickTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const handleLogoClick = () => {
+      setAdminClickCount((prev) => {
+        const nextCount = prev + 1;
+        
+        if (adminClickTimerRef.current) clearTimeout(adminClickTimerRef.current);
+        
+        if (nextCount >= 5) {
+          setShowAdminModal(true);
+          setAdminError('');
+          setAdminPasswordInput('');
+          return 0;
+        }
+
+        adminClickTimerRef.current = setTimeout(() => {
+          setAdminClickCount(0);
+        }, 3000);
+
+        return nextCount;
+      });
+    };
+
+    // Attach to the logo with specific hint
+    const logo = document.querySelector('img[data-ai-hint="site logo"]');
+    if (logo) {
+      logo.addEventListener('click', handleLogoClick);
+    }
+
+    return () => {
+      if (logo) logo.removeEventListener('click', handleLogoClick);
+      if (adminClickTimerRef.current) clearTimeout(adminClickTimerRef.current);
+    };
+  }, []);
+
+  const handleAdminEnter = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (adminPasswordInput === "93463962569392846256") {
+      setShowAdminModal(false);
+      router.push('/admin');
+    } else {
+      setAdminError("Access Denied");
+      setAdminPasswordInput('');
+    }
+  };
 
   const [showProfilePrompt, setShowProfilePrompt] = useState(false);
   const [completingPhone, setCompletingPhone] = useState('');
@@ -446,6 +500,50 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
           </CardContent>
         </Card>
       </main>
+
+      {/* Secret Admin Access Modal */}
+      <Dialog open={showAdminModal} onOpenChange={setShowAdminModal}>
+        <DialogContent className="bg-card border-primary/20 text-white sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-headline font-bold text-primary">Admin Access</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleAdminEnter} className="space-y-6 pt-4">
+            <div className="space-y-2">
+              <Label htmlFor="admin-pass" className="text-xs font-black uppercase tracking-widest text-muted-foreground">Terminal Key</Label>
+              <Input 
+                id="admin-pass"
+                type="password" 
+                value={adminPasswordInput} 
+                onChange={(e) => setAdminPasswordInput(e.target.value)}
+                placeholder="••••••••••••"
+                className="bg-secondary/50 border-border/50 text-white focus:border-primary/50 h-12"
+                autoFocus
+              />
+              {adminError && (
+                <p className="text-[10px] font-bold text-destructive uppercase tracking-widest animate-pulse">
+                  {adminError}
+                </p>
+              )}
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button 
+                type="button" 
+                variant="ghost" 
+                onClick={() => setShowAdminModal(false)}
+                className="font-bold text-muted-foreground hover:text-white"
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                className="bg-primary hover:bg-primary/90 font-bold cyan-box-glow"
+              >
+                Enter Terminal
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
