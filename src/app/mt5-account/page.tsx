@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -21,7 +20,9 @@ import {
   Monitor,
   Smartphone,
   ShieldCheck,
-  Clock
+  Clock,
+  XCircle,
+  Loader2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { motion } from 'framer-motion';
@@ -32,15 +33,18 @@ export default function MT5AccountPage() {
   const [showPassword, setShowPassword] = useState(false);
 
   const isActive = userData?.accountStatus === 'active' && userData?.mt5Login;
+  const isBreached = userData?.accountStatus === 'breached';
 
   const copyToClipboard = (label: string, text: string) => {
+    if (!text) return;
     navigator.clipboard.writeText(text);
     toast({ title: "Copied", description: `${label} copied to clipboard.` });
   };
 
   const copyTraderId = () => {
-    if (userData?.uid) {
-      navigator.clipboard.writeText(userData.uid);
+    const id = userData?.uid || userData?.traderId;
+    if (id) {
+      navigator.clipboard.writeText(id);
       toast({ title: "Copied!", description: "Trader UID copied to clipboard." });
     }
   };
@@ -48,7 +52,10 @@ export default function MT5AccountPage() {
   if (authLoading) {
     return (
       <div className="flex min-h-screen bg-background items-center justify-center">
-        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-10 h-10 animate-spin text-primary" />
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground">Connecting to Terminal Node...</p>
+        </div>
       </div>
     );
   }
@@ -57,7 +64,26 @@ export default function MT5AccountPage() {
     <div className="flex min-h-screen bg-background">
       <Navigation />
       <main className="flex-1 p-8 overflow-y-auto custom-scrollbar">
-        {!isActive ? (
+        {isBreached ? (
+          <div className="h-full flex flex-col items-center justify-center text-center max-w-2xl mx-auto space-y-8">
+            <div className="w-24 h-24 rounded-full bg-destructive/10 border border-destructive/20 flex items-center justify-center text-destructive animate-pulse">
+              <XCircle className="w-12 h-12" />
+            </div>
+            <div className="space-y-4">
+              <h1 className="text-4xl font-headline font-bold text-white">Terminal Offline</h1>
+              <p className="text-muted-foreground text-lg leading-relaxed">
+                Your credentials have been revoked due to a hard rule violation. Access to the trading infrastructure is suspended.
+              </p>
+              <div className="p-4 bg-destructive/10 rounded-xl border border-destructive/20 inline-flex items-center gap-3">
+                <AlertTriangle className="w-5 h-5 text-destructive" />
+                <span className="text-sm font-bold text-white uppercase tracking-tight">Status: Breached</span>
+              </div>
+            </div>
+            <Button variant="outline" className="font-bold rounded-xl border-border/50" asChild>
+              <a href="/support">Appeal or Reset</a>
+            </Button>
+          </div>
+        ) : !isActive ? (
           <div className="h-full flex flex-col items-center justify-center text-center max-w-2xl mx-auto space-y-8">
             <div className="w-24 h-24 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 animate-pulse">
               <Clock className="w-12 h-12" />
@@ -65,31 +91,35 @@ export default function MT5AccountPage() {
             <div className="space-y-4">
               <h1 className="text-4xl font-headline font-bold text-white">Awaiting Activation</h1>
               <p className="text-muted-foreground text-lg leading-relaxed">
-                Your account is currently under review by our compliance team. Once your payment is verified, your institutional credentials will appear here instantly.
+                Our desk is currently processing your challenge. Your institutional credentials will appear here automatically once verified.
               </p>
-              <div className="p-4 bg-secondary/30 rounded-xl border border-border inline-flex items-center gap-3">
-                <AlertTriangle className="w-5 h-5 text-amber-500" />
-                <span className="text-sm font-bold text-white uppercase tracking-tight">ETA: 1-4 Hours</span>
+              <div className="p-4 bg-secondary/30 rounded-xl border border-border inline-flex items-center gap-3 text-amber-500">
+                <AlertTriangle className="w-5 h-5" />
+                <span className="text-sm font-bold text-white uppercase tracking-tight">Avg. Time: 5 - 30 Minutes</span>
               </div>
             </div>
-            <Button variant="outline" className="font-bold rounded-xl border-border/50" asChild>
-              <a href="/support">Need Help?</a>
-            </Button>
+            <div className="grid grid-cols-2 gap-4 w-full max-w-md">
+              <DownloadBtn icon={<Monitor />} label="PC" href="https://www.metatrader5.com/en/download" />
+              <DownloadBtn icon={<Smartphone />} label="Mobile" href="https://www.metatrader5.com/en/download" />
+            </div>
           </div>
         ) : (
           <>
             <motion.div 
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-8 p-4 rounded-xl bg-accent/20 border border-accent/30 flex items-center gap-4"
+              className="mb-8 p-4 rounded-xl bg-accent/20 border border-accent/30 flex items-center justify-between"
             >
-              <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center text-accent-foreground shadow-[0_0_20px_rgba(17,179,245,0.4)]">
-                <CheckCircle2 className="w-6 h-6" />
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center text-accent-foreground shadow-[0_0_20px_rgba(17,179,245,0.4)]">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-white">🎉 MT5 Account Active</h3>
+                  <p className="text-sm text-muted-foreground">Institutional node synchronized. You can start trading now.</p>
+                </div>
               </div>
-              <div>
-                <h3 className="font-bold text-lg text-white">🎉 Account Fully Active</h3>
-                <p className="text-sm text-muted-foreground">Your credentials have been provisioned. Welcome to the desk.</p>
-              </div>
+              <Badge className="bg-accent text-accent-foreground font-black px-4 h-8">LIVE NODE</Badge>
             </motion.div>
 
             <header className="mb-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
@@ -103,7 +133,7 @@ export default function MT5AccountPage() {
               >
                 <div className="space-y-0.5">
                   <p className="text-[10px] font-black uppercase tracking-widest text-primary">Trader UID</p>
-                  <p className="font-mono text-sm font-bold text-white">{userData?.uid || '--------'}</p>
+                  <p className="font-mono text-sm font-bold text-white">{userData?.uid || userData?.traderId || '--------'}</p>
                 </div>
                 <Copy className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
               </div>
@@ -120,7 +150,6 @@ export default function MT5AccountPage() {
                       </CardTitle>
                       <CardDescription className="text-primary font-bold uppercase text-[10px] tracking-widest">Login: {userData.mt5Login}</CardDescription>
                     </div>
-                    <Badge className="bg-accent text-accent-foreground font-black px-4 py-1.5 shadow-[0_0_15px_rgba(17,179,245,0.2)]">ACTIVE</Badge>
                   </CardHeader>
                   <CardContent className="space-y-8">
                     <div className="grid md:grid-cols-2 gap-8 p-8 rounded-2xl bg-background/50 border border-white/5">
@@ -179,26 +208,6 @@ export default function MT5AccountPage() {
                     </div>
                   </CardContent>
                 </Card>
-
-                <Card className="bg-secondary/20 border-border/50">
-                  <CardHeader><CardTitle className="text-lg text-white">Connection Protocol</CardTitle></CardHeader>
-                  <CardContent className="space-y-4">
-                    {[
-                      "Install MetaTrader 5 on your preferred device.",
-                      "Go to 'File' → 'Login to Trade Account'.",
-                      "Select 'PrimeFunded-Live' (or manually type server name).",
-                      "Paste your Credentials from above. Ensure no spaces are included.",
-                      "Once connected, the status icon (bottom right) will turn green."
-                    ].map((step, i) => (
-                      <div key={i} className="flex gap-4 items-start group">
-                        <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary text-xs font-black border border-primary/20 shrink-0 group-hover:scale-110 transition-transform">
-                          {i + 1}
-                        </div>
-                        <p className="text-sm text-muted-foreground leading-relaxed pt-1">{step}</p>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
               </div>
 
               <div className="space-y-6">
@@ -208,35 +217,21 @@ export default function MT5AccountPage() {
                   </div>
                   <CardHeader>
                     <CardTitle className="text-amber-500 flex items-center gap-2 text-lg font-headline">
-                      <AlertTriangle className="w-5 h-5" /> Rules Summary
+                      <AlertTriangle className="w-5 h-5" /> Quick Rules
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-5">
-                    <RuleItem label="Plan Stage" value="Funded (Phase 3)" />
-                    <RuleItem label="Daily Drawdown" value="3% Max" />
-                    <RuleItem label="Total Drawdown" value="6% Max" />
-                    <RuleItem label="Floating Loss Rule" value="1% Threshold" />
-                    
-                    <div className="pt-4 border-t border-amber-500/10 space-y-3">
-                      <p className="text-[10px] uppercase font-black text-amber-500 tracking-widest">Restricted Activity</p>
-                      <ul className="text-xs text-muted-foreground space-y-2.5">
-                        <li className="flex items-center gap-2"><XCircle className="w-3 h-3 text-destructive" /> No Martingale Strategies</li>
-                        <li className="flex items-center gap-2"><XCircle className="w-3 h-3 text-destructive" /> No Signal Copying</li>
-                        <li className="flex items-center gap-2"><XCircle className="w-3 h-3 text-destructive" /> Hold Trades {'>'} 2 Minutes</li>
+                  <CardContent className="space-y-4">
+                    <RuleItem label="Daily Drawdown" value="3.0%" />
+                    <RuleItem label="Max Drawdown" value="6.0%" />
+                    <RuleItem label="Floating Loss" value="1.0%" />
+                    <div className="pt-4 border-t border-amber-500/10">
+                      <p className="text-[10px] font-black uppercase text-amber-500 tracking-widest mb-3">Restrictions</p>
+                      <ul className="text-[11px] space-y-2 text-muted-foreground">
+                        <li className="flex items-center gap-2"><XCircle className="w-3 h-3 text-destructive" /> No Martingale</li>
+                        <li className="flex items-center gap-2"><XCircle className="w-3 h-3 text-destructive" /> No EA/Signal Copying</li>
+                        <li className="flex items-center gap-2"><CheckCircle2 className="w-3 h-3 text-accent" /> News Trading OK</li>
                       </ul>
                     </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-primary/5 border-primary/20">
-                  <CardHeader><CardTitle className="text-lg text-white">Desk Support</CardTitle></CardHeader>
-                  <CardContent className="space-y-4">
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      Facing connection issues or server timeout? Our desk specialists are available 24/7 to assist with credential resets or routing updates.
-                    </p>
-                    <Button variant="outline" className="w-full h-11 font-bold border-primary/30 text-primary hover:bg-primary/10" asChild>
-                      <a href="/support">Open Support Desk</a>
-                    </Button>
                   </CardContent>
                 </Card>
               </div>
@@ -256,8 +251,8 @@ function CredentialField({ icon, label, value, onCopy }: { icon: React.ReactNode
         <span>{label}</span>
       </div>
       <div className="flex items-center justify-between">
-        <span className="font-mono text-lg font-bold text-white tracking-tight">{value}</span>
-        {onCopy && (
+        <span className="font-mono text-lg font-bold text-white tracking-tight">{value || 'Pending...'}</span>
+        {onCopy && value && (
           <Button variant="ghost" size="icon" className="h-9 w-9 text-primary hover:bg-primary/10 cursor-pointer" onClick={onCopy}>
             <Copy className="w-4 h-4" />
           </Button>

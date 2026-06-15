@@ -3,39 +3,62 @@ service cloud.firestore {
   match /databases/{database}/documents {
     
     // Public read for branding/settings
-    // This allows the logo and site name to load on the landing page
     match /settings/{document} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if false; // Only via Admin SDK
     }
 
-    // Allow public read for leaderboard and rankings
-    match /leaderboard/{document} {
-      allow read: if true;
-    }
-
-    match /ranking/{document} {
-      allow read: if true;
-    }
-    
-    // Allow authenticated users to read and write everything else
-    // In production, you should refine this to enforce ownership (e.g. users/{userId})
-    match /{document=**} {
-      allow read, write: if request.auth != null;
-    }
-    
-    // Specific user profile rules (already covered by catch-all but kept for clarity)
     match /users/{userId} {
-      allow write: if request.auth != null && request.auth.uid == userId;
+      // User can only read and write their own profile
+      allow read, write: if request.auth != null && request.auth.uid == userId;
       
-      match /{allSubcollections=**} {
+      match /notifications/{notifId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      match /accounts/{accId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false; // Managed by terminal/admin
       }
     }
     
-    // Allow users to submit their own orders
+    match /mt5_accounts/{accountId} {
+       // Users should be able to read their own sync data
+       allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+       allow write: if false; // Managed by EA/API
+    }
+
     match /orders/{orderId} {
+      // User can create orders and read their own
+      allow create: if request.auth != null;
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+
+    match /payouts/{payoutId} {
+      allow create: if request.auth != null;
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+
+    match /referrals/{refId} {
+      allow read: if request.auth != null && (resource.data.referrerId == request.auth.uid || resource.data.referredUserId == request.auth.uid);
+    }
+    
+    match /referralCodes/{code} {
+      allow read: if true; // Public for signup validation
       allow write: if request.auth != null;
+    }
+    
+    match /breaches/{breachId} {
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+    
+    match /broadcasts/{doc} {
+      allow read: if request.auth != null;
+    }
+
+    // Allow admin terminal to function with full access (fallback for testing)
+    match /{document=**} {
+      allow read, write: if request.auth != null && request.auth.token.admin == true;
     }
   }
 }
