@@ -26,6 +26,8 @@ import { doc, setDoc, collection, getDocs, query, orderBy, limit } from 'firebas
 import { db } from '@/lib/firebase';
 import { useBrandSettings } from '@/hooks/use-brand-settings';
 import { uploadImageAsBase64 } from '@/lib/imageUpload';
+import { useAuth } from '@/context/AuthContext';
+import { redirect } from 'next/navigation';
 
 const StatCard = memo(function StatCard({ title, value, icon, color }: { title: string, value: string | number, icon: any, color: string }) {
   const colors: any = {
@@ -50,6 +52,13 @@ const StatCard = memo(function StatCard({ title, value, icon, color }: { title: 
 });
 
 export default function AdminPage() {
+  const { user, loading: authLoading } = useAuth();
+  
+  // Authorization Guard
+  if (!authLoading && user && user.email !== 'nomis108a@gmail.com' && user.email !== 'sitarama108a@gmail.com') {
+    redirect('/dashboard');
+  }
+
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminPasswordInput, setAdminPasswordInput] = useState('');
