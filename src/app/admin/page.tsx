@@ -324,6 +324,43 @@ export default function AdminPage() {
     setActionLoading(false);
   };
 
+  const handleFixUids = async () => {
+    setActionLoading(true);
+    try {
+      const usersRef = collection(db, 'users');
+      const snapshot = await getDocs(usersRef);
+      const updates: Promise<void>[] = [];
+      
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const currentUid = data.uid;
+        // Check if UID is missing, not 8 digits, or not numeric
+        const needsNewUid = !currentUid || String(currentUid).length !== 8 || isNaN(Number(currentUid));
+        
+        if (needsNewUid) {
+          const newUid = Math.floor(10000000 + Math.random() * 90000000).toString();
+          updates.push(updateDoc(doc(db, 'users', docSnap.id), { 
+            uid: newUid,
+            traderId: newUid,
+            updatedAt: serverTimestamp() 
+          }));
+        }
+      });
+
+      if (updates.length > 0) {
+        await Promise.all(updates);
+        toast({ title: "Fix Complete", description: `Synchronized 8-digit UIDs for ${updates.length} traders.` });
+        loadData();
+      } else {
+        toast({ title: "Status: Valid", description: "All trader UIDs are already in the 8-digit numeric format." });
+      }
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Operation Failed", description: err.message });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Gift Account Handler
   const handleGiftAccount = async () => {
     if (!selectedUser || !giftForm.login || !giftForm.password) {
@@ -727,6 +764,16 @@ export default function AdminPage() {
                   <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
                     Showing {filteredUsers.length} of {adminData?.users?.length || 0} users
                   </p>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="h-8 text-[10px] font-black uppercase tracking-widest border-primary/30 text-primary hover:bg-primary/10"
+                    onClick={handleFixUids}
+                    disabled={actionLoading}
+                  >
+                    {actionLoading ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <Settings className="w-3 h-3 mr-2" />}
+                    🔧 Fix All UIDs
+                  </Button>
                 </div>
                 <Card className="border-border/50 bg-card/30">
                   <CardContent className="p-0">
@@ -928,7 +975,7 @@ export default function AdminPage() {
                             <h4 className="font-bold text-white">{logoFile ? 'Review Selected Logo' : 'Current Logo'}</h4>
                             <p className="text-xs text-muted-foreground">Displayed in navbar, auth screens, and loading sequence.</p>
                           </div>
-                          <div className="flex flex-wrap gap-3 justify-center md:justify-start">
+                          <div className="flex wrap gap-3 justify-center md:justify-start">
                             <Button 
                               variant="secondary" 
                               size="sm" 
@@ -1167,7 +1214,7 @@ export default function AdminPage() {
             </div>
             <div className="space-y-2">
               <Label>MT5 Master Password</Label>
-              <Input placeholder="Enter password" type="text" className="bg-secondary/30" value={giftForm.password} onChange={e => setAssignForm({...assignForm, password: e.target.value})} />
+              <Input placeholder="Enter password" type="text" className="bg-secondary/30" value={giftForm.password} onChange={e => setGiftForm({...giftForm, password: e.target.value})} />
             </div>
             <div className="space-y-2">
               <Label>MT5 Trading Server</Label>
