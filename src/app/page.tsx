@@ -153,37 +153,64 @@ export default function Home() {
 
       {/* Community Section */}
       <section className="py-24 relative overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 text-center">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true }}
-            className="p-16 rounded-[3rem] bg-gradient-to-br from-[#5865F2] to-blue-700 text-white relative overflow-hidden group shadow-2xl shadow-[#5865F2]/20"
-          >
-            <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 blur-[120px] -mr-48 -mt-48 rounded-full" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-black/10 blur-[100px] -ml-32 -mb-32 rounded-full" />
-            
-            <div className="relative z-10 space-y-8 max-w-3xl mx-auto">
-              <div className="w-20 h-20 bg-white/20 backdrop-blur-xl rounded-2xl flex items-center justify-center mx-auto mb-8 animate-float">
-                <DiscordIcon className="w-12 h-12" />
-              </div>
-              <h2 className="text-5xl font-headline font-bold">Join Our Discord Community</h2>
-              <p className="text-xl text-white/80 leading-relaxed">
-                Connect with 1,000+ elite institutional traders. Share setups, discuss market volatility, and get direct support from our desk specialists.
-              </p>
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-4">
-                <Button size="lg" className="h-16 px-12 text-lg rounded-2xl font-bold bg-white text-[#5865F2] hover:bg-white/90 transition-all hover:scale-105" asChild>
-                  <a href={branding.discordUrl} target="_blank" rel="noopener noreferrer">
-                    Join Community Now <DiscordIcon className="ml-2 w-6 h-6" />
-                  </a>
-                </Button>
-                <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-white/70">
-                   <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                   142 Traders Online Now
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Discord Card */}
+            <motion.div 
+              initial={{ opacity: 0, x: -20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="p-12 rounded-[3rem] bg-gradient-to-br from-[#5865F2] to-blue-700 text-white relative overflow-hidden group shadow-2xl shadow-[#5865F2]/20 text-center"
+            >
+              <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 blur-[120px] -mr-32 -mt-32 rounded-full" />
+              <div className="absolute bottom-0 left-0 w-48 h-48 bg-black/10 blur-[100px] -ml-24 -mb-24 rounded-full" />
+              
+              <div className="relative z-10 space-y-8">
+                <div className="w-20 h-20 bg-white/20 backdrop-blur-xl rounded-2xl flex items-center justify-center mx-auto mb-8 animate-float">
+                  <DiscordIcon className="w-12 h-12" />
+                </div>
+                <h2 className="text-4xl font-headline font-bold">Join Our Discord Community</h2>
+                <p className="text-xl text-white/80 leading-relaxed max-w-md mx-auto">
+                  Connect with 1,000+ elite institutional traders. Share setups and get direct support from our desk specialists.
+                </p>
+                <div className="pt-4">
+                  <Button size="lg" className="h-16 px-12 text-lg rounded-2xl font-bold bg-white text-[#5865F2] hover:bg-white/90 transition-all hover:scale-105 w-full sm:w-auto" asChild>
+                    <a href="https://discord.gg/G2jfSwygC9" target="_blank" rel="noopener noreferrer">
+                      Join Community Now <DiscordIcon className="ml-2 w-6 h-6" />
+                    </a>
+                  </Button>
                 </div>
               </div>
-            </div>
-          </motion.div>
+            </motion.div>
+
+            {/* Instagram Card */}
+            <motion.div 
+              initial={{ opacity: 0, x: 20 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="p-12 rounded-[3rem] bg-gradient-to-br from-[#833ab4] via-[#fd1d1d] to-[#fcb045] text-white relative overflow-hidden group shadow-2xl shadow-orange-500/20 text-center"
+            >
+              <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 blur-[120px] -mr-32 -mt-32 rounded-full" />
+              <div className="absolute bottom-0 left-0 w-48 h-48 bg-black/10 blur-[100px] -ml-24 -mb-24 rounded-full" />
+              
+              <div className="relative z-10 space-y-8">
+                <div className="w-20 h-20 bg-white/20 backdrop-blur-xl rounded-2xl flex items-center justify-center mx-auto mb-8 animate-float">
+                  <Instagram className="w-12 h-12" />
+                </div>
+                <h2 className="text-4xl font-headline font-bold">Follow Us on Instagram</h2>
+                <p className="text-xl text-white/80 leading-relaxed max-w-md mx-auto">
+                  Get daily trading insights, funded trader stories and exclusive offers from our professional desk team.
+                </p>
+                <div className="pt-4">
+                  <Button size="lg" className="h-16 px-12 text-lg rounded-2xl font-bold bg-white text-orange-600 hover:bg-white/90 transition-all hover:scale-105 w-full sm:w-auto" asChild>
+                    <a href="https://instagram.com/primefunded" target="_blank" rel="noopener noreferrer">
+                      Follow @primefunded <Instagram className="ml-2 w-6 h-6" />
+                    </a>
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
         </div>
       </section>
 
