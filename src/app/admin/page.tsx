@@ -15,7 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 import { 
-  Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Send, User, History, Award, BarChart3, Search, ExternalLink, RefreshCw, Copy, Loader2, Image as ImageIcon, Settings, Upload, Save, Instagram, MessageCircle, Phone, SearchX, AlertTriangle, Megaphone, DollarSign
+  Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Send, User, History, Award, BarChart3, Search, ExternalLink, RefreshCw, Copy, Loader2, Image as ImageIcon, Settings, Upload, Save, Instagram, MessageCircle, Phone, SearchX, AlertTriangle, Megaphone, DollarSign, Lock
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
@@ -51,7 +51,12 @@ const StatCard = memo(function StatCard({ title, value, icon, color }: { title: 
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [password, setPassword] = useState('');
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [adminPasswordInput, setAdminPasswordInput] = useState('');
+  const [adminError, setAdminError] = useState('');
+  const [adminClickCount, setAdminClickCount] = useState(0);
+  const adminClickTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const [activeTab, setActiveTab] = useState('overview');
   const [searchTerm, setSearchTerm] = useState('');
   const [previewUserId, setPreviewUserId] = useState<string | null>(null);
@@ -81,18 +86,71 @@ export default function AdminPage() {
   });
   const [savingLinks, setSavingLinks] = useState(false);
 
+  // Secret Admin Access via Click Logic
   useEffect(() => {
-    if (branding && !branding.loading) {
-      setSocialLinks({
-        discord: branding.discordUrl || '',
-        instagram: branding.instagramUrl || '',
-        telegram: branding.telegramUrl || '',
-        whatsapp: branding.whatsappUrl || ''
+    const handleLogoClick = () => {
+      setAdminClickCount((prev) => {
+        const nextCount = prev + 1;
+        if (adminClickTimerRef.current) clearTimeout(adminClickTimerRef.current);
+        
+        if (nextCount >= 5) {
+          setShowAdminModal(true);
+          setAdminError('');
+          setAdminPasswordInput('');
+          return 0;
+        }
+
+        adminClickTimerRef.current = setTimeout(() => {
+          setAdminClickCount(0);
+        }, 3000);
+
+        return nextCount;
       });
+    };
+
+    // Attach to the logo area in the navigation sidebar
+    const logoArea = document.querySelector('img[data-ai-hint="site logo"]')?.parentElement;
+    if (logoArea) {
+      logoArea.addEventListener('click', handleLogoClick);
     }
-  }, [branding]);
+
+    return () => {
+      if (logoArea) logoArea.removeEventListener('click', handleLogoClick);
+      if (adminClickTimerRef.current) clearTimeout(adminClickTimerRef.current);
+    };
+  }, []);
+
+  const handleAdminAuth = (e: React.FormEvent) => {
+    e.preventDefault();
+    const masterKey = "93463962569392846256";
+    if (adminPasswordInput === masterKey) {
+      setIsAuthenticated(true);
+      setShowAdminModal(false);
+      sessionStorage.setItem('admin_master_key', adminPasswordInput);
+      toast({ title: "Admin Access Granted" });
+    } else {
+      setAdminError("❌ Access Denied");
+      setAdminPasswordInput('');
+      toast({ variant: "destructive", title: "Access Denied" });
+    }
+  };
+
+  useEffect(() => {
+    const saved = localStorage.getItem('admin_active_tab');
+    if (saved) setActiveTab(saved);
+    
+    const savedPass = sessionStorage.getItem('admin_master_key');
+    const masterKey = "93463962569392846256";
+    if (savedPass && savedPass === masterKey) {
+      setIsAuthenticated(true);
+    } else {
+      // Show modal automatically if visiting unauthenticated
+      setShowAdminModal(true);
+    }
+  }, []);
 
   const loadData = async () => {
+    if (!isAuthenticated) return;
     setIsLoading(true);
     try {
       const fetchCollectionData = async (collName: string, orderByField?: string) => {
@@ -144,17 +202,6 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
-    const saved = localStorage.getItem('admin_active_tab');
-    if (saved) setActiveTab(saved);
-    
-    const savedPass = sessionStorage.getItem('admin_master_key');
-    const masterKey = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "93463962569392846256";
-    if (savedPass && savedPass === masterKey) {
-      setIsAuthenticated(true);
-    }
-  }, []);
-
-  useEffect(() => {
     if (isAuthenticated) {
       loadData();
       const interval = setInterval(loadData, 60000);
@@ -165,18 +212,6 @@ export default function AdminPage() {
   const handleTabChange = (val: string) => {
     setActiveTab(val);
     localStorage.setItem('admin_active_tab', val);
-  };
-
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    const masterKey = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "93463962569392846256";
-    if (password === masterKey) {
-      setIsAuthenticated(true);
-      sessionStorage.setItem('admin_master_key', password);
-      toast({ title: "Admin Access Granted" });
-    } else {
-      toast({ variant: "destructive", title: "Access Denied" });
-    }
   };
 
   const filteredUsers = useMemo(() => {
@@ -322,34 +357,20 @@ export default function AdminPage() {
     );
   }
 
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="w-full max-md border-primary/20 bg-card/50 backdrop-blur-xl">
-          <CardHeader className="text-center">
-            <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-primary/20">
-              <Shield className="text-primary w-8 h-8" />
-            </div>
-            <CardTitle className="text-2xl font-headline font-bold text-white">Admin Portal</CardTitle>
-            <CardDescription>Enter master credentials to access the terminal.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleLogin} className="space-y-6">
-              <div className="space-y-2">
-                <Label className="text-white text-xs uppercase font-black tracking-widest">Master Key</Label>
-                <input type="password" placeholder="••••••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="flex h-12 w-full rounded-md border border-input bg-secondary/30 px-3 py-2 text-white text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" />
-              </div>
-              <Button type="submit" className="w-full h-12 font-bold cyan-box-glow cursor-pointer">Access Terminal</Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex min-h-screen bg-background overflow-hidden">
+    <div className="flex min-h-screen bg-background overflow-hidden relative">
       <Navigation />
+      
+      {!isAuthenticated && (
+        <div className="absolute inset-0 z-40 bg-background/60 backdrop-blur-xl flex items-center justify-center">
+          <div className="text-center space-y-4 animate-pulse">
+            <Lock className="w-12 h-12 text-muted-foreground mx-auto opacity-20" />
+            <p className="text-xs font-black uppercase tracking-[0.3em] text-muted-foreground">Admin Terminal Restricted</p>
+            <p className="text-[10px] text-muted-foreground/60">Tap branding to authenticate</p>
+          </div>
+        </div>
+      )}
+
       <main className="flex-1 flex flex-col min-h-0">
         <div className="p-8 pb-4 shrink-0">
           <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
@@ -367,7 +388,7 @@ export default function AdminPage() {
                    onChange={e => setSearchTerm(e.target.value)} 
                  />
                </div>
-               <Button variant="outline" size="icon" onClick={loadData} disabled={isLoading} className="bg-secondary/50 border-border/50">
+               <Button variant="outline" size="icon" onClick={loadData} disabled={isLoading || !isAuthenticated} className="bg-secondary/50 border-border/50">
                  <RefreshCw className={cn("w-4 h-4 text-white", isLoading && "animate-spin")} />
                </Button>
             </div>
@@ -388,521 +409,570 @@ export default function AdminPage() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-8 pt-0 custom-scrollbar">
-          
-          <div className={cn("space-y-8", activeTab === 'overview' ? "block" : "hidden")}>
-            {isLoading && !adminData ? <LoadingGrid /> : !stats ? <div className="text-center py-20 text-muted-foreground">Sync required.</div> : (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <StatCard title="Total Revenue" value={`$${stats.revenue.toLocaleString()}`} icon={<Wallet />} color="blue" />
-                  <StatCard title="Total Traders" value={stats.totalUsers} icon={<Users />} color="purple" />
-                  <StatCard title="Verified Challenges" value={stats.activeChallenges} icon={<Award />} color="green" />
-                  <StatCard title="Pending Payments" value={stats.pendingOrders} icon={<Clock />} color="amber" />
-                </div>
+          {isAuthenticated ? (
+            <>
+              <div className={cn("space-y-8", activeTab === 'overview' ? "block" : "hidden")}>
+                {isLoading && !adminData ? <LoadingGrid /> : !stats ? <div className="text-center py-20 text-muted-foreground">Sync required.</div> : (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                      <StatCard title="Total Revenue" value={`$${stats.revenue.toLocaleString()}`} icon={<Wallet />} color="blue" />
+                      <StatCard title="Total Traders" value={stats.totalUsers} icon={<Users />} color="purple" />
+                      <StatCard title="Verified Challenges" value={stats.activeChallenges} icon={<Award />} color="green" />
+                      <StatCard title="Pending Payments" value={stats.pendingOrders} icon={<Clock />} color="amber" />
+                    </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  <Card className="border-border/50 bg-card/30">
-                    <CardHeader className="flex flex-row items-center justify-between">
-                      <div>
-                        <CardTitle className="text-white text-lg">Newest Traders</CardTitle>
-                        <CardDescription>Latest registrations in the last 24h.</CardDescription>
-                      </div>
-                      <Button variant="ghost" size="sm" className="text-primary font-bold" onClick={() => handleTabChange('users')}>View All</Button>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                      <div className="divide-y divide-border/30">
-                        {adminData.users.slice(0, 5).map((u: any) => (
-                          <div key={u.id} className="p-4 flex items-center justify-between hover:bg-white/5 transition-colors group">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center font-bold text-xs border border-border group-hover:border-primary/20">
-                                {u.name?.slice(0, 2).toUpperCase()}
-                              </div>
-                              <div>
-                                <p className="text-sm font-bold text-white">{u.name}</p>
-                                <p className="text-[10px] text-muted-foreground">{u.email}</p>
-                              </div>
-                            </div>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => setPreviewUserId(u.id)}>
-                              <Eye className="w-4 h-4" />
-                            </Button>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                      <Card className="border-border/50 bg-card/30">
+                        <CardHeader className="flex flex-row items-center justify-between">
+                          <div>
+                            <CardTitle className="text-white text-lg">Newest Traders</CardTitle>
+                            <CardDescription>Latest registrations in the last 24h.</CardDescription>
                           </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-border/50 bg-card/30">
-                    <CardHeader className="flex flex-row items-center justify-between">
-                      <div>
-                        <CardTitle className="text-white text-lg">Latest Orders</CardTitle>
-                        <CardDescription>Most recent challenge purchases.</CardDescription>
-                      </div>
-                      <Button variant="ghost" size="sm" className="text-primary font-bold" onClick={() => handleTabChange('orders')}>View All</Button>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                      <div className="divide-y divide-border/30">
-                        {adminData.orders.slice(0, 5).map((o: any) => (
-                          <div key={o.id} className="p-4 flex items-center justify-between hover:bg-white/5 transition-colors">
-                            <div>
-                              <p className="text-sm font-bold text-white">{o.plan} ({o.size})</p>
-                              <p className="text-[10px] text-muted-foreground">{o.email}</p>
-                            </div>
-                            <Badge className={o.status === 'verified' ? "bg-accent text-accent-foreground" : "bg-amber-500 text-white"}>
-                              {o.status.toUpperCase()}
-                            </Badge>
+                          <Button variant="ghost" size="sm" className="text-primary font-bold" onClick={() => handleTabChange('users')}>View All</Button>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                          <div className="divide-y divide-border/30">
+                            {adminData.users.slice(0, 5).map((u: any) => (
+                              <div key={u.id} className="p-4 flex items-center justify-between hover:bg-white/5 transition-colors group">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center font-bold text-xs border border-border group-hover:border-primary/20">
+                                    {u.name?.slice(0, 2).toUpperCase()}
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-bold text-white">{u.name}</p>
+                                    <p className="text-[10px] text-muted-foreground">{u.email}</p>
+                                  </div>
+                                </div>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => setPreviewUserId(u.id)}>
+                                  <Eye className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              </>
-            )}
-          </div>
+                        </CardContent>
+                      </Card>
 
-          <div className={cn("space-y-6", activeTab === 'users' ? "block" : "hidden")}>
-            <div className="flex justify-between items-center mb-4">
-              <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
-                Showing {filteredUsers.length} of {adminData?.users?.length || 0} users
-              </p>
-            </div>
-            <Card className="border-border/50 bg-card/30">
-              <CardContent className="p-0">
-                {isLoading ? <LoadingTable /> : filteredUsers.length === 0 ? (
-                  <EmptyState message="No users found matching your search." />
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                      <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
-                        <tr>
-                          <th className="py-4 px-6">Trader Name</th>
-                          <th className="py-4 px-6">Email / Phone</th>
-                          <th className="py-4 px-6">Referral Code</th>
-                          <th className="py-4 px-6 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border/30">
-                        {filteredUsers.map((u: any) => (
-                          <tr key={u.id} className="hover:bg-primary/5 transition-colors group">
-                            <td className="py-4 px-6">
-                              <div className="font-bold text-white">{u.name}</div>
-                              <div className="text-[10px] text-muted-foreground font-mono">{u.id}</div>
-                            </td>
-                            <td className="py-4 px-6">
-                              <div className="text-white">{u.email}</div>
-                              <div className="text-xs text-muted-foreground">{u.phone || 'No Phone'}</div>
-                            </td>
-                            <td className="py-4 px-6">
-                              <Badge variant="outline" className="font-mono text-xs border-primary/20 text-primary">
-                                {u.referralCode}
-                              </Badge>
-                            </td>
-                            <td className="py-4 px-6 text-right">
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setPreviewUserId(u.id)}>
-                                <Eye className="w-4 h-4" />
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                      <Card className="border-border/50 bg-card/30">
+                        <CardHeader className="flex flex-row items-center justify-between">
+                          <div>
+                            <CardTitle className="text-white text-lg">Latest Orders</CardTitle>
+                            <CardDescription>Most recent challenge purchases.</CardDescription>
+                          </div>
+                          <Button variant="ghost" size="sm" className="text-primary font-bold" onClick={() => handleTabChange('orders')}>View All</Button>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                          <div className="divide-y divide-border/30">
+                            {adminData.orders.slice(0, 5).map((o: any) => (
+                              <div key={o.id} className="p-4 flex items-center justify-between hover:bg-white/5 transition-colors">
+                                <div>
+                                  <p className="text-sm font-bold text-white">{o.plan} ({o.size})</p>
+                                  <p className="text-[10px] text-muted-foreground">{o.email}</p>
+                                </div>
+                                <Badge className={o.status === 'verified' ? "bg-accent text-accent-foreground" : "bg-amber-500 text-white"}>
+                                  {o.status.toUpperCase()}
+                                </Badge>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </>
                 )}
-              </CardContent>
-            </Card>
-          </div>
+              </div>
 
-          <div className={cn("space-y-6", activeTab === 'orders' ? "block" : "hidden")}>
-             <div className="flex justify-between items-center mb-4">
-               <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
-                 Showing {filteredOrders.length} of {adminData?.orders?.length || 0} orders
-               </p>
-             </div>
-             <Card className="border-border/50 bg-card/30">
-               <CardContent className="p-0">
-                 {isLoading ? <LoadingTable /> : filteredOrders.length === 0 ? (
-                   <EmptyState message="No orders found matching your search." />
-                 ) : (
-                   <div className="overflow-x-auto max-h-[600px] custom-scrollbar">
-                     <table className="w-full text-sm text-left">
-                       <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest sticky top-0 z-10">
-                         <tr>
-                           <th className="py-4 px-6">Trader</th>
-                           <th className="py-4 px-6">Challenge</th>
-                           <th className="py-4 px-6">TXID / Network</th>
-                           <th className="py-4 px-6">Status</th>
-                           <th className="py-4 px-6 text-right">Verification</th>
-                         </tr>
-                       </thead>
-                       <tbody className="divide-y divide-border/30">
-                         {filteredOrders.map((o: any) => (
-                           <tr key={o.id} className="hover:bg-primary/5 transition-colors">
-                             <td className="py-4 px-6 font-bold text-white">{o.email}</td>
-                             <td className="py-4 px-6 font-mono text-xs">
-                               <div className="text-white">{o.plan}</div>
-                               <div className="text-muted-foreground">{o.size} - {o.price}</div>
-                             </td>
-                             <td className="py-4 px-6">
-                               <div className="flex items-center gap-2">
-                                 <span className="font-mono text-[10px] text-muted-foreground truncate max-w-[120px]">{o.txHash}</span>
-                                 <TooltipProvider>
-                                   <Tooltip>
-                                     <TooltipTrigger asChild>
-                                       <button className="text-muted-foreground hover:text-primary transition-colors" onClick={() => { navigator.clipboard.writeText(o.txHash); toast({ title: "Copied" }); }}>
-                                          <Copy className="w-3 h-3" />
-                                       </button>
-                                     </TooltipTrigger>
-                                     <TooltipContent className="bg-card border-border"><p className="text-xs">{o.txHash}</p></TooltipContent>
-                                   </Tooltip>
-                                 </TooltipProvider>
-                               </div>
-                               <div className="text-[9px] uppercase font-black text-primary/50">{o.network || 'Unknown Network'}</div>
-                             </td>
-                             <td className="py-4 px-6">
-                               <Badge className={o.status === 'verified' ? "bg-accent text-accent-foreground" : "bg-amber-500 text-white"}>
-                                 {o.status.toUpperCase()}
-                               </Badge>
-                             </td>
-                             <td className="py-4 px-6 text-right">
-                               {o.status === 'pending' && (
-                                 <Button 
-                                   size="sm" 
-                                   className="h-8 font-bold bg-accent hover:bg-accent/90" 
-                                   onClick={() => handleVerifyOrder(o.id)}
-                                   disabled={actionLoading}
-                                 >
-                                   {actionLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : "Verify Payment"}
-                                 </Button>
-                               )}
-                             </td>
-                           </tr>
-                         ))}
-                       </tbody>
-                     </table>
-                   </div>
-                 )}
-               </CardContent>
-             </Card>
-          </div>
+              <div className={cn("space-y-6", activeTab === 'users' ? "block" : "hidden")}>
+                <div className="flex justify-between items-center mb-4">
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
+                    Showing {filteredUsers.length} of {adminData?.users?.length || 0} users
+                  </p>
+                </div>
+                <Card className="border-border/50 bg-card/30">
+                  <CardContent className="p-0">
+                    {isLoading ? <LoadingTable /> : filteredUsers.length === 0 ? (
+                      <EmptyState message="No users found matching your search." />
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                          <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
+                            <tr>
+                              <th className="py-4 px-6">Trader Name</th>
+                              <th className="py-4 px-6">Email / Phone</th>
+                              <th className="py-4 px-6">Referral Code</th>
+                              <th className="py-4 px-6 text-right">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border/30">
+                            {filteredUsers.map((u: any) => (
+                              <tr key={u.id} className="hover:bg-primary/5 transition-colors group">
+                                <td className="py-4 px-6">
+                                  <div className="font-bold text-white">{u.name}</div>
+                                  <div className="text-[10px] text-muted-foreground font-mono">{u.id}</div>
+                                </td>
+                                <td className="py-4 px-6">
+                                  <div className="text-white">{u.email}</div>
+                                  <div className="text-xs text-muted-foreground">{u.phone || 'No Phone'}</div>
+                                </td>
+                                <td className="py-4 px-6">
+                                  <Badge variant="outline" className="font-mono text-xs border-primary/20 text-primary">
+                                    {u.referralCode}
+                                  </Badge>
+                                </td>
+                                <td className="py-4 px-6 text-right">
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setPreviewUserId(u.id)}>
+                                    <Eye className="w-4 h-4" />
+                                  </Button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
 
-          <div className={cn("space-y-8", activeTab === 'kyc' ? "block" : "hidden")}>
-             <Card className="border-border/50 bg-card/30">
-               <CardHeader>
-                 <CardTitle className="text-white flex items-center gap-2">
-                   <Fingerprint className="w-5 h-5 text-amber-500" /> Pending Verification
-                 </CardTitle>
-                 <CardDescription>Traders awaiting identity approval to unlock payouts.</CardDescription>
-               </CardHeader>
-               <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                      <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
-                        <tr>
-                          <th className="py-4 px-6">User</th>
-                          <th className="py-4 px-6">Submitted At</th>
-                          <th className="py-4 px-6">Status</th>
-                          <th className="py-4 px-6 text-right">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border/30">
-                        {adminData?.users?.filter((u: any) => u.kycStatus === 'pending').length === 0 ? (
-                          <tr><td colSpan={4} className="py-12 text-center text-muted-foreground italic">No pending KYC applications.</td></tr>
-                        ) : adminData?.users?.filter((u: any) => u.kycStatus === 'pending').map((u: any) => (
-                          <tr key={u.id} className="hover:bg-amber-500/5 transition-colors">
-                            <td className="py-4 px-6">
-                              <div className="font-bold text-white">{u.name}</div>
-                              <div className="text-xs text-muted-foreground">{u.email}</div>
-                            </td>
-                            <td className="py-4 px-6 text-muted-foreground text-xs">
-                              {u.kycSubmittedAt ? new Date(u.kycSubmittedAt).toLocaleString() : 'N/A'}
-                            </td>
-                            <td className="py-4 px-6"><Badge className="bg-amber-500 text-white font-bold">PENDING</Badge></td>
-                            <td className="py-4 px-6 text-right">
-                              <Button 
-                                size="sm" 
-                                variant="outline" 
-                                className="h-8 font-bold border-amber-500/20 text-amber-500 hover:bg-amber-500 hover:text-white"
-                                onClick={() => { setSelectedUser(u); setIsKycReviewOpen(true); }}
-                              >
-                                Review Documents
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-               </CardContent>
-             </Card>
-          </div>
+              <div className={cn("space-y-6", activeTab === 'orders' ? "block" : "hidden")}>
+                 <div className="flex justify-between items-center mb-4">
+                   <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
+                     Showing {filteredOrders.length} of {adminData?.orders?.length || 0} orders
+                   </p>
+                 </div>
+                 <Card className="border-border/50 bg-card/30">
+                   <CardContent className="p-0">
+                     {isLoading ? <LoadingTable /> : filteredOrders.length === 0 ? (
+                       <EmptyState message="No orders found matching your search." />
+                     ) : (
+                       <div className="overflow-x-auto max-h-[600px] custom-scrollbar">
+                         <table className="w-full text-sm text-left">
+                           <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest sticky top-0 z-10">
+                             <tr>
+                               <th className="py-4 px-6">Trader</th>
+                               <th className="py-4 px-6">Challenge</th>
+                               <th className="py-4 px-6">TXID / Network</th>
+                               <th className="py-4 px-6">Status</th>
+                               <th className="py-4 px-6 text-right">Verification</th>
+                             </tr>
+                           </thead>
+                           <tbody className="divide-y divide-border/30">
+                             {filteredOrders.map((o: any) => (
+                               <tr key={o.id} className="hover:bg-primary/5 transition-colors">
+                                 <td className="py-4 px-6 font-bold text-white">{o.email}</td>
+                                 <td className="py-4 px-6 font-mono text-xs">
+                                   <div className="text-white">{o.plan}</div>
+                                   <div className="text-muted-foreground">{o.size} - {o.price}</div>
+                                 </td>
+                                 <td className="py-4 px-6">
+                                   <div className="flex items-center gap-2">
+                                     <span className="font-mono text-[10px] text-muted-foreground truncate max-w-[120px]">{o.txHash}</span>
+                                     <TooltipProvider>
+                                       <Tooltip>
+                                         <TooltipTrigger asChild>
+                                           <button className="text-muted-foreground hover:text-primary transition-colors" onClick={() => { navigator.clipboard.writeText(o.txHash); toast({ title: "Copied" }); }}>
+                                              <Copy className="w-3 h-3" />
+                                           </button>
+                                         </TooltipTrigger>
+                                         <TooltipContent className="bg-card border-border"><p className="text-xs">{o.txHash}</p></TooltipContent>
+                                       </Tooltip>
+                                     </TooltipProvider>
+                                   </div>
+                                   <div className="text-[9px] uppercase font-black text-primary/50">{o.network || 'Unknown Network'}</div>
+                                 </td>
+                                 <td className="py-4 px-6">
+                                   <Badge className={o.status === 'verified' ? "bg-accent text-accent-foreground" : "bg-amber-500 text-white"}>
+                                     {o.status.toUpperCase()}
+                                   </Badge>
+                                 </td>
+                                 <td className="py-4 px-6 text-right">
+                                   {o.status === 'pending' && (
+                                     <Button 
+                                       size="sm" 
+                                       className="h-8 font-bold bg-accent hover:bg-accent/90" 
+                                       onClick={() => handleVerifyOrder(o.id)}
+                                       disabled={actionLoading}
+                                     >
+                                       {actionLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : "Verify Payment"}
+                                     </Button>
+                                   )}
+                                 </td>
+                               </tr>
+                             ))}
+                           </tbody>
+                         </table>
+                       </div>
+                     )}
+                   </CardContent>
+                 </Card>
+              </div>
 
-          <div className={cn("space-y-6", activeTab === 'referrals' ? "block" : "hidden")}>
-             <Card className="border-border/50 bg-card/30">
-                <CardHeader><CardTitle className="text-white">Global Referrals</CardTitle></CardHeader>
-                <CardContent className="p-0">
-                   <div className="overflow-x-auto">
-                     <table className="w-full text-sm text-left">
-                       <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-bold tracking-widest">
-                         <tr>
-                           <th className="py-4 px-6">Date</th>
-                           <th className="py-4 px-6">Referrer ID</th>
-                           <th className="py-4 px-6">Referred User</th>
-                           <th className="py-4 px-6">Status</th>
-                           <th className="py-4 px-6 text-right">Comm.</th>
-                         </tr>
-                       </thead>
-                       <tbody className="divide-y divide-border/30">
-                         {adminData?.referrals?.length === 0 ? (
-                           <tr><td colSpan={5} className="py-12 text-center text-muted-foreground italic">No referral records found.</td></tr>
-                         ) : adminData?.referrals?.map((r: any) => (
-                           <tr key={r.id} className="hover:bg-white/5">
-                             <td className="py-4 px-6 text-xs text-muted-foreground">
-                               {r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'N/A'}
-                             </td>
-                             <td className="py-4 px-6 font-mono text-[10px] text-white truncate max-w-[120px]">{r.referrerId}</td>
-                             <td className="py-4 px-6 font-bold text-white truncate max-w-[150px]">{r.referredUserEmail}</td>
-                             <td className="py-4 px-6"><Badge variant="outline" className="text-[10px]">{r.status?.toUpperCase()}</Badge></td>
-                             <td className="py-4 px-6 text-right font-bold text-accent">${r.amount || 0}</td>
-                           </tr>
-                         ))}
-                       </tbody>
-                     </table>
-                   </div>
-                </CardContent>
-             </Card>
-          </div>
+              <div className={cn("space-y-8", activeTab === 'kyc' ? "block" : "hidden")}>
+                 <Card className="border-border/50 bg-card/30">
+                   <CardHeader>
+                     <CardTitle className="text-white flex items-center gap-2">
+                       <Fingerprint className="w-5 h-5 text-amber-500" /> Pending Verification
+                     </CardTitle>
+                     <CardDescription>Traders awaiting identity approval to unlock payouts.</CardDescription>
+                   </CardHeader>
+                   <CardContent className="p-0">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                          <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
+                            <tr>
+                              <th className="py-4 px-6">User</th>
+                              <th className="py-4 px-6">Submitted At</th>
+                              <th className="py-4 px-6">Status</th>
+                              <th className="py-4 px-6 text-right">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border/30">
+                            {adminData?.users?.filter((u: any) => u.kycStatus === 'pending').length === 0 ? (
+                              <tr><td colSpan={4} className="py-12 text-center text-muted-foreground italic">No pending KYC applications.</td></tr>
+                            ) : adminData?.users?.filter((u: any) => u.kycStatus === 'pending').map((u: any) => (
+                              <tr key={u.id} className="hover:bg-amber-500/5 transition-colors">
+                                <td className="py-4 px-6">
+                                  <div className="font-bold text-white">{u.name}</div>
+                                  <div className="text-xs text-muted-foreground">{u.email}</div>
+                                </td>
+                                <td className="py-4 px-6 text-muted-foreground text-xs">
+                                  {u.kycSubmittedAt ? new Date(u.kycSubmittedAt).toLocaleString() : 'N/A'}
+                                </td>
+                                <td className="py-4 px-6"><Badge className="bg-amber-500 text-white font-bold">PENDING</Badge></td>
+                                <td className="py-4 px-6 text-right">
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    className="h-8 font-bold border-amber-500/20 text-amber-500 hover:bg-amber-500 hover:text-white"
+                                    onClick={() => { setSelectedUser(u); setIsKycReviewOpen(true); }}
+                                  >
+                                    Review Documents
+                                  </Button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                   </CardContent>
+                 </Card>
+              </div>
 
-          <div className={cn("space-y-6", activeTab === 'payouts' ? "block" : "hidden")}>
-             <Card className="border-border/50 bg-card/30">
-                <CardHeader><CardTitle className="text-white">Payout Requests</CardTitle></CardHeader>
-                <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                      <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-bold tracking-widest">
-                        <tr>
-                          <th className="py-4 px-6">Date</th>
-                          <th className="py-4 px-6">Trader</th>
-                          <th className="py-4 px-6">Method</th>
-                          <th className="py-4 px-6 text-right">Amount</th>
-                          <th className="py-4 px-6 text-right">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border/30">
-                        {adminData?.payouts?.length === 0 ? (
-                           <tr><td colSpan={5} className="py-12 text-center text-muted-foreground italic">No payout history.</td></tr>
-                        ) : adminData?.payouts?.map((p: any) => (
-                           <tr key={p.id} className="hover:bg-white/5">
-                             <td className="py-4 px-6 text-xs text-muted-foreground">{p.date ? new Date(p.date).toLocaleDateString() : 'N/A'}</td>
-                             <td className="py-4 px-6 font-bold text-white">{p.email}</td>
-                             <td className="py-4 px-6 text-xs">{p.method}</td>
-                             <td className="py-4 px-6 text-right font-bold text-accent">${p.amount}</td>
-                             <td className="py-4 px-6 text-right">
-                               <Badge className={p.status === 'done' ? "bg-accent text-accent-foreground" : "bg-amber-500 text-white"}>{p.status.toUpperCase()}</Badge>
-                             </td>
-                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-             </Card>
-          </div>
+              <div className={cn("space-y-6", activeTab === 'referrals' ? "block" : "hidden")}>
+                 <Card className="border-border/50 bg-card/30">
+                    <CardHeader><CardTitle className="text-white">Global Referrals</CardTitle></CardHeader>
+                    <CardContent className="p-0">
+                       <div className="overflow-x-auto">
+                         <table className="w-full text-sm text-left">
+                           <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-bold tracking-widest">
+                             <tr>
+                               <th className="py-4 px-6">Date</th>
+                               <th className="py-4 px-6">Referrer ID</th>
+                               <th className="py-4 px-6">Referred User</th>
+                               <th className="py-4 px-6">Status</th>
+                               <th className="py-4 px-6 text-right">Comm.</th>
+                             </tr>
+                           </thead>
+                           <tbody className="divide-y divide-border/30">
+                             {adminData?.referrals?.length === 0 ? (
+                               <tr><td colSpan={5} className="py-12 text-center text-muted-foreground italic">No referral records found.</td></tr>
+                             ) : adminData?.referrals?.map((r: any) => (
+                               <tr key={r.id} className="hover:bg-white/5">
+                                 <td className="py-4 px-6 text-xs text-muted-foreground">
+                                   {r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'N/A'}
+                                 </td>
+                                 <td className="py-4 px-6 font-mono text-[10px] text-white truncate max-w-[120px]">{r.referrerId}</td>
+                                 <td className="py-4 px-6 font-bold text-white truncate max-w-[150px]">{r.referredUserEmail}</td>
+                                 <td className="py-4 px-6"><Badge variant="outline" className="text-[10px]">{r.status?.toUpperCase()}</Badge></td>
+                                 <td className="py-4 px-6 text-right font-bold text-accent">${r.amount || 0}</td>
+                               </tr>
+                             ))}
+                           </tbody>
+                         </table>
+                       </div>
+                    </CardContent>
+                 </Card>
+              </div>
 
-          <div className={cn("space-y-8", activeTab === 'broadcast' ? "block" : "hidden")}>
-            <div className="max-w-3xl space-y-8">
-              <Card className="border-border/50 bg-card/30">
-                <CardHeader>
-                  <CardTitle className="text-white flex items-center gap-2"><Megaphone className="w-5 h-5 text-primary" /> Global Broadcast</CardTitle>
-                  <CardDescription>Send an institutional announcement to all active traders.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label className="text-white">Announcement Title</Label>
-                    <Input placeholder="e.g. Server Maintenance: Weekend Upgrade" className="bg-secondary/50" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-white">Message Body</Label>
-                    <Textarea placeholder="Type your announcement here..." className="bg-secondary/50 min-h-[150px]" />
-                  </div>
-                  <Button className="w-full font-bold cyan-box-glow cursor-not-allowed" disabled>
-                    <Send className="w-4 h-4 mr-2" /> Send to 5,000+ Traders
-                  </Button>
-                  <p className="text-[10px] text-center text-muted-foreground uppercase tracking-widest">Broadcasts are currently disabled for system stability.</p>
-                </CardContent>
-              </Card>
+              <div className={cn("space-y-6", activeTab === 'payouts' ? "block" : "hidden")}>
+                 <Card className="border-border/50 bg-card/30">
+                    <CardHeader><CardTitle className="text-white">Payout Requests</CardTitle></CardHeader>
+                    <CardContent className="p-0">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                          <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-bold tracking-widest">
+                            <tr>
+                              <th className="py-4 px-6">Date</th>
+                              <th className="py-4 px-6">Trader</th>
+                              <th className="py-4 px-6">Method</th>
+                              <th className="py-4 px-6 text-right">Amount</th>
+                              <th className="py-4 px-6 text-right">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border/30">
+                            {adminData?.payouts?.length === 0 ? (
+                               <tr><td colSpan={5} className="py-12 text-center text-muted-foreground italic">No payout history.</td></tr>
+                            ) : adminData?.payouts?.map((p: any) => (
+                               <tr key={p.id} className="hover:bg-white/5">
+                                 <td className="py-4 px-6 text-xs text-muted-foreground">{p.date ? new Date(p.date).toLocaleDateString() : 'N/A'}</td>
+                                 <td className="py-4 px-6 font-bold text-white">{p.email}</td>
+                                 <td className="py-4 px-6 text-xs">{p.method}</td>
+                                 <td className="py-4 px-6 text-right font-bold text-accent">${p.amount}</td>
+                                 <td className="py-4 px-6 text-right">
+                                   <Badge className={p.status === 'done' ? "bg-accent text-accent-foreground" : "bg-amber-500 text-white"}>{p.status.toUpperCase()}</Badge>
+                                 </td>
+                               </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                 </Card>
+              </div>
 
-              <Card className="border-border/50 bg-card/30">
-                 <CardHeader><CardTitle className="text-white text-lg">Sent Broadcasts</CardTitle></CardHeader>
-                 <CardContent className="p-0">
-                    <div className="divide-y divide-border/20">
-                       {adminData?.broadcasts?.length === 0 ? (
-                          <div className="p-8 text-center text-xs text-muted-foreground italic">No message history.</div>
-                       ) : adminData?.broadcasts?.map((b: any) => (
-                          <div key={b.id} className="p-4 flex justify-between items-center">
-                             <div>
-                                <p className="font-bold text-white text-sm">{b.title}</p>
-                                <p className="text-[10px] text-muted-foreground">{new Date(b.sentAt).toLocaleString()}</p>
-                             </div>
-                             <Badge variant="outline">DELIVERED</Badge>
+              <div className={cn("space-y-8", activeTab === 'broadcast' ? "block" : "hidden")}>
+                <div className="max-w-3xl space-y-8">
+                  <Card className="border-border/50 bg-card/30">
+                    <CardHeader>
+                      <CardTitle className="text-white flex items-center gap-2"><Megaphone className="w-5 h-5 text-primary" /> Global Broadcast</CardTitle>
+                      <CardDescription>Send an institutional announcement to all active traders.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <Label className="text-white">Announcement Title</Label>
+                        <Input placeholder="e.g. Server Maintenance: Weekend Upgrade" className="bg-secondary/50" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-white">Message Body</Label>
+                        <Textarea placeholder="Type your announcement here..." className="bg-secondary/50 min-h-[150px]" />
+                      </div>
+                      <Button className="w-full font-bold cyan-box-glow cursor-not-allowed" disabled>
+                        <Send className="w-4 h-4 mr-2" /> Send to 5,000+ Traders
+                      </Button>
+                      <p className="text-[10px] text-center text-muted-foreground uppercase tracking-widest">Broadcasts are currently disabled for system stability.</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-border/50 bg-card/30">
+                     <CardHeader><CardTitle className="text-white text-lg">Sent Broadcasts</CardTitle></CardHeader>
+                     <CardContent className="p-0">
+                        <div className="divide-y divide-border/20">
+                           {adminData?.broadcasts?.length === 0 ? (
+                              <div className="p-8 text-center text-xs text-muted-foreground italic">No message history.</div>
+                           ) : adminData?.broadcasts?.map((b: any) => (
+                              <div key={b.id} className="p-4 flex justify-between items-center">
+                                 <div>
+                                    <p className="font-bold text-white text-sm">{b.title}</p>
+                                    <p className="text-[10px] text-muted-foreground">{new Date(b.sentAt).toLocaleString()}</p>
+                                 </div>
+                                 <Badge variant="outline">DELIVERED</Badge>
+                              </div>
+                           ))}
+                        </div>
+                     </CardContent>
+                  </Card>
+                </div>
+              </div>
+
+              <div className={cn("space-y-8 pb-20", activeTab === 'settings' ? "block" : "hidden")}>
+                <div className="max-w-3xl grid gap-8">
+                  <Card className="border-border/50 bg-card/30 backdrop-blur-sm">
+                    <CardHeader>
+                      <CardTitle className="text-white flex items-center gap-2">
+                        <ImageIcon className="w-5 h-5 text-primary" /> Brand Identity
+                      </CardTitle>
+                      <CardDescription>Update the platform logo via direct storage in Firestore (Base64).</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-8">
+                      <div className="flex flex-col md:flex-row items-center gap-8 p-6 bg-background/50 rounded-2xl border border-white/5">
+                        <div className="relative group">
+                          <div className="w-24 h-24 rounded-full border-2 border-primary/20 bg-secondary/50 flex items-center justify-center overflow-hidden shadow-2xl">
+                            {(logoPreview || branding.logoUrl) ? (
+                              <Image src={logoPreview || branding.logoUrl || ''} alt="Platform Logo" width={96} height={96} className="object-cover" />
+                            ) : (
+                              <ImageIcon className="w-10 h-10 text-muted-foreground opacity-20" />
+                            )}
                           </div>
-                       ))}
-                    </div>
-                 </CardContent>
-              </Card>
-            </div>
-          </div>
-
-          <div className={cn("space-y-8 pb-20", activeTab === 'settings' ? "block" : "hidden")}>
-            <div className="max-w-3xl grid gap-8">
-              <Card className="border-border/50 bg-card/30 backdrop-blur-sm">
-                <CardHeader>
-                  <CardTitle className="text-white flex items-center gap-2">
-                    <ImageIcon className="w-5 h-5 text-primary" /> Brand Identity
-                  </CardTitle>
-                  <CardDescription>Update the platform logo via direct storage in Firestore (Base64).</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-8">
-                  <div className="flex flex-col md:flex-row items-center gap-8 p-6 bg-background/50 rounded-2xl border border-white/5">
-                    <div className="relative group">
-                      <div className="w-24 h-24 rounded-full border-2 border-primary/20 bg-secondary/50 flex items-center justify-center overflow-hidden shadow-2xl">
-                        {(logoPreview || branding.logoUrl) ? (
-                          <Image src={logoPreview || branding.logoUrl || ''} alt="Platform Logo" width={96} height={96} className="object-cover" />
-                        ) : (
-                          <ImageIcon className="w-10 h-10 text-muted-foreground opacity-20" />
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex-1 space-y-4 text-center md:text-left">
-                      <div>
-                        <h4 className="font-bold text-white">{logoFile ? 'Review Selected Logo' : 'Current Logo'}</h4>
-                        <p className="text-xs text-muted-foreground">Displayed in navbar, auth screens, and loading sequence.</p>
-                      </div>
-                      <div className="flex flex-wrap gap-3 justify-center md:justify-start">
-                        <Button 
-                          variant="secondary" 
-                          size="sm" 
-                          className="font-bold cursor-pointer"
-                          onClick={() => { fileInputRef.current?.click(); setIsUploadDone(false); }}
-                          disabled={uploadingLogo}
-                        >
-                          <Upload className="w-4 h-4 mr-2" /> {logoFile ? 'Change Selection' : 'Select New Logo'}
-                        </Button>
-                        <input 
-                          type="file" 
-                          ref={fileInputRef} 
-                          className="hidden" 
-                          accept=".png,.jpg,.jpeg,.svg" 
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              setLogoFile(file);
-                              const reader = new FileReader();
-                              reader.onloadend = () => setLogoPreview(reader.result as string);
-                              reader.readAsDataURL(file);
-                            }
-                          }}
-                        />
-                        {logoFile && (
-                          <Button 
-                            className="font-bold cyan-box-glow cursor-pointer" 
-                            size="sm"
-                            onClick={handleLogoUpload}
-                            disabled={uploadingLogo}
-                          >
-                            {uploadingLogo ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-                            Apply Logo (Database)
-                          </Button>
-                        )}
-                      </div>
-                      
-                      {uploadingLogo && (
-                        <div className="w-full mt-4 space-y-2">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-primary animate-pulse">Syncing with database...</p>
-                          <Progress value={undefined} className="h-1.5 bg-secondary" />
                         </div>
-                      )}
+                        <div className="flex-1 space-y-4 text-center md:text-left">
+                          <div>
+                            <h4 className="font-bold text-white">{logoFile ? 'Review Selected Logo' : 'Current Logo'}</h4>
+                            <p className="text-xs text-muted-foreground">Displayed in navbar, auth screens, and loading sequence.</p>
+                          </div>
+                          <div className="flex flex-wrap gap-3 justify-center md:justify-start">
+                            <Button 
+                              variant="secondary" 
+                              size="sm" 
+                              className="font-bold cursor-pointer"
+                              onClick={() => { fileInputRef.current?.click(); setIsUploadDone(false); }}
+                              disabled={uploadingLogo}
+                            >
+                              <Upload className="w-4 h-4 mr-2" /> {logoFile ? 'Change Selection' : 'Select New Logo'}
+                            </Button>
+                            <input 
+                              type="file" 
+                              ref={fileInputRef} 
+                              className="hidden" 
+                              accept=".png,.jpg,.jpeg,.svg" 
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  setLogoFile(file);
+                                  const reader = new FileReader();
+                                  reader.onloadend = () => setLogoPreview(reader.result as string);
+                                  reader.readAsDataURL(file);
+                                }
+                              }}
+                            />
+                            {logoFile && (
+                              <Button 
+                                className="font-bold cyan-box-glow cursor-pointer" 
+                                size="sm"
+                                onClick={handleLogoUpload}
+                                disabled={uploadingLogo}
+                              >
+                                {uploadingLogo ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                                Apply Logo (Database)
+                              </Button>
+                            )}
+                          </div>
+                          
+                          {uploadingLogo && (
+                            <div className="w-full mt-4 space-y-2">
+                              <p className="text-[10px] font-black uppercase tracking-widest text-primary animate-pulse">Syncing with database...</p>
+                              <Progress value={undefined} className="h-1.5 bg-secondary" />
+                            </div>
+                          )}
 
-                      {isUploadDone && !uploadingLogo && (
-                        <div className="mt-4 flex items-center justify-center md:justify-start gap-2 text-accent text-[10px] font-black uppercase tracking-[0.2em] animate-in fade-in slide-in-from-top-1">
-                          <CheckCircle2 className="w-4 h-4" /> Branding Synchronized
+                          {isUploadDone && !uploadingLogo && (
+                            <div className="mt-4 flex items-center justify-center md:justify-start gap-2 text-accent text-[10px] font-black uppercase tracking-[0.2em] animate-in fade-in slide-in-from-top-1">
+                              <CheckCircle2 className="w-4 h-4" /> Branding Synchronized
+                            </div>
+                          )}
+
+                          {logoFile && !uploadingLogo && !isUploadDone && (
+                            <p className="text-[10px] text-accent font-bold uppercase tracking-widest">Selected: {logoFile.name}</p>
+                          )}
                         </div>
-                      )}
+                      </div>
+                    </CardContent>
+                  </Card>
 
-                      {logoFile && !uploadingLogo && !isUploadDone && (
-                        <p className="text-[10px] text-accent font-bold uppercase tracking-widest">Selected: {logoFile.name}</p>
-                      )}
-                    </div>
+                  <Card className="border-border/50 bg-card/30 backdrop-blur-sm">
+                    <CardHeader>
+                      <CardTitle className="text-white flex items-center gap-2">
+                        <Users className="w-5 h-5 text-purple-500" /> Community Links
+                      </CardTitle>
+                      <CardDescription>Configure external social and community destinations.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="grid md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
+                            <DiscordIcon className="w-3.5 h-3.5" /> Discord Invite
+                          </Label>
+                          <Input 
+                            placeholder="https://discord.gg/..." 
+                            value={socialLinks.discord}
+                            onChange={e => setSocialLinks({...socialLinks, discord: e.target.value})}
+                            className="bg-secondary/30 text-white"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
+                            <Instagram className="w-3.5 h-3.5" /> Instagram Profile
+                          </Label>
+                          <Input 
+                            placeholder="https://instagram.com/..." 
+                            value={socialLinks.instagram}
+                            onChange={e => setSocialLinks({...socialLinks, instagram: e.target.value})}
+                            className="bg-secondary/30 text-white"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
+                            <Send className="w-3.5 h-3.5" /> Telegram Channel
+                          </Label>
+                          <Input 
+                            placeholder="https://t.me/..." 
+                            value={socialLinks.telegram}
+                            onChange={e => setSocialLinks({...socialLinks, telegram: e.target.value})}
+                            className="bg-secondary/30 text-white"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
+                            <Phone className="w-3.5 h-3.5" /> WhatsApp Group
+                          </Label>
+                          <Input 
+                            placeholder="https://chat.whatsapp.com/..." 
+                            value={socialLinks.whatsapp}
+                            onChange={e => setSocialLinks({...socialLinks, whatsapp: e.target.value})}
+                            className="bg-secondary/30 text-white"
+                          />
+                        </div>
+                      </div>
+                      <Button 
+                        className="font-bold cursor-pointer" 
+                        onClick={handleSaveSocialLinks}
+                        disabled={savingLinks}
+                      >
+                        {savingLinks ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                        Save Community Links
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="h-full flex items-center justify-center">
+               <div className="text-center space-y-6 max-w-sm">
+                  <div className="w-20 h-20 bg-secondary/50 rounded-full flex items-center justify-center mx-auto border border-border">
+                    <Shield className="w-10 h-10 text-muted-foreground" />
                   </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-border/50 bg-card/30 backdrop-blur-sm">
-                <CardHeader>
-                  <CardTitle className="text-white flex items-center gap-2">
-                    <Users className="w-5 h-5 text-purple-500" /> Community Links
-                  </CardTitle>
-                  <CardDescription>Configure external social and community destinations.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
-                        <DiscordIcon className="w-3.5 h-3.5" /> Discord Invite
-                      </Label>
-                      <Input 
-                        placeholder="https://discord.gg/..." 
-                        value={socialLinks.discord}
-                        onChange={e => setSocialLinks({...socialLinks, discord: e.target.value})}
-                        className="bg-secondary/30 text-white"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
-                        <Instagram className="w-3.5 h-3.5" /> Instagram Profile
-                      </Label>
-                      <Input 
-                        placeholder="https://instagram.com/..." 
-                        value={socialLinks.instagram}
-                        onChange={e => setSocialLinks({...socialLinks, instagram: e.target.value})}
-                        className="bg-secondary/30 text-white"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
-                        <Send className="w-3.5 h-3.5" /> Telegram Channel
-                      </Label>
-                      <Input 
-                        placeholder="https://t.me/..." 
-                        value={socialLinks.telegram}
-                        onChange={e => setSocialLinks({...socialLinks, telegram: e.target.value})}
-                        className="bg-secondary/30 text-white"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
-                        <Phone className="w-3.5 h-3.5" /> WhatsApp Group
-                      </Label>
-                      <Input 
-                        placeholder="https://chat.whatsapp.com/..." 
-                        value={socialLinks.whatsapp}
-                        onChange={e => setSocialLinks({...socialLinks, whatsapp: e.target.value})}
-                        className="bg-secondary/30 text-white"
-                      />
-                    </div>
-                  </div>
-                  <Button 
-                    className="font-bold cursor-pointer" 
-                    onClick={handleSaveSocialLinks}
-                    disabled={savingLinks}
-                  >
-                    {savingLinks ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-                    Save Community Links
-                  </Button>
-                </CardContent>
-              </Card>
+                  <h2 className="text-2xl font-headline font-bold text-white">Direct Access Denied</h2>
+                  <p className="text-muted-foreground text-sm">You must authenticate via the stealth terminal to access administrative metrics.</p>
+                  <Button variant="outline" className="font-bold" onClick={() => setShowAdminModal(true)}>Enter Access Key</Button>
+               </div>
             </div>
-          </div>
+          )}
         </div>
       </main>
+
+      <Dialog open={showAdminModal} onOpenChange={setShowAdminModal}>
+        <DialogContent className="bg-[#0a0f1e] border-[#00d4ff] text-white sm:max-w-[400px] p-8 shadow-[0_0_50px_rgba(0,212,255,0.2)]">
+          <DialogHeader className="text-center mb-6">
+            <DialogTitle className="text-2xl font-headline font-bold text-[#00d4ff] tracking-tight">🔐 Admin Access</DialogTitle>
+            <DialogDescription className="text-muted-foreground text-xs uppercase tracking-widest font-black">Authorized Personnel Only</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAdminAuth} className="space-y-6">
+            <div className="space-y-2">
+              <Label className="text-[10px] font-bold text-[#00d4ff] uppercase tracking-[0.2em]">Security Protocol</Label>
+              <Input 
+                type="password" 
+                placeholder="Enter admin password" 
+                value={adminPasswordInput} 
+                onChange={(e) => setAdminPasswordInput(e.target.value)}
+                className="bg-[#0a0f1e]/50 border-white/10 text-white focus:border-[#00d4ff] h-12 text-center font-mono"
+                autoFocus
+              />
+              {adminError && (
+                <p className="text-[10px] font-bold text-destructive uppercase tracking-widest text-center mt-2 animate-pulse">
+                  {adminError}
+                </p>
+              )}
+            </div>
+            <div className="flex flex-col gap-3">
+              <Button type="submit" className="w-full h-12 font-bold bg-[#00d4ff] text-[#0a0f1e] hover:bg-[#00d4ff]/90 shadow-[0_0_20px_rgba(0,212,255,0.4)]">
+                Unlock Terminal
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => setShowAdminModal(false)} className="w-full text-muted-foreground hover:text-white font-bold text-xs uppercase tracking-widest">
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isKycReviewOpen} onOpenChange={setIsKycReviewOpen}>
         <DialogContent className="bg-card border-primary/20 max-w-2xl overflow-y-auto max-h-[90vh]">

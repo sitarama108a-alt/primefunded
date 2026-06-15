@@ -90,6 +90,8 @@ export const Navigation = memo(function Navigation() {
   const { logout, userData, user } = useAuth();
   const branding = useBrandSettings();
 
+  const isAuthorizedAdmin = user?.email === "nomis108a@gmail.com" || user?.email === "sitarama108a@gmail.com";
+
   useEffect(() => {
     const routesToPrefetch = [
       '/dashboard',
@@ -181,7 +183,7 @@ export const Navigation = memo(function Navigation() {
             </Link>
           ))}
           
-          {user && (
+          {user && isAuthorizedAdmin && (
             <Link
               href="/admin"
               prefetch={true}
