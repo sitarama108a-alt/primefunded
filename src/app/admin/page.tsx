@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { 
   Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, Award, Search, RefreshCw, Copy, Loader2, Image as ImageIcon, Settings, Upload, Save, Instagram, Phone, SearchX, Megaphone, DollarSign, Lock, ChevronLeft, LayoutDashboard, XCircle, CheckCircle2, Clock, ShieldCheck, AlertTriangle, Gift, FileImage, ExternalLink, Skull, Flame, Mail, Trash2, Send
 } from 'lucide-react';
@@ -22,7 +23,7 @@ import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import DashboardPage from '@/app/dashboard/page';
 import Image from 'next/image';
-import { doc, setDoc, collection, getDocs, query, orderBy, limit, where, updateDoc, writeBatch, serverTimestamp, addDoc, deleteDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, onSnapshot, query, orderBy, limit, where, updateDoc, writeBatch, serverTimestamp, addDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useBrandSettings } from '@/hooks/use-brand-settings';
 import { uploadImageAsBase64 } from '@/lib/imageUpload';
@@ -62,8 +63,15 @@ export default function AdminPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [previewUserId, setPreviewUserId] = useState<string | null>(null);
   
-  const [adminData, setAdminData] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [adminData, setAdminData] = useState<any>({
+    users: [],
+    orders: [],
+    payouts: [],
+    referrals: [],
+    broadcasts: [],
+    breaches: []
+  });
+  const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   
   const { toast } = useToast();
@@ -94,9 +102,6 @@ export default function AdminPage() {
     note: ''
   });
 
-  const [isBreachModalOpen, setIsBreachModalOpen] = useState(false);
-  const [breachReasonInput, setBreachReasonInput] = useState('');
-
   // Branding States
   const [brandingForm, setBrandingForm] = useState({
     siteName: '',
@@ -108,7 +113,6 @@ export default function AdminPage() {
     whatsappUrl: ''
   });
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Broadcast States
   const [broadcastForm, setBroadcastForm] = useState({
@@ -160,62 +164,43 @@ export default function AdminPage() {
     }
   };
 
-  const loadData = async () => {
+  useEffect(() => {
     if (!isAuthenticated) return;
-    setIsLoading(true);
-    try {
-      const fetchCollectionData = async (collName: string, orderByField?: string) => {
-        const collRef = collection(db, collName);
-        let q;
-        if (orderByField) {
-          q = query(collRef, orderBy(orderByField, 'desc'), limit(150));
-        } else {
-          q = query(collRef, limit(150));
-        }
-        const snap = await getDocs(q);
-        return snap.docs.map(doc => ({
+
+    const unsubscribers: (() => void)[] = [];
+
+    const setupListener = (collName: string, setterKey: string, orderByField?: string) => {
+      const collRef = collection(db, collName);
+      const q = orderByField ? query(collRef, orderBy(orderByField, 'desc'), limit(200)) : query(collRef, limit(200));
+      
+      const unsub = onSnapshot(q, (snapshot) => {
+        const data = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || doc.data().createdAt,
-          submittedAt: doc.data().submittedAt?.toDate?.()?.toISOString() || doc.data().submittedAt,
-          sentAt: doc.data().sentAt?.toDate?.()?.toISOString() || doc.data().sentAt,
-          date: doc.data().date?.toDate?.()?.toISOString() || doc.data().date,
-          kycSubmittedAt: doc.data().kycSubmittedAt?.toDate?.()?.toISOString() || doc.data().kycSubmittedAt,
-          lastCodeChange: doc.data().lastCodeChange?.toDate?.()?.toISOString() || doc.data().lastCodeChange,
-          breachedAt: doc.data().breachedAt?.toDate?.()?.toISOString() || doc.data().breachedAt,
+          createdAt: (doc.data() as any).createdAt?.toDate?.()?.toISOString() || (doc.data() as any).createdAt,
+          submittedAt: (doc.data() as any).submittedAt?.toDate?.()?.toISOString() || (doc.data() as any).submittedAt,
+          sentAt: (doc.data() as any).sentAt?.toDate?.()?.toISOString() || (doc.data() as any).sentAt,
+          date: (doc.data() as any).date?.toDate?.()?.toISOString() || (doc.data() as any).date,
+          kycSubmittedAt: (doc.data() as any).kycSubmittedAt?.toDate?.()?.toISOString() || (doc.data() as any).kycSubmittedAt,
+          lastCodeChange: (doc.data() as any).lastCodeChange?.toDate?.()?.toISOString() || (doc.data() as any).lastCodeChange,
+          breachedAt: (doc.data() as any).breachedAt?.toDate?.()?.toISOString() || (doc.data() as any).breachedAt,
         }));
-      };
-
-      const [users, orders, payouts, referrals, broadcasts, breaches] = await Promise.all([
-        fetchCollectionData('users'),
-        fetchCollectionData('orders', 'submittedAt'),
-        fetchCollectionData('payouts', 'date'),
-        fetchCollectionData('referrals', 'createdAt'),
-        fetchCollectionData('broadcasts', 'sentAt'),
-        fetchCollectionData('breaches', 'breachedAt'),
-      ]);
-
-      setAdminData({
-        users,
-        orders,
-        payouts,
-        referrals,
-        broadcasts,
-        breaches,
-        success: true
+        setAdminData((prev: any) => ({ ...prev, [setterKey]: data }));
+        setIsLoading(false);
+      }, (error) => {
+        console.error(`[Admin-Listener] Error for ${collName}:`, error);
       });
-    } catch (error: any) {
-      console.error('[Admin-Sync] Failed:', error);
-      toast({ variant: "destructive", title: "Sync Failed" });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      unsubscribers.push(unsub);
+    };
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      loadData();
-    }
+    setupListener('users', 'users');
+    setupListener('orders', 'orders', 'submittedAt');
+    setupListener('payouts', 'payouts', 'date');
+    setupListener('referrals', 'referrals', 'createdAt');
+    setupListener('broadcasts', 'broadcasts', 'sentAt');
+    setupListener('breaches', 'breaches', 'breachedAt');
+
+    return () => unsubscribers.forEach(unsub => unsub());
   }, [isAuthenticated]);
 
   const handleTabChange = (val: string) => {
@@ -247,11 +232,11 @@ export default function AdminPage() {
     if (!adminData) return null;
     const verifiedOrders = adminData.orders.filter((o: any) => o.status === 'verified');
     const totalRevenue = verifiedOrders.reduce((acc: number, o: any) => acc + (parseFloat(o.amountPaid) || 0), 0);
+    const verifiedCount = verifiedOrders.length;
     const pendingOrders = adminData.orders.filter((o: any) => o.status === 'pending').length;
-    const pendingKyc = adminData.users.filter((u: any) => u.kycStatus === 'pending').length;
-    const pendingPayouts = adminData.payouts.filter((p: any) => p.status === 'pending').length;
+    const totalTraders = adminData.users.length;
 
-    return { totalRevenue, totalTraders: adminData.users.length, pendingOrders, pendingKyc, pendingPayouts };
+    return { totalRevenue, totalTraders, verifiedCount, pendingOrders };
   }, [adminData]);
 
   // ACTION HANDLERS
@@ -283,9 +268,45 @@ export default function AdminPage() {
 
       toast({ title: "Order Verified", description: "MT5 credentials assigned." });
       setIsVerifyModalOpen(false);
-      loadData();
     } catch (err) {
       toast({ variant: "destructive", title: "Verification Failed" });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleGiftAccount = async () => {
+    if (!selectedUser || !giftForm.login || !giftForm.password) return;
+    setActionLoading(true);
+    try {
+      const userRef = doc(db, 'users', selectedUser.id);
+      const updates = {
+        accountPlan: giftForm.plan,
+        accountSize: giftForm.size,
+        accountStatus: "active",
+        mt5Login: giftForm.login,
+        mt5Password: giftForm.password,
+        mt5Server: giftForm.server,
+        giftedAt: serverTimestamp(),
+        giftNote: giftForm.note,
+        isGifted: true,
+        activatedAt: serverTimestamp()
+      };
+      await updateDoc(userRef, updates);
+
+      await addDoc(collection(db, 'users', selectedUser.id, 'notifications'), {
+        title: "🎁 Institutional Account Gifted",
+        message: `An institutional ${giftForm.size} ${giftForm.plan} account has been provisioned to your profile by our desk. ${giftForm.note ? `Note: ${giftForm.note}` : ''}`,
+        type: 'challenge_passed',
+        isRead: false,
+        createdAt: serverTimestamp()
+      });
+
+      toast({ title: "🎁 Account gifted successfully!" });
+      setIsGiftModalOpen(false);
+      setGiftForm({ plan: '1-Step Pro', size: '$100,000', login: '', password: '', server: 'PrimeFunded-Live', note: '' });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Gift Failed" });
     } finally {
       setActionLoading(false);
     }
@@ -312,7 +333,6 @@ export default function AdminPage() {
 
       toast({ title: `KYC ${action}` });
       setIsKycReviewOpen(false);
-      loadData();
     } catch (err) {
       toast({ variant: "destructive", title: "Action Failed" });
     } finally {
@@ -325,7 +345,6 @@ export default function AdminPage() {
     try {
       await updateDoc(doc(db, 'payouts', payoutId), { status: 'paid', paidAt: serverTimestamp() });
       toast({ title: "Payout Processed" });
-      loadData();
     } catch (err) {
       toast({ variant: "destructive", title: "Update Failed" });
     } finally {
@@ -371,15 +390,14 @@ export default function AdminPage() {
       };
       await addDoc(collection(db, 'broadcasts'), broadcastData);
 
-      // Simple client-side loop for broadcast
-      const userSnap = await getDocs(collection(db, 'users'));
+      const userSnap = await getDocs(query(collection(db, 'users'), limit(500)));
       const batch = writeBatch(db);
       userSnap.docs.forEach((uDoc) => {
         const notifRef = doc(collection(db, 'users', uDoc.id, 'notifications'));
         batch.set(notifRef, {
           title: broadcastForm.title,
           message: broadcastForm.message,
-          type: broadcastForm.type === 'info' ? 'system_msg' : broadcastForm.type === 'warning' ? 'soft_breach_warning' : 'referral_earned',
+          type: 'system_msg',
           isRead: false,
           createdAt: serverTimestamp()
         });
@@ -388,7 +406,6 @@ export default function AdminPage() {
 
       toast({ title: "Broadcast Sent", description: "All users notified." });
       setBroadcastForm({ title: '', message: '', target: 'all', type: 'info' });
-      loadData();
     } catch (err) {
       toast({ variant: "destructive", title: "Broadcast Failed" });
     } finally {
@@ -422,7 +439,7 @@ export default function AdminPage() {
           <div className="flex flex-col md:flex-row justify-between items-start mb-6 gap-4">
             <div>
               <h1 className="text-4xl font-headline font-bold mb-1 text-white">Administrative Terminal</h1>
-              <p className="text-muted-foreground text-sm">Institutional control node for Capital Management.</p>
+              <p className="text-muted-foreground text-sm">Monitor performance and manage institutional capital deployment.</p>
             </div>
             <div className="flex items-center gap-4 w-full md:w-auto">
                <div className="relative flex-1 md:w-64">
@@ -434,46 +451,89 @@ export default function AdminPage() {
                    onChange={e => setSearchTerm(e.target.value)} 
                  />
                </div>
-               <Button variant="outline" size="icon" onClick={loadData} disabled={isLoading}>
-                 <RefreshCw className={cn("w-4 h-4 text-white", isLoading && "animate-spin")} />
-               </Button>
             </div>
           </div>
 
           <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
             <TabsList className="bg-secondary/50 p-1 h-12 w-full justify-start rounded-xl border border-border/50 shrink-0 overflow-x-auto no-scrollbar">
               <TabsTrigger value="overview" className="px-6 font-bold cursor-pointer"><Activity className="w-4 h-4 mr-2" /> Overview</TabsTrigger>
-              <TabsTrigger value="users" className="px-6 font-bold cursor-pointer"><Users className="w-4 h-4 mr-2" /> Users</TabsTrigger>
-              <TabsTrigger value="orders" className="px-6 font-bold cursor-pointer"><ShoppingCart className="w-4 h-4 mr-2" /> Orders</TabsTrigger>
+              <TabsTrigger value="user_directory" className="px-6 font-bold cursor-pointer"><Users className="w-4 h-4 mr-2" /> User Directory</TabsTrigger>
+              <TabsTrigger value="order_journal" className="px-6 font-bold cursor-pointer"><ShoppingCart className="w-4 h-4 mr-2" /> Order Journal</TabsTrigger>
               <TabsTrigger value="kyc" className="px-6 font-bold cursor-pointer"><Fingerprint className="w-4 h-4 mr-2" /> KYC Hub</TabsTrigger>
-              <TabsTrigger value="payouts" className="px-6 font-bold cursor-pointer"><Wallet className="w-4 h-4 mr-2" /> Payouts</TabsTrigger>
               <TabsTrigger value="referrals" className="px-6 font-bold cursor-pointer"><TrendingUp className="w-4 h-4 mr-2" /> Referrals</TabsTrigger>
-              <TabsTrigger value="branding" className="px-6 font-bold cursor-pointer"><Settings className="w-4 h-4 mr-2" /> Branding</TabsTrigger>
+              <TabsTrigger value="payouts" className="px-6 font-bold cursor-pointer"><Wallet className="w-4 h-4 mr-2" /> Payouts</TabsTrigger>
               <TabsTrigger value="broadcast" className="px-6 font-bold cursor-pointer"><Megaphone className="w-4 h-4 mr-2" /> Broadcast</TabsTrigger>
+              <TabsTrigger value="branding" className="px-6 font-bold cursor-pointer"><Settings className="w-4 h-4 mr-2" /> Branding</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
 
         <div className="flex-1 overflow-y-auto p-8 pt-0 custom-scrollbar">
           {activeTab === 'overview' && stats && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <StatCard title="Total Revenue" value={`$${stats.totalRevenue.toLocaleString()}`} icon={<DollarSign />} color="blue" />
-              <StatCard title="Total Traders" value={stats.totalTraders} icon={<Users />} color="purple" />
-              <StatCard title="Pending Orders" value={stats.pendingOrders} icon={<ShoppingCart />} color="amber" />
-              <StatCard title="Pending KYC" value={stats.pendingKyc} icon={<Fingerprint />} color="red" />
+            <div className="space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <StatCard title="Total Revenue" value={`$${stats.totalRevenue.toLocaleString()}`} icon={<DollarSign />} color="blue" />
+                <StatCard title="Total Traders" value={stats.totalTraders} icon={<Users />} color="purple" />
+                <StatCard title="Verified Challenges" value={stats.verifiedCount} icon={<Award />} color="green" />
+                <StatCard title="Pending Payments" value={stats.pendingOrders} icon={<ShoppingCart />} color="amber" />
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <Card className="border-border/50 bg-card/30">
+                  <CardHeader><CardTitle className="text-lg">Newest Traders</CardTitle></CardHeader>
+                  <CardContent className="p-0">
+                    <div className="divide-y divide-border/30">
+                      {adminData.users.slice(0, 5).map((u: any) => (
+                        <div key={u.id} className="p-4 flex items-center justify-between hover:bg-primary/5 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8 border border-white/10">
+                              <AvatarFallback className="text-[10px] font-bold bg-secondary">{u.name?.slice(0, 2).toUpperCase()}</AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="text-sm font-bold text-white">{u.name}</p>
+                              <p className="text-[10px] text-muted-foreground font-mono">UID: {u.uid}</p>
+                            </div>
+                          </div>
+                          <Button variant="ghost" size="sm" onClick={() => setPreviewUserId(u.id)}><Eye className="w-4 h-4" /></Button>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-border/50 bg-card/30">
+                  <CardHeader><CardTitle className="text-lg">Latest Orders</CardTitle></CardHeader>
+                  <CardContent className="p-0">
+                    <div className="divide-y divide-border/30">
+                      {adminData.orders.slice(0, 5).map((o: any) => (
+                        <div key={o.id} className="p-4 flex items-center justify-between hover:bg-primary/5 transition-colors">
+                          <div>
+                            <p className="text-sm font-bold text-white">{o.plan} - {o.accountSize}</p>
+                            <p className="text-[10px] text-muted-foreground">{o.email}</p>
+                          </div>
+                          <Badge variant="outline" className={cn(
+                            "text-[8px] uppercase",
+                            o.status === 'verified' ? "border-emerald-500/50 text-emerald-500" : "border-amber-500/50 text-amber-500"
+                          )}>{o.status}</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           )}
 
-          {activeTab === 'users' && (
+          {activeTab === 'user_directory' && (
             <Card className="border-border/50 bg-card/30">
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm text-left">
                     <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
                       <tr>
-                        <th className="py-4 px-6">Trader</th>
-                        <th className="py-4 px-6">UID</th>
-                        <th className="py-4 px-6">Status</th>
+                        <th className="py-4 px-6">Trader Name</th>
+                        <th className="py-4 px-6">Email / Phone</th>
+                        <th className="py-4 px-6">Referral Code</th>
                         <th className="py-4 px-6 text-right">Actions</th>
                       </tr>
                     </thead>
@@ -481,19 +541,30 @@ export default function AdminPage() {
                       {filteredUsers.map((u: any) => (
                         <tr key={u.id} className="hover:bg-primary/5 transition-colors">
                           <td className="py-4 px-6">
-                            <div className="font-bold text-white">{u.name}</div>
-                            <div className="text-xs text-muted-foreground">{u.email}</div>
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-10 w-10 border border-primary/20">
+                                <AvatarFallback className="font-bold text-primary">{u.name?.slice(0, 2).toUpperCase()}</AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <div className="font-bold text-white">{u.name}</div>
+                                <div className="text-[10px] text-muted-foreground font-mono">UID: {u.uid || '--------'}</div>
+                              </div>
+                            </div>
                           </td>
-                          <td className="py-4 px-6 font-mono text-[10px] text-muted-foreground">{u.uid || 'N/A'}</td>
                           <td className="py-4 px-6">
-                            <Badge variant="outline" className={cn(
-                              "text-[9px] uppercase",
-                              u.accountStatus === 'active' ? "border-emerald-500/50 text-emerald-500" : "border-destructive text-destructive"
-                            )}>{u.accountStatus || 'INACTIVE'}</Badge>
+                            <div className="text-white font-medium">{u.email}</div>
+                            <div className="text-xs text-muted-foreground">{u.phone || 'No phone'}</div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <Badge variant="outline" className="text-[10px] border-primary/30 text-primary uppercase font-mono">{u.referralCode || 'NONE'}</Badge>
                           </td>
                           <td className="py-4 px-6 text-right space-x-2">
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => { setSelectedUser(u); setIsGiftModalOpen(true); }}><Gift className="w-4 h-4 text-amber-500" /></Button>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setPreviewUserId(u.id)}><Eye className="w-4 h-4" /></Button>
+                            <Button variant="ghost" size="sm" className="h-9 w-9 p-0 hover:bg-amber-500/10" onClick={() => { setSelectedUser(u); setIsGiftModalOpen(true); }}>
+                              <Gift className="w-5 h-5 text-amber-500" />
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-9 w-9 p-0" onClick={() => setPreviewUserId(u.id)}>
+                              <Eye className="w-5 h-5" />
+                            </Button>
                           </td>
                         </tr>
                       ))}
@@ -505,7 +576,7 @@ export default function AdminPage() {
             </Card>
           )}
 
-          {activeTab === 'orders' && (
+          {activeTab === 'order_journal' && (
             <Card className="border-border/50 bg-card/30">
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
@@ -515,6 +586,7 @@ export default function AdminPage() {
                         <th className="py-4 px-6">Trader</th>
                         <th className="py-4 px-6">Plan / Size</th>
                         <th className="py-4 px-6">Amount / Net</th>
+                        <th className="py-4 px-6">TX Hash</th>
                         <th className="py-4 px-6">Status</th>
                         <th className="py-4 px-6 text-right">Actions</th>
                       </tr>
@@ -524,7 +596,7 @@ export default function AdminPage() {
                         <tr key={o.id} className="hover:bg-primary/5 transition-colors">
                           <td className="py-4 px-6">
                             <div className="font-bold text-white">{o.userName}</div>
-                            <div className="text-[10px] text-muted-foreground font-mono">{o.txHash?.slice(0, 15)}...</div>
+                            <div className="text-[10px] text-muted-foreground">{o.email}</div>
                           </td>
                           <td className="py-4 px-6">
                             <div className="text-white font-medium">{o.plan}</div>
@@ -534,6 +606,7 @@ export default function AdminPage() {
                             <div className="text-white font-bold">${o.amountPaid}</div>
                             <Badge variant="outline" className="text-[8px] py-0">{o.network}</Badge>
                           </td>
+                          <td className="py-4 px-6 font-mono text-[10px] text-muted-foreground max-w-[120px] truncate">{o.txHash}</td>
                           <td className="py-4 px-6">
                             <Badge className={cn(
                               "text-[9px] uppercase",
@@ -543,10 +616,10 @@ export default function AdminPage() {
                           </td>
                           <td className="py-4 px-6 text-right flex justify-end gap-2">
                              {o.paymentScreenshot && (
-                               <Button size="sm" variant="outline" className="h-8 text-[10px]" onClick={() => { setSelectedOrder(o); setIsProofModalOpen(true); }}>Proof</Button>
+                               <Button size="sm" variant="outline" className="h-8 text-[10px]" onClick={() => { setSelectedOrder(o); setIsProofModalOpen(true); }}>View Proof</Button>
                              )}
                              {o.status === 'pending' && (
-                               <Button size="sm" className="h-8 text-[10px] bg-emerald-600 hover:bg-emerald-700" onClick={() => { setSelectedOrder(o); setIsVerifyModalOpen(true); }}>Verify</Button>
+                               <Button size="sm" className="h-8 text-[10px] bg-emerald-600 hover:bg-emerald-700" onClick={() => { setSelectedOrder(o); setIsVerifyModalOpen(true); }}>Verify & Assign</Button>
                              )}
                           </td>
                         </tr>
@@ -591,43 +664,6 @@ export default function AdminPage() {
                       ))}
                     </tbody>
                   </table>
-                  {adminData?.users?.filter((u: any) => u.kycStatus && u.kycStatus !== 'none').length === 0 && <div className="p-20 text-center text-muted-foreground">No KYC submissions found.</div>}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {activeTab === 'payouts' && (
-            <Card className="border-border/50 bg-card/30">
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left">
-                    <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black">
-                      <tr>
-                        <th className="py-4 px-6">Trader</th>
-                        <th className="py-4 px-6">Amount</th>
-                        <th className="py-4 px-6">Status</th>
-                        <th className="py-4 px-6 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/30">
-                      {adminData?.payouts?.map((p: any) => (
-                        <tr key={p.id} className="hover:bg-primary/5 transition-colors">
-                          <td className="py-4 px-6 font-bold text-white">{p.email || p.userId}</td>
-                          <td className="py-4 px-6 text-emerald-500 font-bold">${p.amount}</td>
-                          <td className="py-4 px-6">
-                            <Badge variant="outline" className="text-[9px] uppercase">{p.status}</Badge>
-                          </td>
-                          <td className="py-4 px-6 text-right">
-                             {p.status === 'pending' && (
-                               <Button size="sm" className="h-8 text-[10px] bg-emerald-600" onClick={() => handleMarkPaid(p.id)}>Mark Paid</Button>
-                             )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {adminData?.payouts?.length === 0 && <div className="p-20 text-center text-muted-foreground">No payout requests.</div>}
                 </div>
               </CardContent>
             </Card>
@@ -670,6 +706,41 @@ export default function AdminPage() {
             </Card>
           )}
 
+          {activeTab === 'payouts' && (
+            <Card className="border-border/50 bg-card/30">
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black">
+                      <tr>
+                        <th className="py-4 px-6">Trader</th>
+                        <th className="py-4 px-6">Amount</th>
+                        <th className="py-4 px-6">Status</th>
+                        <th className="py-4 px-6 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/30">
+                      {adminData?.payouts?.map((p: any) => (
+                        <tr key={p.id} className="hover:bg-primary/5 transition-colors">
+                          <td className="py-4 px-6 font-bold text-white">{p.email || p.userId}</td>
+                          <td className="py-4 px-6 text-emerald-500 font-bold">${p.amount}</td>
+                          <td className="py-4 px-6">
+                            <Badge variant="outline" className="text-[9px] uppercase">{p.status}</Badge>
+                          </td>
+                          <td className="py-4 px-6 text-right">
+                             {p.status === 'pending' && (
+                               <Button size="sm" className="h-8 text-[10px] bg-emerald-600" onClick={() => handleMarkPaid(p.id)}>Mark Paid</Button>
+                             )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {activeTab === 'branding' && (
             <div className="max-w-3xl space-y-8">
               <Card className="border-border/50 bg-card/30">
@@ -696,17 +767,6 @@ export default function AdminPage() {
                     <div className="space-y-2">
                       <Label className="text-xs font-bold uppercase">Support Email</Label>
                       <Input value={brandingForm.supportEmail} onChange={e => setBrandingForm({...brandingForm, supportEmail: e.target.value})} className="bg-secondary/50" />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label className="text-xs font-bold uppercase">Discord URL</Label>
-                      <Input value={brandingForm.discordUrl} onChange={e => setBrandingForm({...brandingForm, discordUrl: e.target.value})} className="bg-secondary/50" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs font-bold uppercase">Instagram URL</Label>
-                      <Input value={brandingForm.instagramUrl} onChange={e => setBrandingForm({...brandingForm, instagramUrl: e.target.value})} className="bg-secondary/50" />
                     </div>
                   </div>
 
@@ -750,24 +810,6 @@ export default function AdminPage() {
                     </Button>
                  </CardContent>
                </Card>
-
-               <div className="space-y-4">
-                  <h3 className="text-sm font-black uppercase tracking-widest text-muted-foreground">Broadcast History</h3>
-                  {adminData?.broadcasts?.map((b: any) => (
-                    <Card key={b.id} className="border-border/50 bg-secondary/10">
-                      <CardContent className="p-4 flex justify-between items-center">
-                        <div>
-                          <p className="font-bold text-white">{b.title}</p>
-                          <p className="text-xs text-muted-foreground">{b.message.slice(0, 80)}...</p>
-                        </div>
-                        <div className="text-right">
-                           <Badge variant="outline" className="text-[8px]">{b.type}</Badge>
-                           <p className="text-[8px] text-muted-foreground mt-1">{new Date(b.sentAt).toLocaleString()}</p>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-               </div>
             </div>
           )}
         </div>
@@ -820,6 +862,61 @@ export default function AdminPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={isGiftModalOpen} onOpenChange={setIsGiftModalOpen}>
+        <DialogContent className="bg-card border-amber-500/20">
+          <DialogHeader>
+             <DialogTitle className="text-amber-500">🎁 Gift Account to {selectedUser?.name}</DialogTitle>
+             <DialogDescription>Provision an institutional account for this trader.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+             <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                   <Label className="text-xs font-bold">Plan Type</Label>
+                   <Select value={giftForm.plan} onValueChange={v => setGiftForm({...giftForm, plan: v})}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                         <SelectItem value="1-Step Pro">1-Step Pro</SelectItem>
+                         <SelectItem value="2-Step Classic">2-Step Classic</SelectItem>
+                         <SelectItem value="Instant Funding">Instant Funding</SelectItem>
+                      </SelectContent>
+                   </Select>
+                </div>
+                <div className="space-y-2">
+                   <Label className="text-xs font-bold">Account Size</Label>
+                   <Select value={giftForm.size} onValueChange={v => setGiftForm({...giftForm, size: v})}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                         {['$5,000', '$10,000', '$25,000', '$50,000', '$100,000', '$200,000'].map(s => <SelectItem key={v} value={s}>{s}</SelectItem>)}
+                      </SelectContent>
+                   </Select>
+                </div>
+             </div>
+             <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                   <Label className="text-xs font-bold">MT5 Login</Label>
+                   <Input value={giftForm.login} onChange={e => setGiftForm({...giftForm, login: e.target.value})} placeholder="MT5 account number" />
+                </div>
+                <div className="space-y-2">
+                   <Label className="text-xs font-bold">MT5 Password</Label>
+                   <Input value={giftForm.password} onChange={e => setGiftForm({...giftForm, password: e.target.value})} />
+                </div>
+             </div>
+             <div className="space-y-2">
+                <Label className="text-xs font-bold">MT5 Server</Label>
+                <Input value={giftForm.server} onChange={e => setGiftForm({...giftForm, server: e.target.value})} />
+             </div>
+             <div className="space-y-2">
+                <Label className="text-xs font-bold">Note to trader (optional)</Label>
+                <Textarea value={giftForm.note} onChange={e => setGiftForm({...giftForm, note: e.target.value})} rows={2} />
+             </div>
+          </div>
+          <DialogFooter className="mt-6">
+             <Button variant="ghost" onClick={() => setIsGiftModalOpen(false)}>Cancel</Button>
+             <Button className="bg-amber-500 hover:bg-amber-600 text-black font-bold" onClick={handleGiftAccount} disabled={actionLoading}>Gift Account</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isKycReviewOpen} onOpenChange={setIsKycReviewOpen}>
         <DialogContent className="max-w-4xl bg-card border-border/50">
           <DialogHeader><DialogTitle>KYC Application Review: {selectedUser?.name}</DialogTitle></DialogHeader>
@@ -867,3 +964,4 @@ export default function AdminPage() {
     </div>
   );
 }
+
