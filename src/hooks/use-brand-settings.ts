@@ -23,7 +23,7 @@ export function useBrandSettings() {
     return {
       logoUrl: data?.logoUrl || 'https://picsum.photos/seed/pflogo-blue-silver/400/400',
       siteName: data?.siteName || 'PrimeFunded',
-      discordUrl: data?.discordUrl || 'https://discord.gg/G2jfSwygC9',
+      discordUrl: data?.discordUrl || '',
       instagramUrl: data?.instagramUrl || '',
       telegramUrl: data?.telegramUrl || '',
       whatsappUrl: data?.whatsappUrl || '',
