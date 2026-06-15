@@ -16,11 +16,9 @@ import {
   ChevronRight,
   Award,
   Terminal,
-  Shield,
   BookOpen,
   Gift,
   Users,
-  MessageCircle,
   ArrowRight
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -87,7 +85,7 @@ function DiscordIcon(props: any) {
 export const Navigation = memo(function Navigation() {
   const pathname = usePathname();
   const router = useRouter();
-  const { logout, userData, user } = useAuth();
+  const { logout, userData } = useAuth();
   const branding = useBrandSettings();
 
   const [adminClickCount, setAdminClickCount] = useState(0);

@@ -8,14 +8,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 import { 
-  Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, MoreVertical, Gift, Ban, CheckCircle2, XCircle, Clock, LayoutDashboard, ChevronLeft, Bell, Send, User, History, Award, BarChart3, Search, ExternalLink, RefreshCw, Copy, Loader2, Image as ImageIcon, Settings, Upload, Save, Instagram, MessageCircle, Phone, SearchX, AlertTriangle, Megaphone, DollarSign, Lock
+  Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, Award, Search, RefreshCw, Copy, Loader2, Image as ImageIcon, Settings, Upload, Save, Instagram, Phone, SearchX, Megaphone, DollarSign, Lock, ChevronLeft, LayoutDashboard, XCircle, CheckCircle2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
@@ -27,7 +26,6 @@ import { db } from '@/lib/firebase';
 import { useBrandSettings } from '@/hooks/use-brand-settings';
 import { uploadImageAsBase64 } from '@/lib/imageUpload';
 import { useAuth } from '@/context/AuthContext';
-import { redirect } from 'next/navigation';
 
 const StatCard = memo(function StatCard({ title, value, icon, color }: { title: string, value: string | number, icon: any, color: string }) {
   const colors: any = {
@@ -54,17 +52,10 @@ const StatCard = memo(function StatCard({ title, value, icon, color }: { title: 
 export default function AdminPage() {
   const { user, loading: authLoading } = useAuth();
   
-  // Authorization Guard
-  if (!authLoading && user && user.email !== 'nomis108a@gmail.com' && user.email !== 'sitarama108a@gmail.com') {
-    redirect('/dashboard');
-  }
-
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminPasswordInput, setAdminPasswordInput] = useState('');
   const [adminError, setAdminError] = useState('');
-  const [adminClickCount, setAdminClickCount] = useState(0);
-  const adminClickTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const [activeTab, setActiveTab] = useState('overview');
   const [searchTerm, setSearchTerm] = useState('');
@@ -95,38 +86,17 @@ export default function AdminPage() {
   });
   const [savingLinks, setSavingLinks] = useState(false);
 
-  // Secret Admin Access via Click Logic
+  // Check for existing session on mount
   useEffect(() => {
-    const handleLogoClick = () => {
-      setAdminClickCount((prev) => {
-        const nextCount = prev + 1;
-        if (adminClickTimerRef.current) clearTimeout(adminClickTimerRef.current);
-        
-        if (nextCount >= 5) {
-          setShowAdminModal(true);
-          setAdminError('');
-          setAdminPasswordInput('');
-          return 0;
-        }
-
-        adminClickTimerRef.current = setTimeout(() => {
-          setAdminClickCount(0);
-        }, 3000);
-
-        return nextCount;
-      });
-    };
-
-    // Attach to the logo area in the navigation sidebar
-    const logoArea = document.querySelector('img[data-ai-hint="site logo"]')?.parentElement;
-    if (logoArea) {
-      logoArea.addEventListener('click', handleLogoClick);
+    const isVerified = localStorage.getItem('adminVerified') === 'true';
+    if (isVerified) {
+      setIsAuthenticated(true);
+    } else {
+      setShowAdminModal(true);
     }
-
-    return () => {
-      if (logoArea) logoArea.removeEventListener('click', handleLogoClick);
-      if (adminClickTimerRef.current) clearTimeout(adminClickTimerRef.current);
-    };
+    
+    const savedTab = localStorage.getItem('admin_active_tab');
+    if (savedTab) setActiveTab(savedTab);
   }, []);
 
   const handleAdminAuth = (e: React.FormEvent) => {
@@ -135,7 +105,7 @@ export default function AdminPage() {
     if (adminPasswordInput === masterKey) {
       setIsAuthenticated(true);
       setShowAdminModal(false);
-      sessionStorage.setItem('admin_master_key', adminPasswordInput);
+      localStorage.setItem('adminVerified', 'true');
       toast({ title: "Admin Access Granted" });
     } else {
       setAdminError("❌ Access Denied");
@@ -143,20 +113,6 @@ export default function AdminPage() {
       toast({ variant: "destructive", title: "Access Denied" });
     }
   };
-
-  useEffect(() => {
-    const saved = localStorage.getItem('admin_active_tab');
-    if (saved) setActiveTab(saved);
-    
-    const savedPass = sessionStorage.getItem('admin_master_key');
-    const masterKey = "93463962569392846256";
-    if (savedPass && savedPass === masterKey) {
-      setIsAuthenticated(true);
-    } else {
-      // Show modal automatically if visiting unauthenticated
-      setShowAdminModal(true);
-    }
-  }, []);
 
   const loadData = async () => {
     if (!isAuthenticated) return;
@@ -225,26 +181,26 @@ export default function AdminPage() {
 
   const filteredUsers = useMemo(() => {
     if (!adminData?.users) return [];
-    const query = searchTerm.toLowerCase();
+    const queryStr = searchTerm.toLowerCase();
     return adminData.users.filter((u: any) => 
-      u.name?.toLowerCase().includes(query) ||
-      u.email?.toLowerCase().includes(query) ||
+      u.name?.toLowerCase().includes(queryStr) ||
+      u.email?.toLowerCase().includes(queryStr) ||
       u.phone?.includes(searchTerm) ||
       u.id?.includes(searchTerm) ||
       u.traderId?.includes(searchTerm) ||
-      u.referralCode?.toLowerCase().includes(query)
+      u.referralCode?.toLowerCase().includes(queryStr)
     );
   }, [adminData?.users, searchTerm]);
 
   const filteredOrders = useMemo(() => {
     if (!adminData?.orders) return [];
-    const query = searchTerm.toLowerCase();
+    const queryStr = searchTerm.toLowerCase();
     return adminData.orders.filter((o: any) => 
-      o.email?.toLowerCase().includes(query) ||
-      o.txHash?.toLowerCase().includes(query) ||
-      o.id?.toLowerCase().includes(query) ||
-      o.plan?.toLowerCase().includes(query) ||
-      o.size?.toLowerCase().includes(query)
+      o.email?.toLowerCase().includes(queryStr) ||
+      o.txHash?.toLowerCase().includes(queryStr) ||
+      o.id?.toLowerCase().includes(queryStr) ||
+      o.plan?.toLowerCase().includes(queryStr) ||
+      o.size?.toLowerCase().includes(queryStr)
     );
   }, [adminData?.orders, searchTerm]);
 
@@ -311,12 +267,6 @@ export default function AdminPage() {
     } catch (err) {
       toast({ variant: "destructive", title: "Save Failed" });
     } finally {
-      setSocialLinks({
-        discord: socialLinks.discord,
-        instagram: socialLinks.instagram,
-        telegram: socialLinks.telegram,
-        whatsapp: socialLinks.whatsapp
-      });
       setSavingLinks(false);
     }
   };
@@ -575,16 +525,9 @@ export default function AdminPage() {
                                  <td className="py-4 px-6">
                                    <div className="flex items-center gap-2">
                                      <span className="font-mono text-[10px] text-muted-foreground truncate max-w-[120px]">{o.txHash}</span>
-                                     <TooltipProvider>
-                                       <Tooltip>
-                                         <TooltipTrigger asChild>
-                                           <button className="text-muted-foreground hover:text-primary transition-colors" onClick={() => { navigator.clipboard.writeText(o.txHash); toast({ title: "Copied" }); }}>
-                                              <Copy className="w-3 h-3" />
-                                           </button>
-                                         </TooltipTrigger>
-                                         <TooltipContent className="bg-card border-border"><p className="text-xs">{o.txHash}</p></TooltipContent>
-                                       </Tooltip>
-                                     </TooltipProvider>
+                                     <button className="text-muted-foreground hover:text-primary transition-colors" onClick={() => { navigator.clipboard.writeText(o.txHash); toast({ title: "Copied" }); }}>
+                                        <Copy className="w-3 h-3" />
+                                     </button>
                                    </div>
                                    <div className="text-[9px] uppercase font-black text-primary/50">{o.network || 'Unknown Network'}</div>
                                  </td>
@@ -666,123 +609,7 @@ export default function AdminPage() {
                  </Card>
               </div>
 
-              <div className={cn("space-y-6", activeTab === 'referrals' ? "block" : "hidden")}>
-                 <Card className="border-border/50 bg-card/30">
-                    <CardHeader><CardTitle className="text-white">Global Referrals</CardTitle></CardHeader>
-                    <CardContent className="p-0">
-                       <div className="overflow-x-auto">
-                         <table className="w-full text-sm text-left">
-                           <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-bold tracking-widest">
-                             <tr>
-                               <th className="py-4 px-6">Date</th>
-                               <th className="py-4 px-6">Referrer ID</th>
-                               <th className="py-4 px-6">Referred User</th>
-                               <th className="py-4 px-6">Status</th>
-                               <th className="py-4 px-6 text-right">Comm.</th>
-                             </tr>
-                           </thead>
-                           <tbody className="divide-y divide-border/30">
-                             {adminData?.referrals?.length === 0 ? (
-                               <tr><td colSpan={5} className="py-12 text-center text-muted-foreground italic">No referral records found.</td></tr>
-                             ) : adminData?.referrals?.map((r: any) => (
-                               <tr key={r.id} className="hover:bg-white/5">
-                                 <td className="py-4 px-6 text-xs text-muted-foreground">
-                                   {r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'N/A'}
-                                 </td>
-                                 <td className="py-4 px-6 font-mono text-[10px] text-white truncate max-w-[120px]">{r.referrerId}</td>
-                                 <td className="py-4 px-6 font-bold text-white truncate max-w-[150px]">{r.referredUserEmail}</td>
-                                 <td className="py-4 px-6"><Badge variant="outline" className="text-[10px]">{r.status?.toUpperCase()}</Badge></td>
-                                 <td className="py-4 px-6 text-right font-bold text-accent">${r.amount || 0}</td>
-                               </tr>
-                             ))}
-                           </tbody>
-                         </table>
-                       </div>
-                    </CardContent>
-                 </Card>
-              </div>
-
-              <div className={cn("space-y-6", activeTab === 'payouts' ? "block" : "hidden")}>
-                 <Card className="border-border/50 bg-card/30">
-                    <CardHeader><CardTitle className="text-white">Payout Requests</CardTitle></CardHeader>
-                    <CardContent className="p-0">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left">
-                          <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-bold tracking-widest">
-                            <tr>
-                              <th className="py-4 px-6">Date</th>
-                              <th className="py-4 px-6">Trader</th>
-                              <th className="py-4 px-6">Method</th>
-                              <th className="py-4 px-6 text-right">Amount</th>
-                              <th className="py-4 px-6 text-right">Status</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-border/30">
-                            {adminData?.payouts?.length === 0 ? (
-                               <tr><td colSpan={5} className="py-12 text-center text-muted-foreground italic">No payout history.</td></tr>
-                            ) : adminData?.payouts?.map((p: any) => (
-                               <tr key={p.id} className="hover:bg-white/5">
-                                 <td className="py-4 px-6 text-xs text-muted-foreground">{p.date ? new Date(p.date).toLocaleDateString() : 'N/A'}</td>
-                                 <td className="py-4 px-6 font-bold text-white">{p.email}</td>
-                                 <td className="py-4 px-6 text-xs">{p.method}</td>
-                                 <td className="py-4 px-6 text-right font-bold text-accent">${p.amount}</td>
-                                 <td className="py-4 px-6 text-right">
-                                   <Badge className={p.status === 'done' ? "bg-accent text-accent-foreground" : "bg-amber-500 text-white"}>{p.status.toUpperCase()}</Badge>
-                                 </td>
-                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </CardContent>
-                 </Card>
-              </div>
-
-              <div className={cn("space-y-8", activeTab === 'broadcast' ? "block" : "hidden")}>
-                <div className="max-w-3xl space-y-8">
-                  <Card className="border-border/50 bg-card/30">
-                    <CardHeader>
-                      <CardTitle className="text-white flex items-center gap-2"><Megaphone className="w-5 h-5 text-primary" /> Global Broadcast</CardTitle>
-                      <CardDescription>Send an institutional announcement to all active traders.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="space-y-2">
-                        <Label className="text-white">Announcement Title</Label>
-                        <Input placeholder="e.g. Server Maintenance: Weekend Upgrade" className="bg-secondary/50" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-white">Message Body</Label>
-                        <Textarea placeholder="Type your announcement here..." className="bg-secondary/50 min-h-[150px]" />
-                      </div>
-                      <Button className="w-full font-bold cyan-box-glow cursor-not-allowed" disabled>
-                        <Send className="w-4 h-4 mr-2" /> Send to 5,000+ Traders
-                      </Button>
-                      <p className="text-[10px] text-center text-muted-foreground uppercase tracking-widest">Broadcasts are currently disabled for system stability.</p>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-border/50 bg-card/30">
-                     <CardHeader><CardTitle className="text-white text-lg">Sent Broadcasts</CardTitle></CardHeader>
-                     <CardContent className="p-0">
-                        <div className="divide-y divide-border/20">
-                           {adminData?.broadcasts?.length === 0 ? (
-                              <div className="p-8 text-center text-xs text-muted-foreground italic">No message history.</div>
-                           ) : adminData?.broadcasts?.map((b: any) => (
-                              <div key={b.id} className="p-4 flex justify-between items-center">
-                                 <div>
-                                    <p className="font-bold text-white text-sm">{b.title}</p>
-                                    <p className="text-[10px] text-muted-foreground">{new Date(b.sentAt).toLocaleString()}</p>
-                                 </div>
-                                 <Badge variant="outline">DELIVERED</Badge>
-                              </div>
-                           ))}
-                        </div>
-                     </CardContent>
-                  </Card>
-                </div>
-              </div>
-
-              <div className={cn("space-y-8 pb-20", activeTab === 'settings' ? "block" : "hidden")}>
+              <div className={cn("space-y-8", activeTab === 'settings' ? "block" : "hidden")}>
                 <div className="max-w-3xl grid gap-8">
                   <Card className="border-border/50 bg-card/30 backdrop-blur-sm">
                     <CardHeader>
@@ -857,10 +684,6 @@ export default function AdminPage() {
                               <CheckCircle2 className="w-4 h-4" /> Branding Synchronized
                             </div>
                           )}
-
-                          {logoFile && !uploadingLogo && !isUploadDone && (
-                            <p className="text-[10px] text-accent font-bold uppercase tracking-widest">Selected: {logoFile.name}</p>
-                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -877,7 +700,7 @@ export default function AdminPage() {
                       <div className="grid md:grid-cols-2 gap-6">
                         <div className="space-y-2">
                           <Label className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
-                            <DiscordIcon className="w-3.5 h-3.5" /> Discord Invite
+                             Discord Invite
                           </Label>
                           <Input 
                             placeholder="https://discord.gg/..." 
@@ -888,34 +711,12 @@ export default function AdminPage() {
                         </div>
                         <div className="space-y-2">
                           <Label className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
-                            <Instagram className="w-3.5 h-3.5" /> Instagram Profile
+                            Instagram Profile
                           </Label>
                           <Input 
                             placeholder="https://instagram.com/..." 
                             value={socialLinks.instagram}
                             onChange={e => setSocialLinks({...socialLinks, instagram: e.target.value})}
-                            className="bg-secondary/30 text-white"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
-                            <Send className="w-3.5 h-3.5" /> Telegram Channel
-                          </Label>
-                          <Input 
-                            placeholder="https://t.me/..." 
-                            value={socialLinks.telegram}
-                            onChange={e => setSocialLinks({...socialLinks, telegram: e.target.value})}
-                            className="bg-secondary/30 text-white"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
-                            <Phone className="w-3.5 h-3.5" /> WhatsApp Group
-                          </Label>
-                          <Input 
-                            placeholder="https://chat.whatsapp.com/..." 
-                            value={socialLinks.whatsapp}
-                            onChange={e => setSocialLinks({...socialLinks, whatsapp: e.target.value})}
                             className="bg-secondary/30 text-white"
                           />
                         </div>
@@ -948,7 +749,7 @@ export default function AdminPage() {
         </div>
       </main>
 
-      <Dialog open={showAdminModal} onOpenChange={setShowAdminModal}>
+      <Dialog open={showAdminModal} onOpenChange={(open) => { if (!isAuthenticated) return; setShowAdminModal(open); }}>
         <DialogContent className="bg-[#0a0f1e] border-[#00d4ff] text-white sm:max-w-[400px] p-8 shadow-[0_0_50px_rgba(0,212,255,0.2)]">
           <DialogHeader className="text-center mb-6">
             <DialogTitle className="text-2xl font-headline font-bold text-[#00d4ff] tracking-tight">🔐 Admin Access</DialogTitle>
@@ -1032,28 +833,6 @@ export default function AdminPage() {
   );
 }
 
-function DiscordIcon(props: any) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
-      <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993.023.03.07.039.084.028a19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.419-2.157 2.419zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.419-2.157 2.419z" />
-    </svg>
-  );
-}
-
-function EmptyState({ message }: { message: string }) {
-  return (
-    <div className="py-20 text-center flex flex-col items-center justify-center space-y-4">
-      <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center border border-border">
-        <SearchX className="w-8 h-8 text-muted-foreground opacity-30" />
-      </div>
-      <div>
-        <h4 className="text-white font-bold">No results found</h4>
-        <p className="text-sm text-muted-foreground max-w-xs mx-auto">{message}</p>
-      </div>
-    </div>
-  );
-}
-
 function LoadingGrid() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -1068,6 +847,20 @@ function LoadingTable() {
   return (
     <div className="space-y-4 p-8">
       {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-12 w-full" />)}
+    </div>
+  );
+}
+
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div className="py-20 text-center flex flex-col items-center justify-center space-y-4">
+      <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center border border-border">
+        <SearchX className="w-8 h-8 text-muted-foreground opacity-30" />
+      </div>
+      <div>
+        <h4 className="text-white font-bold">No results found</h4>
+        <p className="text-sm text-muted-foreground max-w-xs mx-auto">{message}</p>
+      </div>
     </div>
   );
 }
