@@ -247,7 +247,7 @@ export default function Home() {
               <span className="font-headline font-bold text-2xl tracking-tight text-white">{branding.siteName}</span>
             </div>
             <p className="text-sm text-muted-foreground max-w-xs text-center md:text-left">
-              The world's most transparent institutional funding firm for traders.
+              The world&apos;s most transparent institutional funding firm for traders.
             </p>
             <div className="flex items-center gap-4 mt-2">
                {branding.discordUrl && <SocialIcon href={branding.discordUrl} icon={<DiscordIcon className="w-5 h-5" />} />}

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { Suspense, useState, useEffect } from 'react';
@@ -155,7 +154,7 @@ function PaymentContent() {
         </div>
         <h2 className="text-4xl font-headline font-bold mb-4 text-white">Verification Pending</h2>
         <p className="text-muted-foreground text-lg mb-10 leading-relaxed">
-          Thank you! We've received your transaction details. Our compliance team will verify your payment within 1-4 hours. 
+          Thank you! We&apos;ve received your transaction details. Our compliance team will verify your payment within 1-4 hours. 
           Your MT5 credentials will be emailed to <span className="text-primary font-bold">{email}</span> as soon as verification is complete.
         </p>
         <div className="flex gap-4">

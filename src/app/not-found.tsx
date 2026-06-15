@@ -1,5 +1,4 @@
-
-'use client';
+"use client";
 
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -28,7 +27,7 @@ export default function NotFound() {
         <div className="space-y-3">
           <h2 className="text-3xl font-headline font-bold text-white">Route Lost in Volatility</h2>
           <p className="text-muted-foreground text-lg">
-            The page you are looking for has been liquidated or moved. Let's get you back to the terminal.
+            The page you are looking for has been liquidated or moved. Let&apos;s get you back to the terminal.
           </p>
         </div>
 

@@ -6,7 +6,6 @@ import { FirebaseClientProvider } from '@/firebase';
 import { ProgressBar } from '@/components/ProgressBar';
 import { PerformanceTracker } from '@/components/PerformanceTracker';
 import { Suspense } from 'react';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
 
 const logoUrl = 'https://picsum.photos/seed/pflogo-blue-silver/400/400';
 
