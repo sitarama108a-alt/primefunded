@@ -17,13 +17,13 @@ import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { 
-  Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, Award, Search, RefreshCw, Copy, Loader2, Image as ImageIcon, Settings, Upload, Save, Instagram, Phone, SearchX, Megaphone, DollarSign, Lock, ChevronLeft, LayoutDashboard, XCircle, CheckCircle2, Clock, ShieldCheck, AlertTriangle, Gift, FileImage, ExternalLink, Skull, Flame, Mail, Trash2, Send
+  Eye, Shield, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, Award, Search, RefreshCw, Copy, Loader2, Image as ImageIcon, Settings, Upload, Save, Instagram, Phone, SearchX, Megaphone, DollarSign, Lock, ChevronLeft, LayoutDashboard, XCircle, CheckCircle2, Clock, ShieldCheck, AlertTriangle, Gift, FileImage, ExternalLink, Skull, Flame, Mail, Trash2, Send, Wrench
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import DashboardPage from '@/app/dashboard/page';
 import Image from 'next/image';
-import { doc, setDoc, collection, onSnapshot, query, orderBy, limit, where, updateDoc, writeBatch, serverTimestamp, addDoc, deleteDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, onSnapshot, query, orderBy, limit, where, updateDoc, writeBatch, serverTimestamp, addDoc, deleteDoc, getDoc, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useBrandSettings } from '@/hooks/use-brand-settings';
 import { uploadImageAsBase64 } from '@/lib/imageUpload';
@@ -240,6 +240,41 @@ export default function AdminPage() {
   }, [adminData]);
 
   // ACTION HANDLERS
+  const handleFixUids = async () => {
+    setActionLoading(true);
+    try {
+      const usersRef = collection(db, 'users');
+      const snapshot = await getDocs(usersRef);
+      
+      const updates: any[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const currentUid = data.uid;
+        const needsNewUid = !currentUid || currentUid.length !== 8 || isNaN(Number(currentUid));
+        
+        if (needsNewUid) {
+          const newUid = Math.floor(10000000 + Math.random() * 90000000).toString();
+          updates.push(updateDoc(doc(db, 'users', docSnap.id), { 
+            uid: newUid,
+            traderId: newUid,
+            updatedAt: serverTimestamp()
+          }));
+        }
+      });
+
+      if (updates.length > 0) {
+        await Promise.all(updates);
+        toast({ title: "✅ UID Maintenance Complete", description: `${updates.length} trader IDs were repaired.` });
+      } else {
+        toast({ title: "✅ Database Synchronized", description: "All trader UIDs are already valid." });
+      }
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Maintenance Failed", description: err.message });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleVerifyOrder = async () => {
     if (!selectedOrder || !verifyForm.login || !verifyForm.password) return;
     setActionLoading(true);
@@ -525,55 +560,65 @@ export default function AdminPage() {
           )}
 
           {activeTab === 'user_directory' && (
-            <Card className="border-border/50 bg-card/30">
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left">
-                    <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
-                      <tr>
-                        <th className="py-4 px-6">Trader Name</th>
-                        <th className="py-4 px-6">Email / Phone</th>
-                        <th className="py-4 px-6">Referral Code</th>
-                        <th className="py-4 px-6 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/30">
-                      {filteredUsers.map((u: any) => (
-                        <tr key={u.id} className="hover:bg-primary/5 transition-colors">
-                          <td className="py-4 px-6">
-                            <div className="flex items-center gap-3">
-                              <Avatar className="h-10 w-10 border border-primary/20">
-                                <AvatarFallback className="font-bold text-primary">{u.name?.slice(0, 2).toUpperCase()}</AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <div className="font-bold text-white">{u.name}</div>
-                                <div className="text-[10px] text-muted-foreground font-mono">UID: {u.uid || '--------'}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-4 px-6">
-                            <div className="text-white font-medium">{u.email}</div>
-                            <div className="text-xs text-muted-foreground">{u.phone || 'No phone'}</div>
-                          </td>
-                          <td className="py-4 px-6">
-                            <Badge variant="outline" className="text-[10px] border-primary/30 text-primary uppercase font-mono">{u.referralCode || 'NONE'}</Badge>
-                          </td>
-                          <td className="py-4 px-6 text-right space-x-2">
-                            <Button variant="ghost" size="sm" className="h-9 w-9 p-0 hover:bg-amber-500/10" onClick={() => { setSelectedUser(u); setIsGiftModalOpen(true); }}>
-                              <Gift className="w-5 h-5 text-amber-500" />
-                            </Button>
-                            <Button variant="ghost" size="sm" className="h-9 w-9 p-0" onClick={() => setPreviewUserId(u.id)}>
-                              <Eye className="w-5 h-5" />
-                            </Button>
-                          </td>
+            <div className="space-y-6">
+              <div className="flex justify-between items-center px-2">
+                <h3 className="text-xl font-headline font-bold text-white">Trader Directory</h3>
+                <Button variant="outline" size="sm" className="bg-primary/10 border-primary/20 text-primary font-bold" onClick={handleFixUids} disabled={actionLoading}>
+                   {actionLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Wrench className="w-4 h-4 mr-2" />}
+                   🔧 Fix All UIDs
+                </Button>
+              </div>
+              
+              <Card className="border-border/50 bg-card/30">
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
+                        <tr>
+                          <th className="py-4 px-6">Trader Name</th>
+                          <th className="py-4 px-6">Email / Phone</th>
+                          <th className="py-4 px-6">Referral Code</th>
+                          <th className="py-4 px-6 text-right">Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {filteredUsers.length === 0 && <div className="p-20 text-center text-muted-foreground">No users found.</div>}
-                </div>
-              </CardContent>
-            </Card>
+                      </thead>
+                      <tbody className="divide-y divide-border/30">
+                        {filteredUsers.map((u: any) => (
+                          <tr key={u.id} className="hover:bg-primary/5 transition-colors">
+                            <td className="py-4 px-6">
+                              <div className="flex items-center gap-3">
+                                <Avatar className="h-10 w-10 border border-primary/20">
+                                  <AvatarFallback className="font-bold text-primary">{u.name?.slice(0, 2).toUpperCase()}</AvatarFallback>
+                                </Avatar>
+                                <div>
+                                  <div className="font-bold text-white">{u.name}</div>
+                                  <div className="text-[10px] text-muted-foreground font-mono">UID: {u.uid || '--------'}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-4 px-6">
+                              <div className="text-white font-medium">{u.email}</div>
+                              <div className="text-xs text-muted-foreground">{u.phone || 'No phone'}</div>
+                            </td>
+                            <td className="py-4 px-6">
+                              <Badge variant="outline" className="text-[10px] border-primary/30 text-primary uppercase font-mono">{u.referralCode || 'NONE'}</Badge>
+                            </td>
+                            <td className="py-4 px-6 text-right space-x-2">
+                              <Button variant="ghost" size="sm" className="h-9 w-9 p-0 hover:bg-amber-500/10" onClick={() => { setSelectedUser(u); setIsGiftModalOpen(true); }}>
+                                <Gift className="w-5 h-5 text-amber-500" />
+                              </Button>
+                              <Button variant="ghost" size="sm" className="h-9 w-9 p-0" onClick={() => setPreviewUserId(u.id)}>
+                                <Eye className="w-5 h-5" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {filteredUsers.length === 0 && <div className="p-20 text-center text-muted-foreground">No users found.</div>}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           )}
 
           {activeTab === 'order_journal' && (
@@ -886,7 +931,7 @@ export default function AdminPage() {
                    <Select value={giftForm.size} onValueChange={v => setGiftForm({...giftForm, size: v})}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                         {['$5,000', '$10,000', '$25,000', '$50,000', '$100,000', '$200,000'].map(s => <SelectItem key={v} value={s}>{s}</SelectItem>)}
+                         {['$5,000', '$10,000', '$25,000', '$50,000', '$100,000', '$200,000'].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                       </SelectContent>
                    </Select>
                 </div>
@@ -903,7 +948,7 @@ export default function AdminPage() {
              </div>
              <div className="space-y-2">
                 <Label className="text-xs font-bold">MT5 Server</Label>
-                <Input value={giftForm.server} onChange={e => setGiftForm({...giftForm, server: e.target.value})} />
+                <Input value={giftForm.server} onChange={e => setVerifyVerifyForm({...verifyForm, server: e.target.value})} />
              </div>
              <div className="space-y-2">
                 <Label className="text-xs font-bold">Note to trader (optional)</Label>
