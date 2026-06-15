@@ -32,5 +32,5 @@ export function isValidEmail(email: string): boolean {
  */
 export function isValidPhone(phone: string): boolean {
   const phoneRegex = /^\+?[0-9\s\-()]{7,20}$/;
-  return phoneRegex.test(phone);
+  return phoneRegex.test(email);
 }

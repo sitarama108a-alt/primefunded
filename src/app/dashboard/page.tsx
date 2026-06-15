@@ -37,7 +37,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { aiComplianceMonitorAlerts } from '@/ai/flows/ai-compliance-monitor-alerts';
 import { useFirestore, useCollection, useDoc } from '@/firebase';
-import { where, doc, updateDoc, setDoc, serverTimestamp, limit, orderBy, onSnapshot } from 'firebase/firestore';
+import { where, doc, updateDoc, setDoc, serverTimestamp, limit, orderBy, onSnapshot, collection, query } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { NotificationBell } from '@/components/NotificationBell';
