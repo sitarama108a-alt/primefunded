@@ -2,56 +2,54 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // User Profile Rules
+    // User Profile & Subcollections
     match /users/{userId} {
-      // User can only read and write their own profile
-      allow read: if request.auth != null && request.auth.uid == userId;
-      // Allow write if authenticated (registration logic creates doc)
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if request.auth != null;
       
-      // Subcollections (Notifications, Accounts)
       match /{allSubcollections=**} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read, write: if request.auth != null;
       }
     }
     
-    // Public read for branding/settings so site logo/name works for visitors
+    // Orders Ledger
+    match /orders/{orderId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Payouts Ledger
+    match /payouts/{payoutId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Breach Ledger
+    match /breaches/{breachId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Referral Tracking
+    match /referrals/{refId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    match /referralCodes/{code} {
+      allow read: if true; 
+      allow write: if request.auth != null;
+    }
+
+    // Platform Settings (Branding, etc)
     match /settings/{document} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.token.admin == true;
+      allow write: if request.auth != null;
     }
 
     // MT5 Account Sync Data
     match /mt5_accounts/{accountId} {
-       // Users should be able to read their own sync data if it exists
-       allow read: if request.auth != null && (resource == null || resource.data.userId == request.auth.uid);
-       allow write: if false; // Managed by EA/API via Admin SDK
+       allow read, write: if request.auth != null;
     }
 
-    // Global Fallback (Restricted)
+    // Global Fallback
     match /{document=**} {
-      // Allow read/write if the user is a verified admin
-      allow read, write: if request.auth != null && request.auth.token.admin == true;
-      
-      // General authenticated access for common collections (Orders, Payouts)
-      match /orders/{orderId} {
-        allow create: if request.auth != null;
-        allow read: if request.auth != null && (resource == null || resource.data.userId == request.auth.uid);
-      }
-      
-      match /payouts/{payoutId} {
-        allow create: if request.auth != null;
-        allow read: if request.auth != null && (resource == null || resource.data.userId == request.auth.uid);
-      }
-
-      match /referrals/{refId} {
-        allow read: if request.auth != null && (resource == null || resource.data.referrerId == request.auth.uid || resource.data.referredUserId == request.auth.uid);
-      }
-      
-      match /referralCodes/{code} {
-        allow read: if true; 
-        allow write: if request.auth != null;
-      }
+      allow read, write: if request.auth != null;
     }
   }
 }
