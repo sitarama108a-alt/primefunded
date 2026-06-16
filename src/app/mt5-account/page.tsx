@@ -50,6 +50,7 @@ export default function MT5AccountPage() {
   }, [authLoading]);
 
   // Safe data extraction with institutional fallbacks
+  // Data is fetched from users/{auth.currentUser.uid} in AuthContext.tsx
   const accountStatus = userData?.accountStatus || 'none';
   const mt5Login = userData?.mt5Login || null;
   const mt5Password = userData?.mt5Password || null;
