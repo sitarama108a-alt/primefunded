@@ -1,18 +1,19 @@
 "use client";
 
-import { useState, memo, useEffect } from 'react';
+import { useState, memo, useEffect, useMemo } from 'react';
 import { Navigation } from '@/components/Navigation';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
-import { Check, ChevronDown, ChevronUp, TicketPercent, Skull, AlertTriangle, AlertCircle } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, TicketPercent, Skull, AlertTriangle, AlertCircle, Copy, Link as LinkIcon, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { useToast } from '@/hooks/use-toast';
 
 const planData = {
   '1-step': [
@@ -170,17 +171,17 @@ const ChallengeCard = memo(function ChallengeCard({ tier, planName, delay, disco
         )}
 
         <CardHeader className="text-center pt-10">
-          <CardTitle className="text-3xl font-headline font-bold text-white group-hover:text-primary">{tier.size}</CardTitle>
-          <p className="text-muted-foreground text-[10px] uppercase tracking-[0.2em] font-black">
+          <CardTitle className="text-2xl font-headline font-bold text-white group-hover:text-primary">{tier.size}</CardTitle>
+          <p className="text-muted-foreground text-[9px] uppercase tracking-[0.2em] font-black">
             {planName === '1-step' ? '1-Step Pro' : planName === '2-step' ? '2-Step Classic' : planName === '3-step' ? '3-Step Classic' : 'Instant Funding'}
           </p>
         </CardHeader>
 
         <CardContent className="flex-1 flex flex-col">
-          <div className="text-center mb-8">
+          <div className="text-center mb-6">
             <div className="flex items-center justify-center gap-2">
-              {discountApplied && <span className="text-xl text-muted-foreground line-through">${tier.price}</span>}
-              <span className={`text-4xl font-headline font-bold ${discountApplied ? 'text-accent' : 'text-white'}`}>
+              {discountApplied && <span className="text-lg text-muted-foreground line-through">${tier.price}</span>}
+              <span className={`text-3xl font-headline font-bold ${discountApplied ? 'text-accent' : 'text-white'}`}>
                 ${finalPrice}
               </span>
             </div>
@@ -188,7 +189,7 @@ const ChallengeCard = memo(function ChallengeCard({ tier, planName, delay, disco
           
           <Collapsible open={isOpen} onOpenChange={setIsOpen} className="w-full">
             <CollapsibleTrigger asChild>
-              <Button variant="ghost" className="w-full flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-primary h-10 px-4 border border-primary/20 rounded-lg cursor-pointer">
+              <Button variant="ghost" className="w-full flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-primary h-9 px-4 border border-primary/20 rounded-lg cursor-pointer">
                 View Stage Rules
                 {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               </Button>
@@ -222,7 +223,7 @@ const ChallengeCard = memo(function ChallengeCard({ tier, planName, delay, disco
         </CardContent>
 
         <CardFooter className="pt-4 pb-8 px-6">
-          <Button className="w-full h-12 font-bold rounded-xl cyan-box-glow cursor-pointer" asChild>
+          <Button className="w-full h-11 font-bold rounded-xl cyan-box-glow cursor-pointer" asChild>
             <Link href={`/payment?plan=${planName}&size=${tier.size}&price=$${finalPrice}`}>
               Start Challenge
             </Link>
@@ -255,15 +256,60 @@ function RuleSection({ title, items }: { title: string, items: any[] }) {
   );
 }
 
+const ReferralTerminal = memo(function ReferralTerminal({ referralCode }: { referralCode?: string }) {
+  const { toast } = useToast();
+  const [copied, setCopied] = useState(false);
+
+  const referralLink = useMemo(() => {
+    if (typeof window === 'undefined' || !referralCode) return '';
+    return `${window.location.origin}/signup?ref=${referralCode}`;
+  }, [referralCode]);
+
+  const handleCopy = () => {
+    if (!referralLink) return;
+    navigator.clipboard.writeText(referralLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    toast({ title: "Link Copied!", description: "Share this link with your friends." });
+  };
+
+  return (
+    <Card className="border-primary/20 bg-primary/5 overflow-hidden sticky top-24">
+      <CardHeader className="pb-4">
+        <CardTitle className="text-lg font-headline text-white flex items-center gap-2">
+          <LinkIcon className="w-4 h-4 text-primary" /> Referral Hub
+        </CardTitle>
+        <CardDescription className="text-xs">Earn $30.00 for every referral purchase.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <p className="text-[9px] font-black uppercase text-muted-foreground tracking-[0.2em]">Share Your Link</p>
+          <div className="flex flex-col gap-2">
+            <div className="font-mono text-[10px] p-3 bg-background/50 rounded-lg border border-border text-white break-all">
+              {referralLink || 'Initializing code...'}
+            </div>
+            <Button onClick={handleCopy} size="sm" className="w-full font-bold rounded-lg cursor-pointer h-10" disabled={!referralLink}>
+              {copied ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
+              {copied ? 'Copied!' : 'Copy Link'}
+            </Button>
+          </div>
+        </div>
+        <Button variant="outline" size="sm" className="w-full text-[10px] font-black uppercase tracking-widest border-primary/20 text-primary h-9 cursor-pointer" asChild>
+          <Link href="/referral">Detailed History <ExternalLink className="ml-1 w-3 h-3" /></Link>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+});
+
 export default function ChallengesPage() {
   const [selectedPlan, setSelectedPlan] = useState('1-step');
   const [couponCode, setCouponCode] = useState('');
   const [discountApplied, setDiscountApplied] = useState(false);
   
-  const { user, loading } = useAuth();
+  const { user, userData, loading } = useAuth();
   const router = useRouter();
 
-  // Auth Guard
   useEffect(() => {
     if (!loading && !user) {
       router.push('/login?redirect=/challenges');
@@ -295,80 +341,86 @@ export default function ChallengesPage() {
     <div className="flex min-h-screen bg-background">
       <Navigation />
       
-      <main className="flex-1 p-8">
-        <header className="mb-12">
-          <motion.h1 
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-4xl font-headline font-bold mb-2 text-white"
-          >
-            Select Your Challenge
-          </motion.h1>
-          <motion.p 
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-muted-foreground"
-          >
-            Institutional funding starting from $5,000 up to $300,000.
-          </motion.p>
-        </header>
+      <main className="flex-1 p-8 overflow-y-auto custom-scrollbar">
+        <div className="max-w-[1600px] mx-auto">
+          <header className="mb-10">
+            <motion.h1 
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-4xl font-headline font-bold mb-2 text-white"
+            >
+              Select Your Challenge
+            </motion.h1>
+            <motion.p 
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-muted-foreground"
+            >
+              Institutional funding starting from $5,000 up to $300,000.
+            </motion.p>
+          </header>
 
-        <div className="mb-8 p-4 bg-destructive/15 border-l-4 border-destructive rounded-r-lg flex items-center gap-3">
-          <AlertCircle className="text-destructive w-5 h-5 shrink-0" />
-          <p className="text-xs font-bold text-destructive">
-            ⚠️ Hard breaches result in immediate account termination with no appeal.
-          </p>
-        </div>
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            <div className="lg:col-span-3 space-y-8">
+              <div className="p-4 bg-destructive/15 border-l-4 border-destructive rounded-r-lg flex items-center gap-3">
+                <AlertCircle className="text-destructive w-5 h-5 shrink-0" />
+                <p className="text-xs font-bold text-destructive">
+                  ⚠️ Hard breaches result in immediate account termination with no appeal.
+                </p>
+              </div>
 
-        <div className="mb-12">
-          <Tabs defaultValue="1-step" className="w-full" onValueChange={(val) => {
-            setSelectedPlan(val);
-            if (val !== 'instant') setDiscountApplied(false);
-          }}>
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
-              <TabsList className="grid w-full max-w-2xl grid-cols-4 h-14 bg-secondary p-1 rounded-xl">
-                <TabsTrigger value="1-step" className="data-[state=active]:bg-background font-bold rounded-lg cursor-pointer">1-Step Pro</TabsTrigger>
-                <TabsTrigger value="2-step" className="data-[state=active]:bg-background font-bold rounded-lg cursor-pointer">2-Step Classic</TabsTrigger>
-                <TabsTrigger value="3-step" className="data-[state=active]:bg-background font-bold rounded-lg cursor-pointer">3-Step Classic</TabsTrigger>
-                <TabsTrigger value="instant" className="data-[state=active]:bg-background font-bold rounded-lg cursor-pointer">Instant Funding</TabsTrigger>
-              </TabsList>
+              <Tabs defaultValue="1-step" className="w-full" onValueChange={(val) => {
+                setSelectedPlan(val);
+                if (val !== 'instant') setDiscountApplied(false);
+              }}>
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
+                  <TabsList className="grid w-full max-w-2xl grid-cols-4 h-12 bg-secondary p-1 rounded-xl">
+                    <TabsTrigger value="1-step" className="data-[state=active]:bg-background font-bold rounded-lg cursor-pointer">1-Step</TabsTrigger>
+                    <TabsTrigger value="2-step" className="data-[state=active]:bg-background font-bold rounded-lg cursor-pointer">2-Step</TabsTrigger>
+                    <TabsTrigger value="3-step" className="data-[state=active]:bg-background font-bold rounded-lg cursor-pointer">3-Step</TabsTrigger>
+                    <TabsTrigger value="instant" className="data-[state=active]:bg-background font-bold rounded-lg cursor-pointer">Instant</TabsTrigger>
+                  </TabsList>
 
-              {selectedPlan === 'instant' && (
-                <div className="flex items-center gap-2 bg-secondary/50 p-2 rounded-xl border border-border">
-                  <TicketPercent className="w-5 h-5 text-primary ml-2" />
-                  <Input 
-                    placeholder="Enter Coupon Code" 
-                    className="h-10 bg-transparent border-none focus-visible:ring-0 w-44" 
-                    value={couponCode}
-                    onChange={(e) => setCouponCode(e.target.value)}
-                  />
-                  <Button size="sm" className="font-bold cursor-pointer" onClick={handleApplyCoupon}>Apply</Button>
+                  {selectedPlan === 'instant' && (
+                    <div className="flex items-center gap-2 bg-secondary/50 p-2 rounded-xl border border-border">
+                      <TicketPercent className="w-5 h-5 text-primary ml-2" />
+                      <Input 
+                        placeholder="Enter Coupon Code" 
+                        className="h-9 bg-transparent border-none focus-visible:ring-0 w-36 text-sm" 
+                        value={couponCode}
+                        onChange={(e) => setCouponCode(e.target.value)}
+                      />
+                      <Button size="sm" className="font-bold cursor-pointer h-8" onClick={handleApplyCoupon}>Apply</Button>
+                    </div>
+                  )}
                 </div>
-              )}
+
+                <AnimatePresence mode="wait">
+                  <motion.div 
+                    key={selectedPlan + (discountApplied ? '-discount' : '')}
+                    initial={{ opacity: 0, x: 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -10 }}
+                    className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
+                  >
+                    {planData[selectedPlan as keyof typeof planData]?.map((tier, idx) => (
+                      <ChallengeCard 
+                        key={tier.size} 
+                        tier={tier} 
+                        planName={selectedPlan} 
+                        delay={idx * 0.03} 
+                        discountApplied={discountApplied && selectedPlan === 'instant'}
+                      />
+                    ))}
+                  </motion.div>
+                </AnimatePresence>
+              </Tabs>
             </div>
 
-            <div className="mt-6">
-              <AnimatePresence mode="wait">
-                <motion.div 
-                  key={selectedPlan + (discountApplied ? '-discount' : '')}
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -10 }}
-                  className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-                >
-                  {planData[selectedPlan as keyof typeof planData]?.map((tier, idx) => (
-                    <ChallengeCard 
-                      key={tier.size} 
-                      tier={tier} 
-                      planName={selectedPlan} 
-                      delay={idx * 0.03} 
-                      discountApplied={discountApplied && selectedPlan === 'instant'}
-                    />
-                  ))}
-                </motion.div>
-              </AnimatePresence>
+            <div className="hidden lg:block lg:col-span-1">
+              <ReferralTerminal referralCode={userData?.referralCode} />
             </div>
-          </Tabs>
+          </div>
         </div>
       </main>
     </div>

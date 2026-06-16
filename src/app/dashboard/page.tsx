@@ -19,17 +19,31 @@ import {
   DollarSign, 
   Skull,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  BarChart3,
+  Calendar,
+  History
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useFirestore, useCollection, useDoc } from '@/firebase';
 import { where, doc, limit, orderBy, onSnapshot, collection, query } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { NotificationBell } from '@/components/NotificationBell';
 import { cn } from '@/lib/utils';
+import { 
+  LineChart, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip as ChartTooltip, 
+  ResponsiveContainer 
+} from 'recharts';
+import { format, subDays, subMonths } from 'date-fns';
 
 interface DashboardPageProps {
   adminViewMode?: boolean;
@@ -70,11 +84,34 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   const [mt5Data, setMt5Data] = useState<any>(null);
   const [mt5DocExists, setMt5DocExists] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [linkCopied, setLinkCopied] = useState(false);
+  const [chartPeriod, setChartPeriod] = useState('7D');
   const { toast } = useToast();
   const db = useFirestore();
 
   const [softBreachWarning, setSoftBreachWarning] = useState<string | null>(null);
+
+  // Performance Data Fetching
+  const performanceConstraints = useMemo(() => {
+    if (!effectiveUid) return [];
+    let startDate = subDays(new Date(), 7);
+    if (chartPeriod === '14D') startDate = subDays(new Date(), 14);
+    if (chartPeriod === '1M') startDate = subMonths(new Date(), 1);
+    
+    return [
+      orderBy('date', 'asc'),
+      where('date', '>=', startDate.toISOString())
+    ];
+  }, [effectiveUid, chartPeriod]);
+
+  const { data: performanceData } = useCollection<any>(
+    effectiveUid ? `users/${effectiveUid}/dailyPnL` : null,
+    performanceConstraints
+  );
+
+  const { data: tradesData } = useCollection<any>(
+    effectiveUid ? `users/${effectiveUid}/trades` : null,
+    [orderBy('date', 'desc'), limit(10)]
+  );
 
   useEffect(() => {
     if (!effectiveUid || !db || !userData?.mt5Login) return;
@@ -120,24 +157,6 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     return () => unsubscribeNotif();
   }, [effectiveUid, db]);
 
-  const referralConstraints = useMemo(() => {
-    if (!effectiveUid) return [];
-    return [
-      where('referrerId', '==', effectiveUid),
-      orderBy('createdAt', 'desc')
-    ];
-  }, [effectiveUid]);
-
-  const { data: referrals } = useCollection<any>(effectiveUid ? 'referrals' : null, referralConstraints);
-
-  const refStats = useMemo(() => {
-    const data = referrals || [];
-    return {
-      total: data.length,
-      earned: data.reduce((acc: number, r: any) => acc + (r.amount || 0), 0)
-    };
-  }, [referrals]);
-
   useEffect(() => {
     if (!authLoading && !user && !adminViewMode) {
       router.push('/login?redirect=/dashboard');
@@ -173,6 +192,20 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
       tradesToday: mt5Data?.tradesToday || 0
     };
   }, [userData?.accountBalance, userData?.accountSize, mt5Data]);
+
+  const performanceStats = useMemo(() => {
+    if (!performanceData || performanceData.length === 0) return null;
+    
+    const totalPnL = performanceData.reduce((acc, curr) => acc + (curr.pnl || 0), 0);
+    const positiveDays = performanceData.filter(d => (d.pnl || 0) > 0).length;
+    const winRate = (positiveDays / performanceData.length) * 100;
+    
+    const sortedByPnL = [...performanceData].sort((a, b) => (b.pnl || 0) - (a.pnl || 0));
+    const bestDay = sortedByPnL[0]?.pnl || 0;
+    const worstDay = sortedByPnL[sortedByPnL.length - 1]?.pnl || 0;
+
+    return { totalPnL, winRate, bestDay, worstDay, count: performanceData.length };
+  }, [performanceData]);
 
   const dailyRiskMetrics = useMemo(() => {
     const dailyStart = userData?.dailyStartBalance || metrics.balance;
@@ -210,15 +243,6 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
       setTimeout(() => setCopied(false), 2000);
       toast({ title: "Copied!", description: "Trader UID copied to clipboard." });
     }
-  };
-
-  const copyReferralLink = () => {
-    if (!userData?.referralCode) return;
-    const link = `${window.location.origin}/signup?ref=${userData.referralCode}`;
-    navigator.clipboard.writeText(link);
-    setLinkCopied(true);
-    setTimeout(() => setLinkCopied(false), 2000);
-    toast({ title: "Link Copied!", description: "Referral link is ready to share." });
   };
 
   if (authLoading || (adminViewMode && targetUserLoading)) {
@@ -319,13 +343,13 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
           />
           <MetricCard 
             title="Total Referrals" 
-            value={refStats.total.toString()} 
+            value={(userData?.referralCount || 0).toString()} 
             icon={<Users className="text-emerald-500" />}
             footer="Signups via your code"
           />
           <MetricCard 
             title="Referral Earnings" 
-            value={`$${refStats.earned.toFixed(2)}`} 
+            value={`$${(userData?.referralEarnings || 0).toFixed(2)}`} 
             icon={<DollarSign className="text-amber-500" />}
             footer="Withdrawable commission"
           />
@@ -395,28 +419,75 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-          <Card className="lg:col-span-2 border-border/50 shadow-xl shadow-primary/5 bg-card/40 backdrop-blur-sm">
-            <CardHeader className="flex flex-row items-center justify-between">
+          <Card className="lg:col-span-2 border-border/50 bg-card/40 backdrop-blur-sm shadow-xl shadow-primary/5">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div>
-                <CardTitle className="text-xl font-headline text-white">Referral Terminal</CardTitle>
-                <CardDescription>Share your link and earn up to 10% commission on purchases.</CardDescription>
+                <CardTitle className="text-xl font-headline text-white flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-primary" /> Trading Performance
+                </CardTitle>
+                <CardDescription>Equity growth and risk analysis.</CardDescription>
               </div>
+              <Tabs value={chartPeriod} onValueChange={setChartPeriod}>
+                <TabsList className="bg-secondary/50 p-1">
+                  <TabsTrigger value="7D" className="text-[10px] font-bold px-3">7D</TabsTrigger>
+                  <TabsTrigger value="14D" className="text-[10px] font-bold px-3">14D</TabsTrigger>
+                  <TabsTrigger value="1M" className="text-[10px] font-bold px-3">1M</TabsTrigger>
+                </TabsList>
+              </Tabs>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="p-6 rounded-2xl bg-primary/5 border border-primary/20">
-                 <p className="text-[10px] font-black uppercase text-muted-foreground tracking-[0.2em] mb-3">Your Referral Link:</p>
-                 <div className="flex items-center gap-2">
-                   <div className="flex-1 font-mono text-sm font-bold p-3 bg-background/50 rounded-xl border border-border text-white truncate">
-                     {typeof window !== 'undefined' ? window.location.origin : ''}/signup?ref={userData?.referralCode || 'CODE'}
-                   </div>
-                   <Button onClick={copyReferralLink} className="h-12 w-12 rounded-xl cyan-box-glow cursor-pointer" size="icon">
-                     {linkCopied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
-                   </Button>
-                 </div>
+            <CardContent className="pt-6">
+              <div className="h-[300px] w-full mb-8">
+                {performanceData && performanceData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={performanceData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#222" vertical={false} />
+                      <XAxis 
+                        dataKey="date" 
+                        stroke="#666" 
+                        fontSize={10} 
+                        tickFormatter={(str) => format(new Date(str), 'MMM d')}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis 
+                        stroke="#666" 
+                        fontSize={10} 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tickFormatter={(val) => `$${val.toLocaleString()}`}
+                      />
+                      <ChartTooltip 
+                        contentStyle={{ backgroundColor: '#0a0f1e', border: '1px solid #11b3f5', borderRadius: '8px', fontSize: '12px' }}
+                        itemStyle={{ color: '#11b3f5' }}
+                        labelFormatter={(str) => format(new Date(str), 'PPPP')}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="endBalance" 
+                        stroke="#11b3f5" 
+                        strokeWidth={3} 
+                        dot={{ r: 4, fill: '#11b3f5' }} 
+                        activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full w-full flex flex-col items-center justify-center border-2 border-dashed border-border rounded-2xl bg-secondary/10">
+                    <Calendar className="w-12 h-12 text-muted-foreground opacity-20 mb-4" />
+                    <p className="text-muted-foreground text-sm">No performance data captured for this period.</p>
+                  </div>
+                )}
               </div>
-              <Button variant="outline" className="w-full font-bold h-12 border-primary/20 text-primary cursor-pointer" asChild>
-                <Link href="/referral">View Detailed History <ExternalLink className="ml-2 w-4 h-4" /></Link>
-              </Button>
+
+              {performanceStats && (
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 pt-6 border-t border-border/50">
+                  <StatItem label="Total P&L" value={`$${performanceStats.totalPnL.toLocaleString()}`} color={performanceStats.totalPnL >= 0 ? 'emerald' : 'destructive'} />
+                  <StatItem label="Win Rate" value={`${performanceStats.winRate.toFixed(1)}%`} />
+                  <StatItem label="Total Trades" value={performanceStats.count.toString()} />
+                  <StatItem label="Best Day" value={`+$${performanceStats.bestDay.toLocaleString()}`} color="emerald" />
+                  <StatItem label="Worst Day" value={`-$${Math.abs(performanceStats.worstDay).toLocaleString()}`} color="destructive" />
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -463,7 +534,87 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
             </Card>
           </div>
         </div>
+
+        <Card className="border-border/50 bg-card/40 backdrop-blur-sm mb-8 overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between border-b border-border/50 pb-4">
+            <div>
+              <CardTitle className="text-xl font-headline text-white flex items-center gap-2">
+                <History className="w-5 h-5 text-primary" /> Total Trade History
+              </CardTitle>
+              <CardDescription>Last 10 executions across your accounts.</CardDescription>
+            </div>
+            <Button variant="ghost" size="sm" className="text-primary font-bold hover:bg-primary/10" asChild>
+              <Link href="/history">View All <ExternalLink className="ml-2 w-4 h-4" /></Link>
+            </Button>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
+                  <tr>
+                    <th className="py-4 px-6">Date</th>
+                    <th className="py-4 px-2">Symbol</th>
+                    <th className="py-4 px-2">Type</th>
+                    <th className="py-4 px-2 text-right">Lots</th>
+                    <th className="py-4 px-2 text-right">Open</th>
+                    <th className="py-4 px-2 text-right">Close</th>
+                    <th className="py-4 px-6 text-right">P&L</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/30">
+                  {tradesData && tradesData.length > 0 ? (
+                    tradesData.map((trade: any) => (
+                      <tr key={trade.id} className="hover:bg-primary/5 transition-colors group">
+                        <td className="py-4 px-6 font-medium text-muted-foreground whitespace-nowrap">
+                          {trade.date ? format(new Date(trade.date), 'MMM d, HH:mm') : 'N/A'}
+                        </td>
+                        <td className="py-4 px-2 font-bold text-white">{trade.symbol}</td>
+                        <td className="py-4 px-2">
+                          <span className={cn(
+                            "px-2 py-0.5 rounded text-[9px] font-black uppercase",
+                            trade.type?.toLowerCase() === 'buy' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-destructive/10 text-destructive'
+                          )}>
+                            {trade.type}
+                          </span>
+                        </td>
+                        <td className="py-4 px-2 text-right text-white font-mono">{trade.lots}</td>
+                        <td className="py-4 px-2 text-right text-muted-foreground font-mono">{trade.openPrice}</td>
+                        <td className="py-4 px-2 text-right text-muted-foreground font-mono">{trade.closePrice}</td>
+                        <td className={cn(
+                          "py-4 px-6 text-right font-bold tabular-nums",
+                          (trade.pnl || 0) >= 0 ? 'text-emerald-500' : 'text-destructive'
+                        )}>
+                          {(trade.pnl || 0) >= 0 ? '+' : ''}${trade.pnl?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={7} className="py-20 text-center text-muted-foreground italic bg-secondary/5">
+                        No trade history found. Executions will populate here after they are closed on MT5.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
       </main>
+    </div>
+  );
+}
+
+function StatItem({ label, value, color = 'muted' }: { label: string, value: string, color?: 'emerald' | 'destructive' | 'muted' }) {
+  const colorMap = {
+    emerald: 'text-emerald-500',
+    destructive: 'text-destructive',
+    muted: 'text-white'
+  };
+  return (
+    <div className="space-y-1">
+      <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{label}</p>
+      <p className={cn("text-sm font-bold tabular-nums", colorMap[color])}>{value}</p>
     </div>
   );
 }
