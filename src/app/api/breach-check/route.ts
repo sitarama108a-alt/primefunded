@@ -5,6 +5,16 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 /**
  * @fileOverview Institutional Breach Detection Engine
  * Algorithmic evaluation of MT5 metrics against plan-specific prop firm rules.
+ * 
+ * AUTOMATED CHECKS:
+ * - Profit Targets (Achievement Detection)
+ * - Daily & Max Drawdown
+ * - Single Trade Loss Limits (3%)
+ * - Execution Frequency (1/3 mins)
+ * - Holding Time (2 mins minimum)
+ * - Floating Loss Thresholds (1% in Funded stage)
+ * - Martingale lot-scaling patterns
+ * - Friday Overnight holding (Instant Plan)
  */
 
 function getAdminDb() {
@@ -29,11 +39,16 @@ export async function POST(request: Request) {
     if (!userSnap.exists) return new Response('User not found', { status: 404 });
     const userData = userSnap.data()!;
     
-    // Skip if already breached
+    // Skip if already breached or already passed
     if (userData.accountStatus === 'breached') return new Response('Account already breached', { status: 200 });
 
     const plan = userData.accountPlan || '1-Step Pro';
     const phase = userData.currentPhase || 'evaluation';
+    const planKey = plan.toLowerCase();
+    
+    // Normalize numeric values
+    const startingBalance = parseFloat(String(userData.accountBalance || 100000));
+    const liveBalance = parseFloat(String(userData.liveBalance || startingBalance));
     
     // Metrics provided by MT5 EA
     const { 
@@ -50,45 +65,77 @@ export async function POST(request: Request) {
     let breachType: 'hard' | 'soft' | null = null;
     let breachReason = '';
 
-    // UNIFIED RULES (Duration and Frequency)
-    if (phase === 'funded' || plan === 'Instant Funding') {
-       if (lastTradeDuration !== undefined && lastTradeDuration < 120) {
-          breachType = 'hard';
-          breachReason = 'No closing trades within 2 minutes allowed (Funded Stage)';
-       } else if (lastTradeInterval !== undefined && lastTradeInterval < 180) {
-          breachType = 'hard';
-          breachReason = 'Execution frequency violation: 1 trade per 3 mins maximum';
-       }
+    // 1. PROFIT TARGET DETECTION (AUTO-PASS)
+    const getTargetPct = () => {
+      if (planKey.includes('1-step')) return 10;
+      if (planKey.includes('2-step')) {
+        return (phase === 'phase1') ? 8 : (phase === 'phase2') ? 5 : 0;
+      }
+      if (planKey.includes('3-step')) {
+        return (phase === 'phase1') ? 10 : (phase === 'phase2') ? 8 : (phase === 'phase3') ? 5 : 0;
+      }
+      return 0;
+    };
+
+    const targetPct = getTargetPct();
+    const currentProfitPct = ((liveBalance - startingBalance) / startingBalance) * 100;
+
+    if (targetPct > 0 && currentProfitPct >= targetPct && !userData.readyForPhaseAdvancement) {
+      await userRef.update({
+        readyForPhaseAdvancement: true,
+        passedAt: FieldValue.serverTimestamp()
+      });
+
+      await userRef.collection('notifications').add({
+        title: "🎯 Profit Target Reached!",
+        message: `Congratulations! You have reached the ${targetPct}% profit target. Our desk is reviewing your unique trading days and consistency patterns to advance you to the next stage.`,
+        type: 'challenge_passed',
+        isRead: false,
+        createdAt: FieldValue.serverTimestamp()
+      });
+      // Continue to check breaches for this cycle to ensure equity is maintained
     }
 
-    // PLAN-SPECIFIC LOGIC
-    if (plan === '1-Step Pro' && !breachType) {
-      if (dailyDrawdown > 3) { breachType = 'hard'; breachReason = 'Daily drawdown exceeded 3%'; }
-      else if (maxDrawdown > 6) { breachType = 'hard'; breachReason = 'Maximum drawdown exceeded 6%'; }
-      else if (floatingLoss > 1) { breachType = 'hard'; breachReason = 'Floating loss exceeded 1% threshold'; }
-      else if (lastLotSize > prevLotSize * 1.5 && phase === 'evaluation') { breachType = 'soft'; breachReason = 'Martingale pattern detected in evaluation'; }
-    } 
-    else if (plan === '2-Step Classic' && !breachType) {
-      const dailyLimit = 5;
-      const maxLimit = 10;
-      
-      if (dailyDrawdown > dailyLimit) { breachType = 'hard'; breachReason = `Daily drawdown exceeded ${dailyLimit}%`; }
-      else if (maxDrawdown > maxLimit) { breachType = 'hard'; breachReason = `Max drawdown exceeded ${maxLimit}%`; }
-      else if (lastTradeLossPct !== undefined && lastTradeLossPct > 3) { breachType = 'hard'; breachReason = 'Single trade loss exceeded 3% threshold'; }
-      else if (floatingLoss > 1 && phase === 'funded') { breachType = 'hard'; breachReason = 'Floating loss exceeded 1% threshold (Funded)'; }
+    // 2. UNIFIED TIMING RULES (Duration and Frequency)
+    // Applies to all plans as per Rules page
+    if (lastTradeDuration !== undefined && lastTradeDuration > 0 && lastTradeDuration < 120) {
+      breachType = 'hard';
+      breachReason = 'Duration violation: Trades must be held for at least 2 minutes';
+    } else if (lastTradeInterval !== undefined && lastTradeInterval > 0 && lastTradeInterval < 180) {
+      breachType = 'hard';
+      breachReason = 'Frequency violation: 1 trade per 3 mins maximum execution speed';
     }
-    else if (plan === '3-Step Classic' && !breachType) {
-      const dailyLimit = 4;
-      const maxLimit = 8;
-      if (dailyDrawdown > dailyLimit) { breachType = 'hard'; breachReason = `Daily drawdown exceeded ${dailyLimit}%`; }
-      else if (maxDrawdown > maxLimit) { breachType = 'hard'; breachReason = `Max drawdown exceeded ${maxLimit}%`; }
-      else if (lastTradeLossPct !== undefined && lastTradeLossPct > 3) { breachType = 'hard'; breachReason = 'Single trade loss exceeded 3% threshold'; }
-    }
-    else if (plan === 'Instant Funding' && !breachType) {
-      if (dailyDrawdown > 3) { breachType = 'hard'; breachReason = 'Instant Account: 3% Daily Drawdown hit'; }
-      else if (maxDrawdown > 4) { breachType = 'hard'; breachReason = 'Instant Account: 4% Max Drawdown hit'; }
-      else if (floatingLoss > 1) { breachType = 'hard'; breachReason = 'Instant Account: 1% Floating Loss hit'; }
-      else if (lastTradeLossPct !== undefined && lastTradeLossPct > 3) { breachType = 'hard'; breachReason = 'Instant Account: 3% Single Trade Loss hit'; }
+
+    // 3. PLAN-SPECIFIC HARD BREACH LOGIC
+    if (!breachType) {
+      if (planKey.includes('1-step')) {
+        if (dailyDrawdown > 3) { breachType = 'hard'; breachReason = '1-Step: Daily drawdown exceeded 3%'; }
+        else if (maxDrawdown > 6) { breachType = 'hard'; breachReason = '1-Step: Maximum drawdown exceeded 6%'; }
+        else if (phase === 'funded' && floatingLoss > 1) { breachType = 'hard'; breachReason = 'Funded Stage: Floating loss exceeded 1% threshold'; }
+        else if (lastLotSize > prevLotSize * 1.5) { breachType = 'soft'; breachReason = 'Martingale lot scaling detected'; }
+      } 
+      else if (planKey.includes('2-step')) {
+        if (dailyDrawdown > 5) { breachType = 'hard'; breachReason = '2-Step: Daily drawdown exceeded 5%'; }
+        else if (maxDrawdown > 10) { breachType = 'hard'; breachReason = '2-Step: Max drawdown exceeded 10%'; }
+        else if (lastTradeLossPct > 3) { breachType = 'hard'; breachReason = 'Single trade loss exceeded 3% limit'; }
+        else if (phase === 'funded' && floatingLoss > 1) { breachType = 'hard'; breachReason = 'Funded Stage: Floating loss exceeded 1% threshold'; }
+      }
+      else if (planKey.includes('3-step')) {
+        if (dailyDrawdown > 4) { breachType = 'hard'; breachReason = '3-Step: Daily drawdown exceeded 4%'; }
+        else if (maxDrawdown > 8) { breachType = 'hard'; breachReason = '3-Step: Max drawdown exceeded 8%'; }
+        else if (lastTradeLossPct > 3) { breachType = 'hard'; breachReason = 'Single trade loss exceeded 3% limit'; }
+        else if (phase === 'funded' && floatingLoss > 1) { breachType = 'hard'; breachReason = 'Funded Stage: Floating loss exceeded 1% threshold'; }
+      }
+      else if (planKey.includes('instant')) {
+        const now = new Date();
+        const isFridayEvening = now.getUTCDay() === 5 && now.getUTCHours() >= 21;
+        
+        if (dailyDrawdown > 3) { breachType = 'hard'; breachReason = 'Instant: Daily drawdown hit 3% limit'; }
+        else if (maxDrawdown > 4) { breachType = 'hard'; breachReason = 'Instant: Max drawdown hit 4% limit'; }
+        else if (lastTradeLossPct > 3) { breachType = 'hard'; breachReason = 'Instant: Single trade loss exceeded 3%'; }
+        else if (floatingLoss > 1) { breachType = 'hard'; breachReason = 'Instant: Floating loss exceeded 1% threshold'; }
+        else if (isFridayEvening && mt5Data.hasOpenTrades) { breachType = 'hard'; breachReason = 'Instant: No Friday overnight holding allowed'; }
+      }
     }
 
     if (breachType === 'hard') {
@@ -113,9 +160,9 @@ export async function POST(request: Request) {
       });
 
       await userRef.collection('notifications').add({
-        title: "🚫 Account Terminated",
-        message: `Your account has been breached: ${breachReason}. Institutional capital access revoked.`,
-        type: 'hard_breach',
+        title: "🚫 Account Liquidated",
+        message: `Your account has been terminated due to an institutional risk breach: ${breachReason}. Please contact our compliance desk if you believe this is an error.`,
+        type: 'challenge_failed',
         isRead: false,
         createdAt: FieldValue.serverTimestamp()
       });
@@ -134,18 +181,22 @@ export async function POST(request: Request) {
       });
 
       await userRef.collection('notifications').add({
-        title: "⚠️ Strategy Warning",
-        message: `Violation detected: ${breachReason}. Evaluation reset or warning issued.`,
+        title: "⚠️ Performance Warning",
+        message: `Strategic violation detected: ${breachReason}. Please adjust your execution pattern to remain compliant with institutional standards.`,
         type: 'soft_breach_warning',
         isRead: false,
         createdAt: FieldValue.serverTimestamp()
       });
     }
 
-    return new Response(JSON.stringify({ status: breachType || 'compliant', reason: breachReason }), { status: 200 });
+    return new Response(JSON.stringify({ 
+      status: breachType || 'compliant', 
+      reason: breachReason,
+      achieved: userData.readyForPhaseAdvancement || false 
+    }), { status: 200 });
 
   } catch (error: any) {
-    console.error('[Breach-Engine] Error:', error);
+    console.error('[Breach-Engine] Critical Failure:', error);
     return new Response(error.message, { status: 500 });
   }
 }
