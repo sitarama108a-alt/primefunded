@@ -1,21 +1,19 @@
-
 "use client";
 
 import { useMemo } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useCollection } from '@/firebase';
-import { where, limit } from 'firebase/firestore';
+import { limit } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ShieldCheck, Plus, ExternalLink, Copy, SearchX, Terminal } from 'lucide-react';
+import { ShieldCheck, Plus, Copy, SearchX, Terminal } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 
 export default function AccountsPage() {
-  const { user } = useAuth();
+  const { user, userData } = useAuth();
   const { toast } = useToast();
 
   const constraints = useMemo(() => [
@@ -31,6 +29,24 @@ export default function AccountsPage() {
     navigator.clipboard.writeText(text);
     toast({ title: "Copied", description: "Account detail copied to clipboard." });
   };
+
+  const hasPrimaryAccount = userData?.accountStatus === 'active';
+  const displayAccounts = useMemo(() => {
+    const list = [...accounts];
+    if (hasPrimaryAccount && !list.find(a => a.mt5Login === userData.mt5Login)) {
+      list.unshift({
+        id: 'primary',
+        plan: userData.accountPlan,
+        size: userData.accountSize,
+        mt5Login: userData.mt5Login,
+        mt5Password: userData.mt5Password,
+        mt5Server: userData.mt5Server,
+        status: userData.accountStatus,
+        balance: userData.accountBalance
+      });
+    }
+    return list;
+  }, [accounts, userData, hasPrimaryAccount]);
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -51,7 +67,7 @@ export default function AccountsPage() {
             [1, 2].map(i => (
               <Card key={i} className="border-border/50 bg-secondary/10 animate-pulse h-48 rounded-2xl" />
             ))
-          ) : accounts.length === 0 ? (
+          ) : displayAccounts.length === 0 ? (
             <Card className="border-2 border-dashed border-border/50 bg-secondary/5">
               <CardContent className="flex flex-col items-center justify-center p-20 text-center space-y-6">
                 <div className="p-6 bg-secondary/50 rounded-full border border-border">
@@ -69,7 +85,7 @@ export default function AccountsPage() {
               </CardContent>
             </Card>
           ) : (
-            accounts.map((acc) => (
+            displayAccounts.map((acc) => (
               <Card key={acc.id} className={cn(
                 "border-border/50 transition-all hover:border-primary/30",
                 acc.status === 'active' ? "bg-primary/5 border-primary/20" : "opacity-60 grayscale bg-card/50"
@@ -97,7 +113,7 @@ export default function AccountsPage() {
                 <CardContent>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8 mb-8 p-6 bg-background/40 rounded-2xl border border-border/30">
                     <CredentialItem label="Platform" value="MetaTrader 5" />
-                    <CredentialItem label="Server" value={acc.mt5Server || 'PrimeFunded-Live'} />
+                    <CredentialItem label="Server" value={acc.mt5Server || 'MetaQuotes-Demo'} />
                     <CredentialItem 
                       label="Login" 
                       value={acc.mt5Login || 'Generating...'} 

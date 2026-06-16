@@ -57,15 +57,14 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   
   const effectiveUid = adminViewMode && targetUid ? targetUid : user?.uid;
   
-  // Only use useDoc for admin mode (viewing other users). 
-  // Otherwise, use the userData provided by AuthContext to avoid redundant listeners.
   const { data: targetUserData, loading: targetUserLoading } = useDoc<any>(
     adminViewMode && effectiveUid ? `users/${effectiveUid}` : null
   );
   
   const userData = adminViewMode ? targetUserData : loggedInUserData;
   
-  const [isConnected, setIsConnected] = useState(true);
+  const [mt5Data, setMt5Data] = useState<any>(null);
+  const [isConnected, setIsConnected] = useState(false);
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const { toast } = useToast();
@@ -76,18 +75,33 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   useEffect(() => {
     if (!effectiveUid || !db) return;
 
-    // Listen for MT5 metric updates to trigger breach check
-    // This is account-specific and separate from UserProfile doc
-    const unsubscribeMt5 = onSnapshot(doc(db, 'mt5_accounts', effectiveUid), (snapshot) => {
-      if (snapshot.exists() && !adminViewMode) {
-        fetch('/api/breach-check', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: effectiveUid, mt5Data: snapshot.data() })
-        }).catch(err => console.error('Breach check failed:', err));
-      }
-    });
+    // Listen for MT5 Live Sync Data from EA
+    // The EA writes to mt5_accounts/{login}, we need to find the login from userData
+    const login = userData?.mt5Login;
+    if (login) {
+      const unsubscribeMt5 = onSnapshot(doc(db, 'mt5_accounts', login.toString()), (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          setMt5Data(data);
+          setIsConnected(true);
+          
+          if (!adminViewMode) {
+            fetch('/api/breach-check', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId: effectiveUid, mt5Data: data })
+            }).catch(err => console.error('Breach check failed:', err));
+          }
+        } else {
+          setIsConnected(false);
+        }
+      });
+      return () => unsubscribeMt5();
+    }
+  }, [effectiveUid, db, adminViewMode, userData?.mt5Login]);
 
+  useEffect(() => {
+    if (!effectiveUid || !db) return;
     // Listen for soft breach notifications
     const q = query(
       collection(db, 'users', effectiveUid, 'notifications'), 
@@ -103,11 +117,8 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
       }
     });
 
-    return () => {
-      unsubscribeMt5();
-      unsubscribeNotif();
-    };
-  }, [effectiveUid, db, adminViewMode]);
+    return () => unsubscribeNotif();
+  }, [effectiveUid, db]);
 
   const referralConstraints = useMemo(() => [
     where('referrerId', '==', effectiveUid || 'none'),
@@ -130,28 +141,19 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     }
   }, [user, authLoading, router, adminViewMode]);
 
-  const accountConstraints = useMemo(() => {
-    if (!effectiveUid) return [];
-    return [where('status', '==', 'active'), limit(1)];
-  }, [effectiveUid]);
-
-  const { data: accounts, loading: accountsLoading } = useCollection<any>(
-    effectiveUid ? `users/${effectiveUid}/accounts` : null, 
-    accountConstraints
-  );
-
-  const activeAccount = accounts?.[0];
-
+  // Combined metrics from Profile (static) and MT5 (live)
   const metrics = useMemo(() => {
-    if (!activeAccount) {
-      return { balance: 0, winRate: 0, tradesToday: 0 };
-    }
+    const staticBalance = userData?.accountBalance || 0;
+    const liveBalance = mt5Data?.balance !== undefined ? mt5Data.balance : staticBalance;
+    const liveEquity = mt5Data?.equity !== undefined ? mt5Data.equity : liveBalance;
+    
     return {
-      balance: activeAccount?.balance || 0,
-      winRate: 0,
-      tradesToday: 0
+      balance: liveBalance,
+      equity: liveEquity,
+      winRate: mt5Data?.winRate || 0,
+      tradesToday: mt5Data?.tradesToday || 0
     };
-  }, [activeAccount]);
+  }, [userData?.accountBalance, mt5Data]);
 
   const copyTraderId = () => {
     const idToCopy = userData?.uid || userData?.traderId;
@@ -172,7 +174,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     toast({ title: "Link Copied!", description: "Referral link is ready to share." });
   };
 
-  if (authLoading || accountsLoading || (adminViewMode && targetUserLoading)) {
+  if (authLoading || (adminViewMode && targetUserLoading)) {
     return (
       <div className="flex min-h-screen bg-background items-center justify-center">
         <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
@@ -181,6 +183,8 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   }
 
   if (!user && !adminViewMode) return null;
+
+  const hasActiveAccount = userData?.accountStatus === 'active';
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -216,23 +220,6 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
           </div>
         )}
 
-        {!adminViewMode && userData && !userData.kycVerified && userData.accountStatus !== 'breached' && (
-          <div className="mb-6 p-4 rounded-xl bg-destructive/10 border border-destructive/20 flex items-center justify-between shadow-lg shadow-destructive/5">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-destructive/20 flex items-center justify-center text-destructive">
-                <AlertTriangle className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-white uppercase tracking-tight">KYC Verification Required</p>
-                <p className="text-xs text-muted-foreground">Payouts and referral withdrawals are locked until you verify your identity.</p>
-              </div>
-            </div>
-            <Button size="sm" variant="outline" className="border-destructive/30 text-destructive hover:bg-destructive hover:text-white font-bold cursor-pointer" asChild>
-              <Link href="/kyc">Verify Now <ExternalLink className="ml-2 w-3 h-3" /></Link>
-            </Button>
-          </div>
-        )}
-
         <header className="flex justify-between items-start mb-10">
           <div>
             <h1 className="text-3xl font-headline font-bold mb-1 text-white">Trader Terminal</h1>
@@ -257,7 +244,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
             {!adminViewMode && <NotificationBell />}
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary border border-border">
               <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-accent live-indicator' : 'bg-destructive'}`} />
-              <span className="text-xs font-semibold uppercase tracking-wider text-white">{isConnected ? 'LIVE DATA' : 'DISCONNECTED'}</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-white">{isConnected ? 'LIVE SYNC' : 'EA OFFLINE'}</span>
             </div>
           </div>
         </header>
@@ -267,25 +254,25 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
             title="Account Balance" 
             value={`$${metrics.balance.toLocaleString('en-US')}`} 
             icon={<Wallet className="text-primary" />}
-            footer={activeAccount ? `${activeAccount.size} ${activeAccount.plan}` : 'NO ACTIVE ACCOUNT'}
+            footer={hasActiveAccount ? `${userData.accountSize} ${userData.accountPlan}` : 'NO ACTIVE ACCOUNT'}
+          />
+          <MetricCard 
+            title="Equity" 
+            value={`$${metrics.equity.toLocaleString('en-US')}`} 
+            icon={<Activity className="text-accent" />}
+            footer="Live margin available"
           />
           <MetricCard 
             title="Total Referrals" 
             value={refStats.total.toString()} 
-            icon={<Users className="text-accent" />}
-            footer={`${refStats.total} traders joined via your code`}
+            icon={<Users className="text-emerald-500" />}
+            footer="Signups via your code"
           />
           <MetricCard 
             title="Referral Earnings" 
             value={`$${refStats.earned.toFixed(2)}`} 
-            icon={<DollarSign className="text-emerald-500" />}
-            footer="Total commissions generated"
-          />
-          <MetricCard 
-            title="Win Rate" 
-            value={`${metrics.winRate}%`} 
-            icon={<CheckCircle2 className="text-primary" />}
-            footer={activeAccount ? `${metrics.tradesToday} trades executed today` : 'NO ACTIVE ACCOUNT'}
+            icon={<DollarSign className="text-amber-500" />}
+            footer="Withdrawable commission"
           />
         </div>
 
@@ -324,8 +311,8 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
-                  <DetailItem label="Plan" value={activeAccount?.plan || 'None'} />
-                  <DetailItem label="Size" value={activeAccount?.size || 'N/A'} />
+                  <DetailItem label="Plan" value={userData?.accountPlan || 'None'} />
+                  <DetailItem label="Size" value={userData?.accountSize || 'N/A'} />
                   <DetailItem label="Tier" value={userData?.tier || 'Bronze'} />
                   <DetailItem label="Status" value={userData?.accountStatus || 'N/A'} />
                 </div>

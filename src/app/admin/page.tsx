@@ -21,7 +21,6 @@ import Image from 'next/image';
 import { doc, setDoc, collection, onSnapshot, query, orderBy, limit, updateDoc, writeBatch, serverTimestamp, addDoc, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useBrandSettings } from '@/hooks/use-brand-settings';
-import { uploadImageAsBase64 } from '@/lib/imageUpload';
 import { useAuth } from '@/context/AuthContext';
 
 const StatCard = memo(function StatCard({ title, value, icon, color }: { title: string, value: string | number, icon: any, color: string }) {
@@ -63,13 +62,13 @@ export default function AdminPage() {
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [isProofModalOpen, setIsProofModalOpen] = useState(false);
   const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false);
-  const [verifyForm, setVerifyVerifyForm] = useState({ login: '', password: '', server: 'PrimeFunded-Live' });
+  const [verifyForm, setVerifyVerifyForm] = useState({ login: '', password: '', server: 'MetaQuotes-Demo' });
 
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [isKycReviewOpen, setIsKycReviewOpen] = useState(false);
   const [isGiftModalOpen, setIsGiftModalOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
-  const [giftForm, setGiftForm] = useState({ plan: '1-Step Pro', size: '$100,000', login: '', password: '', server: 'PrimeFunded-Live', note: '' });
+  const [giftForm, setGiftForm] = useState({ plan: '1-Step Pro', size: '$100,000', login: '', password: '', server: 'MetaQuotes-Demo', note: '' });
 
   const [brandingForm, setBrandingForm] = useState({ siteName: '', logoUrl: '', supportEmail: '' });
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -169,6 +168,8 @@ export default function AdminPage() {
     if (!selectedOrder || !verifyForm.login || !verifyForm.password) return;
     setActionLoading(true);
     try {
+      const balanceValue = parseFloat(selectedOrder.accountSize?.replace(/[$,]/g, '') || '100000');
+      
       await updateDoc(doc(db, 'orders', selectedOrder.id), { status: 'verified', verifiedAt: serverTimestamp() });
       await updateDoc(doc(db, 'users', selectedOrder.userId), {
         mt5Login: verifyForm.login,
@@ -176,9 +177,24 @@ export default function AdminPage() {
         mt5Server: verifyForm.server,
         accountPlan: selectedOrder.plan,
         accountSize: selectedOrder.accountSize,
+        accountBalance: balanceValue,
+        accountActive: true,
         accountStatus: "active",
+        currentPhase: "evaluation",
         activatedAt: serverTimestamp()
       });
+
+      // Initialize sync doc for EA
+      await setDoc(doc(db, 'mt5_accounts', verifyForm.login), {
+        userId: selectedOrder.userId,
+        login: verifyForm.login,
+        balance: balanceValue,
+        equity: balanceValue,
+        status: 'active',
+        planType: selectedOrder.plan,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+
       await addDoc(collection(db, 'users', selectedOrder.userId, 'notifications'), {
         title: "✅ Account Activated",
         message: `Your ${selectedOrder.accountSize} account is ready! Check Credentials tab.`,
@@ -199,16 +215,33 @@ export default function AdminPage() {
     if (!selectedUser || !giftForm.login || !giftForm.password) return;
     setActionLoading(true);
     try {
+      const balanceValue = parseFloat(giftForm.size.replace(/[$,]/g, '') || '100000');
+
       await updateDoc(doc(db, 'users', selectedUser.id), {
         accountPlan: giftForm.plan,
         accountSize: giftForm.size,
+        accountBalance: balanceValue,
+        accountActive: true,
         accountStatus: "active",
+        currentPhase: "evaluation",
         mt5Login: giftForm.login,
         mt5Password: giftForm.password,
         mt5Server: giftForm.server,
         isGifted: true,
         activatedAt: serverTimestamp()
       });
+
+      // Initialize sync doc for EA
+      await setDoc(doc(db, 'mt5_accounts', giftForm.login), {
+        userId: selectedUser.id,
+        login: giftForm.login,
+        balance: balanceValue,
+        equity: balanceValue,
+        status: 'active',
+        planType: giftForm.plan,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+
       await addDoc(collection(db, 'users', selectedUser.id, 'notifications'), {
         title: "🎁 Account Gifted",
         message: `An institutional ${giftForm.size} account has been provisioned to your profile.`,
@@ -372,8 +405,6 @@ export default function AdminPage() {
               </CardContent>
             </Card>
           )}
-
-          {/* Other tabs follow same pattern... */}
         </div>
       </main>
 
@@ -405,6 +436,7 @@ export default function AdminPage() {
                 <div className="space-y-2"><Label>MT5 Login</Label><Input value={giftForm.login} onChange={e => setGiftForm({...giftForm, login: e.target.value})} /></div>
                 <div className="space-y-2"><Label>Password</Label><Input value={giftForm.password} onChange={e => setGiftForm({...giftForm, password: e.target.value})} /></div>
              </div>
+             <div className="space-y-2"><Label>MT5 Server</Label><Input value={giftForm.server} onChange={e => setGiftForm({...giftForm, server: e.target.value})} /></div>
           </div>
           <DialogFooter className="mt-6"><Button variant="ghost" onClick={() => setIsGiftModalOpen(false)}>Cancel</Button><Button className="bg-amber-500 text-black font-bold" onClick={handleGiftAccount} disabled={actionLoading}>Gift Account</Button></DialogFooter>
         </DialogContent>
