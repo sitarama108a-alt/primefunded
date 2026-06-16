@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo } from 'react';
@@ -21,7 +22,6 @@ import {
   Smartphone,
   ShieldCheck,
   Clock,
-  XCircle,
   Loader2,
   RefreshCw,
   Skull
@@ -58,7 +58,7 @@ export default function MT5AccountPage() {
     if (plan.includes('1-step')) return { daily: '3.0%', max: '6.0%' };
     if (plan.includes('2-step')) return { daily: '5.0%', max: '10.0%' };
     if (plan.includes('3-step')) return { daily: '4.0%', max: '8.0%' };
-    if (plan.includes('instant')) return { daily: '2.0%', max: '4.0%' };
+    if (plan.includes('instant')) return { daily: '3.0%', max: '4.0%' }; // UPDATED: 2.0% -> 3.0%
     return { daily: '3.0%', max: '6.0%' }; // Default fallback
   }, [accountPlan]);
 

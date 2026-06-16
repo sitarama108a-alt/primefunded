@@ -34,7 +34,7 @@ export async function POST(request: Request) {
 
     const plan = userData.accountPlan || '1-Step Pro';
     const phase = userData.currentPhase || 'evaluation';
-    const { balance, equity, dailyDrawdown, maxDrawdown, floatingLoss, lastLotSize, prevLotSize } = mt5Data;
+    const { dailyDrawdown, maxDrawdown, floatingLoss, lastLotSize, prevLotSize } = mt5Data;
 
     let breachType: 'hard' | 'soft' | null = null;
     let breachReason = '';
@@ -54,8 +54,15 @@ export async function POST(request: Request) {
       else if (maxDrawdown > maxLimit) { breachType = 'hard'; breachReason = `Max drawdown exceeded ${maxLimit}%`; }
       else if (floatingLoss > 1) { breachType = 'hard'; breachReason = 'Floating loss exceeded 1% threshold'; }
     }
+    else if (plan === '3-Step Classic') {
+      const dailyLimit = 4;
+      const maxLimit = 8;
+      if (dailyDrawdown > dailyLimit) { breachType = 'hard'; breachReason = `Daily drawdown exceeded ${dailyLimit}%`; }
+      else if (maxDrawdown > maxLimit) { breachType = 'hard'; breachReason = `Max drawdown exceeded ${maxLimit}%`; }
+    }
     else if (plan === 'Instant Funding') {
-      if (dailyDrawdown > 2) { breachType = 'hard'; breachReason = 'Instant Account: 2% Daily Drawdown hit'; }
+      // UPDATED: Daily drawdown limit changed from 2% to 3%
+      if (dailyDrawdown > 3) { breachType = 'hard'; breachReason = 'Instant Account: 3% Daily Drawdown hit'; }
       else if (maxDrawdown > 4) { breachType = 'hard'; breachReason = 'Instant Account: 4% Max Drawdown hit'; }
       else if (floatingLoss > 1) { breachType = 'hard'; breachReason = 'Instant Account: 1% Floating Loss hit'; }
     }

@@ -1,11 +1,11 @@
+
 "use client"
 
 import { useMemo, useEffect, useState } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Check, Shield, AlertTriangle, Target, Skull, AlertCircle, MapPin, Info } from 'lucide-react';
-import Link from 'next/link';
+import { Check, Shield, AlertTriangle, Target, Skull, AlertCircle, MapPin } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -108,7 +108,7 @@ const PLAN_RULES = {
       { text: "Daily payouts available", check: true },
       { text: "First payout after 24 hours", check: true },
       { text: "1% max floating loss (Hard Breach)", warning: true },
-      { text: "2% daily drawdown (Hard Breach)", warning: true },
+      { text: "3% daily drawdown (Hard Breach)", warning: true },
       { text: "4% max drawdown (Hard Breach)", warning: true },
       { text: "3% max loss per single trade", warning: true },
       { text: "No Friday overnight holding (Hard Breach)", check: false },
@@ -290,7 +290,7 @@ function RuleCard({ title, items, variant = 'primary', active }: { title: string
             </div>
             <span className={cn(
               "text-sm font-medium",
-              item.type === 'hard' || (!item.check && !item.warning) ? 'text-destructive' : 'text-foreground/90'
+              (item.warning || !item.check) ? 'text-destructive' : 'text-foreground/90'
             )}>
               {item.text}
             </span>

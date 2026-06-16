@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, memo, useEffect, useMemo } from 'react';
@@ -145,7 +146,7 @@ const RULES = {
       { text: "Daily payouts available", type: 'check' },
       { text: "First payout after 24 hours", type: 'check' },
       { text: "Max withdraw 3% per 24 hours", type: 'warning' },
-      { text: "2% daily drawdown (Hard Breach)", type: 'hard' },
+      { text: "3% daily drawdown (Hard Breach)", type: 'hard' }, // UPDATED: 2% -> 3%
       { text: "4% max drawdown (Hard Breach)", type: 'hard' },
       { text: "No martingale (Hard Breach)", type: 'hard' },
       { text: "No payout exceeding daily drawdown", type: 'warning' },

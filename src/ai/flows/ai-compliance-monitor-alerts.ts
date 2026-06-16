@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview This file implements a Genkit flow for the AI Compliance Monitor, providing real-time insights
@@ -71,7 +72,7 @@ Here are the rules for each challenge plan:
     *   Minimum 5 trading days per phase.
 
 3.  **Instant Funding Plan Rules:**
-    *   If Daily Loss > 2%: FAILED
+    *   If Daily Loss > 3%: FAILED (Updated: Limit is 3%)
     *   If Total Loss > 4%: FAILED
     *   First payout after 24 hours.
 

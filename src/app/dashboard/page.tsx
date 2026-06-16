@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useMemo, memo } from 'react';
@@ -131,7 +132,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
       if (plan.includes('1-step')) return 3;
       if (plan.includes('2-step')) return 5;
       if (plan.includes('3-step')) return 4;
-      if (plan.includes('instant')) return 2;
+      if (plan.includes('instant')) return 3; // UPDATED: 2 -> 3
       return 3;
     };
 

@@ -1,3 +1,4 @@
+
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
@@ -168,7 +169,8 @@ export async function POST(request: Request) {
       }
     }
     else if (planType === 'instant-funding') {
-      if (dailyDrawdownPct > 2) triggerHardBreach(`Instant Account: 2% Daily Drawdown hit`);
+      // UPDATED: Daily drawdown limit changed from 2% to 3%
+      if (dailyDrawdownPct > 3) triggerHardBreach(`Instant Account: 3% Daily Drawdown hit`);
       if (maxDrawdownPct > 4) triggerHardBreach(`Instant Account: 4% Max Drawdown hit`);
       if (floatingLossPct > 1) triggerHardBreach(`Instant Account: 1% Max Floating Loss hit`);
     }
