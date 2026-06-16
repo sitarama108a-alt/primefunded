@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { 
@@ -25,13 +24,14 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/context/AuthContext';
-import { useCollection } from '@/firebase';
-import { orderBy, where, limit } from 'firebase/firestore';
+import { useCollection, useFirestore } from '@/firebase';
+import { orderBy, where, limit, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { format, isWithinInterval, startOfDay, endOfDay, differenceInSeconds } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 export default function HistoryPage() {
-  const { user } = useAuth();
+  const { user, userData } = useAuth();
+  const db = useFirestore();
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
@@ -50,6 +50,22 @@ export default function HistoryPage() {
     user ? `users/${user.uid}/phaseHistory` : null,
     [orderBy('advancedAt', 'desc')]
   );
+
+  // Auto-repair missing initial phase history for active accounts
+  useEffect(() => {
+    if (user && userData?.accountStatus === 'active' && !phasesLoading && phaseHistory.length === 0) {
+      const historyRef = collection(db, 'users', user.uid, 'phaseHistory');
+      addDoc(historyRef, {
+        phase: userData.currentPhase || 'evaluation',
+        accountSize: userData.accountSize || 'Standard',
+        plan: userData.accountPlan || 'Standard',
+        mt5Login: userData.mt5Login || 'N/A',
+        advancedAt: userData.activatedAt || serverTimestamp(),
+        advancedBy: "system",
+        note: "Initial stage recorded (auto-repair)"
+      });
+    }
+  }, [user, userData, phasesLoading, phaseHistory.length, db]);
 
   const calculateHoldingTime = (open: string, close: string) => {
     if (!open || !close) return 'N/A';

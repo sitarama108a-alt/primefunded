@@ -22,6 +22,7 @@ import { doc, setDoc, collection, onSnapshot, query, orderBy, limit, updateDoc, 
 import { db } from '@/lib/firebase';
 import { useBrandSettings } from '@/hooks/use-brand-settings';
 import { useAuth } from '@/context/AuthContext';
+import { motion } from 'framer-motion';
 
 const StatCard = memo(function StatCard({ title, value, icon, color }: { title: string, value: string | number, icon: any, color: string }) {
   const colors: any = {
@@ -173,6 +174,17 @@ export default function AdminPage() {
         updatedAt: serverTimestamp()
       }, { merge: true });
 
+      // Add to phase history
+      await addDoc(collection(db, 'users', selectedOrder.userId, 'phaseHistory'), {
+        phase: "evaluation",
+        accountSize: selectedOrder.accountSize,
+        plan: selectedOrder.plan,
+        mt5Login: verifyForm.login,
+        advancedAt: serverTimestamp(),
+        advancedBy: "admin",
+        note: "Initial account provisioned via order verification"
+      });
+
       await addDoc(collection(db, 'users', selectedOrder.userId, 'notifications'), {
         title: "✅ Account Activated",
         message: `Your ${selectedOrder.accountSize} account is ready! Check Credentials tab.`,
@@ -218,6 +230,17 @@ export default function AdminPage() {
         planType: giftForm.plan,
         updatedAt: serverTimestamp()
       }, { merge: true });
+
+      // Add initial phase history
+      await addDoc(collection(db, 'users', selectedUser.id, 'phaseHistory'), {
+        phase: "evaluation",
+        accountSize: giftForm.size,
+        plan: giftForm.plan,
+        mt5Login: giftForm.login,
+        advancedAt: serverTimestamp(),
+        advancedBy: "admin",
+        note: "Institutional account gifted by administrator"
+      });
 
       await addDoc(collection(db, 'users', selectedUser.id, 'notifications'), {
         title: "🎁 Account Gifted",
@@ -308,9 +331,11 @@ export default function AdminPage() {
       await addDoc(collection(db, 'users', selectedUser.id, 'phaseHistory'), {
         phase: phaseForm.newPhase,
         accountSize: selectedUser.accountSize,
+        plan: selectedUser.accountPlan || 'Standard',
         mt5Login: phaseForm.assignNewAccount ? phaseForm.login : (selectedUser.mt5Login || 'N/A'),
         advancedAt: serverTimestamp(),
-        advancedBy: "admin"
+        advancedBy: "admin",
+        note: `Advanced to ${phaseForm.newPhase} stage`
       });
 
       const message = phaseForm.assignNewAccount 
