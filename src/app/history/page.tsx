@@ -70,9 +70,24 @@ export default function HistoryPage() {
 
   const getTradeDate = (time: any) => {
     if (!time) return null;
-    if (typeof time === 'number') return new Date(time * 1000);
-    if (time.toDate && typeof time.toDate === 'function') return time.toDate();
-    return new Date(time);
+    let date;
+    if (typeof time === 'number') date = new Date(time * 1000);
+    else if (time.toDate && typeof time.toDate === 'function') date = time.toDate();
+    else date = new Date(time);
+    
+    if (isNaN(date.getTime())) return null;
+    return date;
+  };
+
+  const formatTradeDate = (time: any) => {
+    try {
+      if (!time) return 'N/A';
+      const date = getTradeDate(time);
+      if (!date) return 'N/A';
+      return format(date, 'yyyy-MM-dd HH:mm:ss');
+    } catch (e) {
+      return 'N/A';
+    }
   };
 
   const calculateHoldingTime = (open: any, close: any) => {
@@ -82,6 +97,9 @@ export default function HistoryPage() {
     if (!openDate || !closeDate) return 'N/A';
     try {
       const seconds = differenceInSeconds(closeDate, openDate);
+      if (isNaN(seconds)) return 'N/A';
+      
+      if (seconds < 0) return '0s';
       if (seconds < 60) return `${seconds}s`;
       const minutes = Math.floor(seconds / 60);
       const remainingSeconds = seconds % 60;
@@ -193,7 +211,9 @@ export default function HistoryPage() {
                      <CardContent className="p-5 space-y-3">
                         <div className="flex justify-between items-start">
                            <Badge className="bg-primary/20 text-primary uppercase text-[9px] font-black border-none px-2">{phase.phase}</Badge>
-                           <span className="text-[10px] text-muted-foreground font-medium">{phase.advancedAt?.seconds ? format(phase.advancedAt.seconds * 1000, 'MMM d, yyyy') : 'N/A'}</span>
+                           <span className="text-[10px] text-muted-foreground font-medium">
+                            {formatTradeDate(phase.advancedAt)}
+                           </span>
                         </div>
                         <div>
                            <p className="text-xs font-bold text-white">{phase.accountSize || 'Standard'} Account</p>
@@ -282,8 +302,6 @@ export default function HistoryPage() {
                     ))
                   ) : paginatedTrades.length > 0 ? (
                     paginatedTrades.map((trade: any) => {
-                      const tradeDate = getTradeDate(trade.time || trade.date);
-                      const closeDate = getTradeDate(trade.closeDate || trade.updatedAt);
                       return (
                         <tr key={trade.id} className="hover:bg-primary/5 transition-colors group">
                           <td className="py-4 px-6 font-bold text-white">{trade.symbol || 'N/A'}</td>
@@ -296,10 +314,10 @@ export default function HistoryPage() {
                              </Badge>
                           </td>
                           <td className="py-4 px-4 text-muted-foreground font-mono text-xs">
-                            {tradeDate ? format(tradeDate, 'yyyy-MM-dd HH:mm:ss') : 'N/A'}
+                            {formatTradeDate(trade.time || trade.date)}
                           </td>
                           <td className="py-4 px-4 text-muted-foreground font-mono text-xs">
-                            {trade.closeDate ? format(new Date(trade.closeDate), 'yyyy-MM-dd HH:mm:ss') : 'Live'}
+                            {formatTradeDate(trade.closeDate || trade.updatedAt)}
                           </td>
                           <td className="py-4 px-4 text-muted-foreground text-xs flex items-center gap-1.5 pt-5">
                             <Clock className="w-3 h-3" />

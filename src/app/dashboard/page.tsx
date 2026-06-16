@@ -165,9 +165,24 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
 
   const getTradeDate = (time: any) => {
     if (!time) return null;
-    if (typeof time === 'number') return new Date(time * 1000);
-    if (time.toDate && typeof time.toDate === 'function') return time.toDate();
-    return new Date(time);
+    let date;
+    if (typeof time === 'number') date = new Date(time * 1000);
+    else if (time.toDate && typeof time.toDate === 'function') date = time.toDate();
+    else date = new Date(time);
+    
+    if (isNaN(date.getTime())) return null;
+    return date;
+  };
+
+  const formatTradeDate = (time: any) => {
+    try {
+      if (!time) return 'N/A';
+      const date = getTradeDate(time);
+      if (!date) return 'N/A';
+      return format(date, 'MMM d, HH:mm');
+    } catch (e) {
+      return 'N/A';
+    }
   };
 
   const calculateHoldingTime = (open: any, close: any) => {
@@ -177,6 +192,9 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     if (!openDate || !closeDate) return 'N/A';
     try {
       const seconds = differenceInSeconds(closeDate, openDate);
+      if (isNaN(seconds)) return 'N/A';
+      
+      if (seconds < 0) return '0s';
       if (seconds < 60) return `${seconds}s`;
       const minutes = Math.floor(seconds / 60);
       const remainingSeconds = seconds % 60;
@@ -353,8 +371,6 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                     ))
                   ) : recentTrades.length > 0 ? (
                     recentTrades.map((trade: any) => {
-                      const tradeDate = getTradeDate(trade.time || trade.date);
-                      const closeDate = getTradeDate(trade.closeDate || trade.updatedAt);
                       return (
                         <tr key={trade.id} className="hover:bg-primary/5 transition-colors">
                           <td className="py-4 px-6 font-bold text-white">{trade.symbol || 'N/A'}</td>
@@ -367,7 +383,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                             </Badge>
                           </td>
                           <td className="py-4 px-4 text-xs text-muted-foreground font-mono">
-                            {tradeDate ? format(tradeDate, 'MMM d, HH:mm') : 'N/A'}
+                            {formatTradeDate(trade.time || trade.date)}
                           </td>
                           <td className="py-4 px-4 text-xs text-muted-foreground flex items-center gap-1.5">
                             <Clock className="w-3 h-3" />
