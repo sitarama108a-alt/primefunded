@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo } from 'react';
@@ -17,7 +18,8 @@ import {
   Zap,
   ShieldCheck,
   XCircle,
-  Clock
+  Clock,
+  CheckCircle2
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -25,7 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/context/AuthContext';
 import { useCollection } from '@/firebase';
 import { orderBy, where, limit } from 'firebase/firestore';
-import { format, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
+import { format, isWithinInterval, startOfDay, endOfDay, differenceInSeconds } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 export default function HistoryPage() {
@@ -49,6 +51,22 @@ export default function HistoryPage() {
     [orderBy('advancedAt', 'desc')]
   );
 
+  const calculateHoldingTime = (open: string, close: string) => {
+    if (!open || !close) return 'N/A';
+    try {
+      const seconds = differenceInSeconds(new Date(close), new Date(open));
+      if (seconds < 60) return `${seconds}s`;
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = seconds % 60;
+      if (minutes < 60) return `${minutes}m ${remainingSeconds}s`;
+      const hours = Math.floor(minutes / 60);
+      const remainingMinutes = minutes % 60;
+      return `${hours}h ${remainingMinutes}m`;
+    } catch (e) {
+      return 'N/A';
+    }
+  };
+
   const filteredTrades = useMemo(() => {
     if (!trades) return [];
     
@@ -57,11 +75,15 @@ export default function HistoryPage() {
       
       let matchesDate = true;
       if (dateRange.start && dateRange.end) {
-        const tradeDate = new Date(trade.date);
-        matchesDate = isWithinInterval(tradeDate, {
-          start: startOfDay(new Date(dateRange.start)),
-          end: endOfDay(new Date(dateRange.end))
-        });
+        try {
+          const tradeDate = new Date(trade.date);
+          matchesDate = isWithinInterval(tradeDate, {
+            start: startOfDay(new Date(dateRange.start)),
+            end: endOfDay(new Date(dateRange.end))
+          });
+        } catch (e) {
+          matchesDate = true;
+        }
       }
 
       return matchesSymbol && matchesDate;
@@ -78,9 +100,16 @@ export default function HistoryPage() {
   const exportToCSV = () => {
     if (!filteredTrades.length) return;
     
-    const headers = ['Date', 'Symbol', 'Type', 'Lots', 'OpenPrice', 'ClosePrice', 'PnL'];
+    const headers = ['Date', 'Symbol', 'Type', 'Lots', 'OpenPrice', 'ClosePrice', 'PnL', 'HoldingTime'];
     const rows = filteredTrades.map(t => [
-      t.date, t.symbol, t.type, t.lots, t.openPrice, t.closePrice, t.pnl
+      t.date, 
+      t.symbol, 
+      t.type, 
+      t.lots, 
+      t.openPrice, 
+      t.closePrice, 
+      t.pnl,
+      calculateHoldingTime(t.date, t.closeDate || t.updatedAt)
     ]);
     
     const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
@@ -88,7 +117,7 @@ export default function HistoryPage() {
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `trading_history_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    link.setAttribute("download", `primefunded_trades_${format(new Date(), 'yyyy-MM-dd')}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -120,7 +149,6 @@ export default function HistoryPage() {
           </Button>
         </header>
 
-        {/* Phase Progression Section */}
         <section className="mb-12">
           <div className="flex items-center gap-2 mb-6">
             <Trophy className="w-5 h-5 text-primary" />
@@ -206,12 +234,12 @@ export default function HistoryPage() {
               <table className="w-full text-sm text-left">
                 <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
                   <tr className="border-b border-border/50">
-                    <th className="py-4 px-6">Date <ArrowUpDown className="inline w-3 h-3 ml-1" /></th>
-                    <th className="py-4 px-2">Symbol</th>
+                    <th className="py-4 px-6">Symbol</th>
                     <th className="py-4 px-2">Type</th>
+                    <th className="py-4 px-4">Open Time</th>
+                    <th className="py-4 px-4">Close Time</th>
+                    <th className="py-4 px-4">Duration</th>
                     <th className="py-4 px-2 text-right">Lot</th>
-                    <th className="py-4 px-2 text-right">Entry</th>
-                    <th className="py-4 px-2 text-right">Exit</th>
                     <th className="py-4 px-6 text-right">P&L</th>
                   </tr>
                 </thead>
@@ -225,21 +253,26 @@ export default function HistoryPage() {
                   ) : paginatedTrades.length > 0 ? (
                     paginatedTrades.map((trade: any) => (
                       <tr key={trade.id} className="hover:bg-primary/5 transition-colors group">
-                        <td className="py-4 px-6 text-muted-foreground font-mono text-xs">
-                          {trade.date ? format(new Date(trade.date), 'yyyy-MM-dd HH:mm:ss') : 'N/A'}
-                        </td>
-                        <td className="py-4 px-2 font-bold text-white">{trade.symbol}</td>
+                        <td className="py-4 px-6 font-bold text-white">{trade.symbol}</td>
                         <td className="py-4 px-2">
                            <Badge variant="outline" className={cn(
                              "text-[9px] font-black uppercase px-2 py-0",
-                             trade.type?.toLowerCase() === 'buy' ? 'border-emerald-500/30 text-emerald-500' : 'border-destructive/30 text-destructive'
+                             trade.type?.toLowerCase() === 'buy' ? 'border-emerald-500/30 text-emerald-500 bg-emerald-500/5' : 'border-destructive/30 text-destructive bg-destructive/5'
                            )}>
                              {trade.type}
                            </Badge>
                         </td>
+                        <td className="py-4 px-4 text-muted-foreground font-mono text-xs">
+                          {trade.date ? format(new Date(trade.date), 'yyyy-MM-dd HH:mm:ss') : 'N/A'}
+                        </td>
+                        <td className="py-4 px-4 text-muted-foreground font-mono text-xs">
+                          {trade.closeDate ? format(new Date(trade.closeDate), 'yyyy-MM-dd HH:mm:ss') : 'Live'}
+                        </td>
+                        <td className="py-4 px-4 text-muted-foreground text-xs flex items-center gap-1.5 pt-5">
+                          <Clock className="w-3 h-3" />
+                          {calculateHoldingTime(trade.date, trade.closeDate || trade.updatedAt)}
+                        </td>
                         <td className="py-4 px-2 text-right text-white font-mono">{trade.lots}</td>
-                        <td className="py-4 px-2 text-right text-muted-foreground font-mono">{trade.openPrice}</td>
-                        <td className="py-4 px-2 text-right text-muted-foreground font-mono">{trade.closePrice}</td>
                         <td className={cn(
                           "py-4 px-6 text-right font-bold tabular-nums",
                           (trade.pnl || 0) >= 0 ? 'text-emerald-500' : 'text-destructive'
@@ -256,9 +289,9 @@ export default function HistoryPage() {
                             <SearchX className="w-10 h-10 text-muted-foreground opacity-20" />
                           </div>
                           <div>
-                            <h3 className="text-xl font-bold text-white mb-2">No results found</h3>
+                            <h3 className="text-xl font-bold text-white mb-2">No executions found</h3>
                             <p className="text-muted-foreground text-sm leading-relaxed">
-                              No historical trade data matches your current filters. Try adjusting your search criteria.
+                              No historical trade data matches your current filters. Live executions from MT5 will appear here instantly.
                             </p>
                           </div>
                         </div>

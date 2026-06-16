@@ -24,7 +24,8 @@ import {
   History,
   Trophy,
   Zap,
-  ArrowRight
+  ArrowRight,
+  Clock
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -46,7 +47,7 @@ import {
   ChartTooltip, 
   ResponsiveContainer 
 } from 'recharts';
-import { format, subDays, subMonths } from 'date-fns';
+import { format, subDays, subMonths, differenceInSeconds } from 'date-fns';
 
 interface DashboardPageProps {
   adminViewMode?: boolean;
@@ -105,6 +106,17 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     return () => unsubscribeMt5();
   }, [effectiveUid, db, userData?.mt5Login]);
 
+  // Fetch recent trades
+  const tradeConstraints = useMemo(() => [
+    orderBy('date', 'desc'),
+    limit(10)
+  ], []);
+
+  const { data: recentTrades, loading: tradesLoading } = useCollection<any>(
+    effectiveUid ? `users/${effectiveUid}/trades` : null,
+    tradeConstraints
+  );
+
   const metrics = useMemo(() => {
     const parseSize = (sizeStr: string) => {
       if (!sizeStr) return 0;
@@ -151,6 +163,18 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     if (phase === 'phase3') return { label: 'Phase 3: Final Stage', icon: <Zap className="w-3 h-3" />, className: 'bg-primary/10 text-primary border-primary/20' };
     return { label: 'Evaluation Phase', icon: <Zap className="w-3 h-3" />, className: 'bg-primary/10 text-primary border-primary/20' };
   }, [userData?.currentPhase]);
+
+  const calculateHoldingTime = (open: string, close: string) => {
+    if (!open || !close) return 'N/A';
+    const seconds = differenceInSeconds(new Date(close), new Date(open));
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    if (minutes < 60) return `${minutes}m ${remainingSeconds}s`;
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return `${hours}h ${remainingMinutes}m`;
+  };
 
   if (authLoading) return null;
 
@@ -234,7 +258,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
           <div className="lg:col-span-2">
             <Card className={cn("border-border/50 bg-card/40", isBreached && "opacity-40 grayscale")}>
               <CardHeader className="flex flex-row items-center justify-between">
@@ -281,6 +305,74 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
             </Card>
           </div>
         </div>
+
+        <Card className={cn("border-border/50 bg-card/40 backdrop-blur-sm", isBreached && "opacity-40 grayscale")}>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-xl font-headline text-white flex items-center gap-2">
+              <History className="w-5 h-5 text-primary" /> Recent Trades
+            </CardTitle>
+            <Button variant="ghost" size="sm" className="text-[10px] font-black uppercase tracking-widest text-primary hover:text-white" asChild>
+              <Link href="/history">View Full Journal <ArrowRight className="ml-2 w-3 h-3" /></Link>
+            </Button>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-secondary/30 text-muted-foreground uppercase text-[10px] font-black tracking-widest">
+                  <tr>
+                    <th className="py-4 px-6">Symbol</th>
+                    <th className="py-4 px-4">Type</th>
+                    <th className="py-4 px-4">Open Time</th>
+                    <th className="py-4 px-4">Holding Time</th>
+                    <th className="py-4 px-4 text-right">Lots</th>
+                    <th className="py-4 px-6 text-right">P&L</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/50">
+                  {tradesLoading ? (
+                    [...Array(3)].map((_, i) => (
+                      <tr key={i} className="animate-pulse"><td colSpan={6} className="py-6 px-6"><div className="h-4 bg-secondary/50 rounded w-full" /></td></tr>
+                    ))
+                  ) : recentTrades.length > 0 ? (
+                    recentTrades.map((trade: any) => (
+                      <tr key={trade.id} className="hover:bg-primary/5 transition-colors">
+                        <td className="py-4 px-6 font-bold text-white">{trade.symbol}</td>
+                        <td className="py-4 px-4">
+                          <Badge variant="outline" className={cn(
+                            "text-[9px] font-black uppercase px-2",
+                            trade.type?.toLowerCase() === 'buy' ? 'border-emerald-500/30 text-emerald-500 bg-emerald-500/5' : 'border-destructive/30 text-destructive bg-destructive/5'
+                          )}>
+                            {trade.type}
+                          </Badge>
+                        </td>
+                        <td className="py-4 px-4 text-xs text-muted-foreground font-mono">
+                          {trade.date ? format(new Date(trade.date), 'MMM d, HH:mm') : 'N/A'}
+                        </td>
+                        <td className="py-4 px-4 text-xs text-muted-foreground flex items-center gap-1.5">
+                          <Clock className="w-3 h-3" />
+                          {calculateHoldingTime(trade.date, trade.closeDate || trade.updatedAt)}
+                        </td>
+                        <td className="py-4 px-4 text-right text-white font-mono">{trade.lots}</td>
+                        <td className={cn(
+                          "py-4 px-6 text-right font-bold tabular-nums",
+                          (trade.pnl || 0) >= 0 ? 'text-emerald-500' : 'text-destructive'
+                        )}>
+                          {(trade.pnl || 0) >= 0 ? '+' : ''}${trade.pnl?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={6} className="py-20 text-center text-muted-foreground italic text-sm">
+                        No trades recorded yet. Your MT5 executions will appear here live.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
       </main>
     </div>
   );
