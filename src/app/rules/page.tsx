@@ -4,10 +4,11 @@ import { useMemo, useEffect, useState } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Check, Shield, AlertTriangle, Target, Skull, AlertCircle, MapPin } from 'lucide-react';
+import { Check, Shield, AlertTriangle, Target, Skull, AlertCircle, MapPin, Info } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { motion } from 'framer-motion';
+import { cn } from '@/lib/utils';
 
 const PLAN_RULES = {
   '1-step': {
@@ -147,7 +148,7 @@ export default function RulesPage() {
       <main className="flex-1 p-8 overflow-y-auto custom-scrollbar">
         <header className="mb-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-4xl font-headline font-bold mb-2">Trading Rules</h1>
+            <h1 className="text-4xl font-headline font-bold mb-2 text-white">Trading Rules</h1>
             <p className="text-muted-foreground">Comprehensive guide to maintain your funding eligibility.</p>
           </div>
           {userData?.currentPhase && (
@@ -213,7 +214,44 @@ export default function RulesPage() {
           </TabsContent>
         </Tabs>
 
-        {/* Breach types section remains same... */}
+        <section className="mt-20 space-y-8">
+          <div className="flex items-center gap-3">
+             <div className="p-2 bg-secondary rounded-lg">
+                <Shield className="text-primary w-6 h-6" />
+             </div>
+             <h2 className="text-3xl font-headline font-bold text-white">Breach Protocol</h2>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-8">
+            <Card className="bg-destructive/5 border-destructive/20 p-8">
+              <h3 className="text-xl font-bold text-destructive mb-4 flex items-center gap-2">
+                <Skull className="w-5 h-5" /> Hard Breach
+              </h3>
+              <p className="text-muted-foreground text-sm leading-relaxed mb-6">
+                Violating hard rules results in immediate liquidation of your trading account. The account is terminated, and all profits are forfeited. No appeals are permitted for hard breaches.
+              </p>
+              <ul className="space-y-3">
+                <ProtocolItem text="Daily Drawdown limit reached" />
+                <ProtocolItem text="Maximum Drawdown limit reached" />
+                <ProtocolItem text="Unauthorized Martingale / Grid trading" />
+              </ul>
+            </Card>
+
+            <Card className="bg-amber-500/5 border-amber-500/20 p-8">
+              <h3 className="text-xl font-bold text-amber-500 mb-4 flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5" /> Soft Breach
+              </h3>
+              <p className="text-muted-foreground text-sm leading-relaxed mb-6">
+                Soft rules are designed to protect your evaluation. Violating a soft rule results in a formal warning or a reset of the evaluation phase without terminating your eligibility for funding.
+              </p>
+              <ul className="space-y-3">
+                <ProtocolItem text="Holding over the weekend (on specific plans)" />
+                <ProtocolItem text="Copying unauthorized external signals" />
+                <ProtocolItem text="Inconsistent execution patterns" />
+              </ul>
+            </Card>
+          </div>
+        </section>
       </main>
     </div>
   );
@@ -224,11 +262,11 @@ function RuleCard({ title, items, variant = 'primary', active }: { title: string
   return (
     <Card className={cn(
       "h-full transition-all duration-500 relative",
-      active ? "border-primary ring-2 ring-primary/20 scale-[1.02] shadow-2xl shadow-primary/10" : "border-border/50 opacity-60 grayscale-[0.5]",
-      isDestructive && active ? "border-destructive ring-destructive/20 shadow-destructive/10" : ""
+      active ? "border-primary ring-2 ring-primary/20 scale-[1.02] shadow-2xl shadow-primary/10 bg-primary/5" : "border-border/50 opacity-60 grayscale-[0.5] bg-card/40",
+      isDestructive && active ? "border-destructive ring-destructive/20 shadow-destructive/10 bg-destructive/5" : ""
     )}>
       {active && (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-black px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest z-10">
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-black px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest z-10 shadow-lg">
           Your Current Stage
         </div>
       )}
@@ -252,7 +290,7 @@ function RuleCard({ title, items, variant = 'primary', active }: { title: string
             </div>
             <span className={cn(
               "text-sm font-medium",
-              item.type === 'hard' ? 'text-destructive' : 'text-foreground/90'
+              item.type === 'hard' || (!item.check && !item.warning) ? 'text-destructive' : 'text-foreground/90'
             )}>
               {item.text}
             </span>
@@ -260,5 +298,14 @@ function RuleCard({ title, items, variant = 'primary', active }: { title: string
         ))}
       </CardContent>
     </Card>
+  );
+}
+
+function ProtocolItem({ text }: { text: string }) {
+  return (
+    <li className="flex items-center gap-2 text-xs text-muted-foreground">
+      <div className="w-1.5 h-1.5 rounded-full bg-border" />
+      {text}
+    </li>
   );
 }
