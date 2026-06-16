@@ -26,6 +26,7 @@ import { where, doc, limit, orderBy, onSnapshot, collection, query } from 'fireb
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { NotificationBell } from '@/components/NotificationBell';
+import { cn } from '@/lib/utils';
 
 interface DashboardPageProps {
   adminViewMode?: boolean;
@@ -64,7 +65,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   const userData = adminViewMode ? targetUserData : loggedInUserData;
   
   const [mt5Data, setMt5Data] = useState<any>(null);
-  const [isConnected, setIsConnected] = useState(false);
+  const [mt5DocExists, setMt5DocExists] = useState(false);
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const { toast } = useToast();
@@ -73,36 +74,32 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   const [softBreachWarning, setSoftBreachWarning] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!effectiveUid || !db) return;
+    if (!effectiveUid || !db || !userData?.mt5Login) return;
 
-    // Listen for MT5 Live Sync Data from EA
-    // The EA writes to mt5_accounts/{login}, we need to find the login from userData
-    const login = userData?.mt5Login;
-    if (login) {
-      const unsubscribeMt5 = onSnapshot(doc(db, 'mt5_accounts', login.toString()), (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.data();
-          setMt5Data(data);
-          setIsConnected(true);
-          
-          if (!adminViewMode) {
-            fetch('/api/breach-check', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ userId: effectiveUid, mt5Data: data })
-            }).catch(err => console.error('Breach check failed:', err));
-          }
-        } else {
-          setIsConnected(false);
+    const login = userData.mt5Login.toString();
+    const unsubscribeMt5 = onSnapshot(doc(db, 'mt5_accounts', login), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setMt5Data(data);
+        setMt5DocExists(true);
+        
+        if (!adminViewMode) {
+          fetch('/api/breach-check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: effectiveUid, mt5Data: data })
+          }).catch(err => {});
         }
-      });
-      return () => unsubscribeMt5();
-    }
+      } else {
+        setMt5DocExists(false);
+        setMt5Data(null);
+      }
+    });
+    return () => unsubscribeMt5();
   }, [effectiveUid, db, adminViewMode, userData?.mt5Login]);
 
   useEffect(() => {
     if (!effectiveUid || !db) return;
-    // Listen for soft breach notifications
     const q = query(
       collection(db, 'users', effectiveUid, 'notifications'), 
       where('type', '==', 'soft_breach_warning'), 
@@ -141,9 +138,25 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     }
   }, [user, authLoading, router, adminViewMode]);
 
-  // Combined metrics from Profile (static) and MT5 (live)
+  const connectionStatus = useMemo(() => {
+    if (!userData?.mt5Login) return 'none';
+    if (!mt5DocExists) return 'awaiting';
+    if (!mt5Data?.updatedAt) return 'offline';
+
+    const lastUpdate = mt5Data.updatedAt?.seconds ? mt5Data.updatedAt.seconds * 1000 : 
+                       mt5Data.updatedAt ? new Date(mt5Data.updatedAt).getTime() : 0;
+    
+    const isStale = (Date.now() - lastUpdate) > 60000;
+    return isStale ? 'offline' : 'online';
+  }, [userData?.mt5Login, mt5DocExists, mt5Data]);
+
   const metrics = useMemo(() => {
-    const staticBalance = userData?.accountBalance || 0;
+    const parseSize = (sizeStr: string) => {
+      if (!sizeStr) return 0;
+      return parseFloat(sizeStr.replace(/[$,]/g, '').replace(/k/i, '000')) || 0;
+    };
+
+    const staticBalance = userData?.accountBalance || parseSize(userData?.accountSize);
     const liveBalance = mt5Data?.balance !== undefined ? mt5Data.balance : staticBalance;
     const liveEquity = mt5Data?.equity !== undefined ? mt5Data.equity : liveBalance;
     
@@ -153,7 +166,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
       winRate: mt5Data?.winRate || 0,
       tradesToday: mt5Data?.tradesToday || 0
     };
-  }, [userData?.accountBalance, mt5Data]);
+  }, [userData?.accountBalance, userData?.accountSize, mt5Data]);
 
   const copyTraderId = () => {
     const idToCopy = userData?.uid || userData?.traderId;
@@ -243,8 +256,16 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
           <div className="flex items-center gap-4">
             {!adminViewMode && <NotificationBell />}
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary border border-border">
-              <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-accent live-indicator' : 'bg-destructive'}`} />
-              <span className="text-xs font-semibold uppercase tracking-wider text-white">{isConnected ? 'LIVE SYNC' : 'EA OFFLINE'}</span>
+              <span className={cn(
+                "w-2 h-2 rounded-full",
+                connectionStatus === 'online' ? 'bg-accent live-indicator' : 
+                connectionStatus === 'offline' ? 'bg-destructive' : 'bg-muted-foreground'
+              )} />
+              <span className="text-xs font-semibold uppercase tracking-wider text-white">
+                {connectionStatus === 'online' ? 'LIVE SYNC' : 
+                 connectionStatus === 'offline' ? 'EA OFFLINE' : 
+                 connectionStatus === 'awaiting' ? 'AWAITING SYNC' : 'TERMINAL IDLE'}
+              </span>
             </div>
           </div>
         </header>
