@@ -138,17 +138,10 @@ export async function POST(request: Request) {
 
     await userDoc.ref.update(updates);
 
-    // Sync to mt5_accounts collection for redundancy/credential reference
-    await db.collection('mt5_accounts').doc(login).set({
-      userId,
-      login,
-      balance: currBalance,
-      equity: currEquity,
-      status: newStatus,
-      updatedAt: FieldValue.serverTimestamp()
-    }, { merge: true });
-
-    return new Response(JSON.stringify({ status: "OK" }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ status: "OK" }), { 
+      status: 200, 
+      headers: { 'Content-Type': 'application/json' } 
+    });
 
   } catch (error: any) {
     console.error('[MT5-Sync] Server Error:', error.message);
