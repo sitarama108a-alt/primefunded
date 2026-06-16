@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
@@ -75,13 +74,12 @@ export default function HistoryPage() {
     else if (time.toDate && typeof time.toDate === 'function') date = time.toDate();
     else date = new Date(time);
     
-    if (isNaN(date.getTime())) return null;
+    if (!date || isNaN(date.getTime())) return null;
     return date;
   };
 
   const formatTradeDate = (time: any) => {
     try {
-      if (!time) return 'N/A';
       const date = getTradeDate(time);
       if (!date) return 'N/A';
       return format(date, 'yyyy-MM-dd HH:mm:ss');
@@ -96,10 +94,9 @@ export default function HistoryPage() {
     
     if (!openDate || !closeDate) return 'N/A';
     try {
-      const seconds = differenceInSeconds(closeDate, openDate);
+      const seconds = Math.abs(differenceInSeconds(closeDate, openDate));
       if (isNaN(seconds)) return 'N/A';
       
-      if (seconds < 0) return '0s';
       if (seconds < 60) return `${seconds}s`;
       const minutes = Math.floor(seconds / 60);
       const remainingSeconds = seconds % 60;
@@ -135,18 +132,44 @@ export default function HistoryPage() {
     });
   }, [trades, searchTerm, dateRange]);
 
+  const enrichedTrades = useMemo(() => {
+    if (!filteredTrades) return [];
+    
+    return filteredTrades.map((trade: any, index: number, array: any[]) => {
+      const currentPnL = trade.pnl || trade.profit || 0;
+      
+      // Find duration if it's a closing deal
+      if (currentPnL !== 0) {
+        const matchingEntry = array.find(t => 
+          (t.positionId && trade.positionId && t.positionId === trade.positionId && (t.pnl || t.profit || 0) === 0) ||
+          (t.symbol === trade.symbol && (t.lots || t.volume) === (trade.lots || trade.volume) && (t.pnl || t.profit || 0) === 0 && getTradeDate(t.time || t.date) < getTradeDate(trade.time || trade.date))
+        );
+        
+        return {
+          ...trade,
+          duration: matchingEntry ? calculateHoldingTime(matchingEntry.time || matchingEntry.date, trade.time || trade.date) : 'N/A'
+        };
+      }
+      
+      return {
+        ...trade,
+        duration: '—'
+      };
+    });
+  }, [filteredTrades]);
+
   const paginatedTrades = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredTrades.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredTrades, currentPage]);
+    return enrichedTrades.slice(startIndex, startIndex + itemsPerPage);
+  }, [enrichedTrades, currentPage]);
 
-  const totalPages = Math.ceil(filteredTrades.length / itemsPerPage);
+  const totalPages = Math.ceil(enrichedTrades.length / itemsPerPage);
 
   const exportToCSV = () => {
-    if (!filteredTrades.length) return;
+    if (!enrichedTrades.length) return;
     
     const headers = ['Date', 'Symbol', 'Type', 'Lots', 'OpenPrice', 'ClosePrice', 'PnL', 'HoldingTime'];
-    const rows = filteredTrades.map(t => {
+    const rows = enrichedTrades.map(t => {
       const d = getTradeDate(t.time || t.date);
       return [
         d ? d.toISOString() : 'N/A', 
@@ -156,7 +179,7 @@ export default function HistoryPage() {
         t.openPrice || t.price || '0', 
         t.closePrice || '0', 
         t.pnl || t.profit || '0',
-        calculateHoldingTime(t.time || t.date, t.closeDate || t.updatedAt)
+        t.duration
       ];
     });
     
@@ -190,7 +213,7 @@ export default function HistoryPage() {
           <Button 
             variant="outline" 
             onClick={exportToCSV}
-            disabled={!filteredTrades.length}
+            disabled={!enrichedTrades.length}
             className="w-full md:w-auto font-bold border-border/50 rounded-xl hover:bg-secondary cursor-pointer"
           >
             <Download className="w-4 h-4 mr-2" /> Export CSV
@@ -321,7 +344,7 @@ export default function HistoryPage() {
                           </td>
                           <td className="py-4 px-4 text-muted-foreground text-xs flex items-center gap-1.5 pt-5">
                             <Clock className="w-3 h-3" />
-                            {calculateHoldingTime(trade.time || trade.date, trade.closeDate || trade.updatedAt)}
+                            {trade.duration}
                           </td>
                           <td className="py-4 px-2 text-right text-white font-mono">{trade.lots || trade.volume || '0.00'}</td>
                           <td className={cn(
@@ -357,7 +380,7 @@ export default function HistoryPage() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between p-6 border-t border-white/5 bg-secondary/10">
                 <p className="text-xs text-muted-foreground font-medium">
-                  Showing <span className="text-white">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-white">{Math.min(currentPage * itemsPerPage, filteredTrades.length)}</span> of <span className="text-white">{filteredTrades.length}</span> executions
+                  Showing <span className="text-white">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-white">{Math.min(currentPage * itemsPerPage, enrichedTrades.length)}</span> of <span className="text-white">{enrichedTrades.length}</span> executions
                 </p>
                 <div className="flex gap-2">
                   <Button 

@@ -51,11 +51,13 @@ export async function POST(request: Request) {
       
       batch.set(tradeRef, {
         ticket: trade.ticket,
+        positionId: trade.positionId || trade.position_id || null, // Link deals together
         symbol: trade.symbol,
         type: trade.type, // 'buy' or 'sell'
         lots: parseFloat(trade.volume) || 0,
         price: parseFloat(trade.price) || 0,
         pnl: parseFloat(trade.profit) || 0,
+        time: trade.time, // Unix number
         date: new Date(trade.time * 1000).toISOString(),
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });

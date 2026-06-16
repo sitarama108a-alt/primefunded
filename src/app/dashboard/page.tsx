@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useMemo, memo } from 'react';
@@ -116,6 +115,76 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     tradeConstraints
   );
 
+  const getTradeDate = (time: any) => {
+    if (!time) return null;
+    let date;
+    if (typeof time === 'number') date = new Date(time * 1000);
+    else if (time.toDate && typeof time.toDate === 'function') date = time.toDate();
+    else date = new Date(time);
+    
+    if (!date || isNaN(date.getTime())) return null;
+    return date;
+  };
+
+  const formatTradeDate = (time: any) => {
+    try {
+      const date = getTradeDate(time);
+      if (!date) return 'N/A';
+      return format(date, 'MMM d, HH:mm');
+    } catch (e) {
+      return 'N/A';
+    }
+  };
+
+  const calculateHoldingTime = (open: any, close: any) => {
+    const openDate = getTradeDate(open);
+    const closeDate = getTradeDate(close);
+    
+    if (!openDate || !closeDate) return 'N/A';
+    try {
+      const seconds = Math.abs(differenceInSeconds(closeDate, openDate));
+      if (isNaN(seconds)) return 'N/A';
+      
+      if (seconds < 60) return `${seconds}s`;
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = seconds % 60;
+      if (minutes < 60) return `${minutes}m ${remainingSeconds}s`;
+      const hours = Math.floor(minutes / 60);
+      const remainingMinutes = minutes % 60;
+      return `${hours}h ${remainingMinutes}m`;
+    } catch (e) {
+      return 'N/A';
+    }
+  };
+
+  // Enriched trades with paired Entry/Exit logic
+  const enrichedTrades = useMemo(() => {
+    if (!recentTrades) return [];
+    
+    return recentTrades.map((trade: any, index: number, array: any[]) => {
+      const currentPnL = trade.pnl || trade.profit || 0;
+      
+      // If it's a closing deal (non-zero profit), try to find the opening deal
+      if (currentPnL !== 0) {
+        const matchingEntry = array.find(t => 
+          (t.positionId && trade.positionId && t.positionId === trade.positionId && (t.pnl || t.profit || 0) === 0) ||
+          (t.symbol === trade.symbol && (t.lots || t.volume) === (trade.lots || trade.volume) && (t.pnl || t.profit || 0) === 0 && getTradeDate(t.time || t.date) < getTradeDate(trade.time || trade.date))
+        );
+        
+        return {
+          ...trade,
+          duration: matchingEntry ? calculateHoldingTime(matchingEntry.time || matchingEntry.date, trade.time || trade.date) : 'N/A'
+        };
+      }
+      
+      // It's an opening deal
+      return {
+        ...trade,
+        duration: '—'
+      };
+    });
+  }, [recentTrades]);
+
   const metrics = useMemo(() => {
     const parseSize = (sizeStr: string) => {
       if (!sizeStr) return 0;
@@ -162,50 +231,6 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     if (phase === 'phase3') return { label: 'Phase 3: Final Stage', icon: <Zap className="w-3 h-3" />, className: 'bg-primary/10 text-primary border-primary/20' };
     return { label: 'Evaluation Phase', icon: <Zap className="w-3 h-3" />, className: 'bg-primary/10 text-primary border-primary/20' };
   }, [userData?.currentPhase]);
-
-  const getTradeDate = (time: any) => {
-    if (!time) return null;
-    let date;
-    if (typeof time === 'number') date = new Date(time * 1000);
-    else if (time.toDate && typeof time.toDate === 'function') date = time.toDate();
-    else date = new Date(time);
-    
-    if (isNaN(date.getTime())) return null;
-    return date;
-  };
-
-  const formatTradeDate = (time: any) => {
-    try {
-      if (!time) return 'N/A';
-      const date = getTradeDate(time);
-      if (!date) return 'N/A';
-      return format(date, 'MMM d, HH:mm');
-    } catch (e) {
-      return 'N/A';
-    }
-  };
-
-  const calculateHoldingTime = (open: any, close: any) => {
-    const openDate = getTradeDate(open);
-    const closeDate = getTradeDate(close);
-    
-    if (!openDate || !closeDate) return 'N/A';
-    try {
-      const seconds = differenceInSeconds(closeDate, openDate);
-      if (isNaN(seconds)) return 'N/A';
-      
-      if (seconds < 0) return '0s';
-      if (seconds < 60) return `${seconds}s`;
-      const minutes = Math.floor(seconds / 60);
-      const remainingSeconds = seconds % 60;
-      if (minutes < 60) return `${minutes}m ${remainingSeconds}s`;
-      const hours = Math.floor(minutes / 60);
-      const remainingMinutes = minutes % 60;
-      return `${hours}h ${remainingMinutes}m`;
-    } catch (e) {
-      return 'N/A';
-    }
-  };
 
   if (authLoading) return null;
 
@@ -369,8 +394,8 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                     [...Array(3)].map((_, i) => (
                       <tr key={i} className="animate-pulse"><td colSpan={6} className="py-6 px-6"><div className="h-4 bg-secondary/50 rounded w-full" /></td></tr>
                     ))
-                  ) : recentTrades.length > 0 ? (
-                    recentTrades.map((trade: any) => {
+                  ) : enrichedTrades.length > 0 ? (
+                    enrichedTrades.map((trade: any) => {
                       return (
                         <tr key={trade.id} className="hover:bg-primary/5 transition-colors">
                           <td className="py-4 px-6 font-bold text-white">{trade.symbol || 'N/A'}</td>
@@ -387,7 +412,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                           </td>
                           <td className="py-4 px-4 text-xs text-muted-foreground flex items-center gap-1.5">
                             <Clock className="w-3 h-3" />
-                            {calculateHoldingTime(trade.time || trade.date, trade.closeDate || trade.updatedAt)}
+                            {trade.duration}
                           </td>
                           <td className="py-4 px-4 text-right text-white font-mono">{trade.lots || trade.volume || '0.00'}</td>
                           <td className={cn(
