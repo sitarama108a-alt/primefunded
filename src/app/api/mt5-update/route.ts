@@ -1,21 +1,13 @@
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
-/**
- * @fileOverview MT5 Update API with Direct User Sync & Breach Detection
- * Receives metrics from MT5 EA and synchronizes them with the User Profile.
- */
-
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 function getAdminDb() {
   if (!getApps().length) {
     const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-    if (!serviceAccountKey) {
-      console.error('[MT5-Update] FIREBASE_SERVICE_ACCOUNT_KEY is missing.');
-      throw new Error('Missing FIREBASE_SERVICE_ACCOUNT_KEY');
-    }
+    if (!serviceAccountKey) throw new Error('Missing FIREBASE_SERVICE_ACCOUNT_KEY');
     try {
       const serviceAccount = JSON.parse(serviceAccountKey);
       initializeApp({ credential: cert(serviceAccount) });
@@ -31,7 +23,6 @@ export async function POST(request: Request) {
     const db = getAdminDb();
     let payload: any = {};
     const contentType = request.headers.get('content-type') || '';
-    
     try {
       if (contentType.includes('application/json')) {
         payload = await request.json();
@@ -48,7 +39,6 @@ export async function POST(request: Request) {
       return new Response(JSON.stringify({ status: "ERROR", message: "Missing login" }), { status: 400 });
     }
 
-    // 1. Search for account by login in mt5_accounts collection
     const usersRef = db.collection('mt5_accounts');
     const querySnapshot = await usersRef.where('login', '==', login).limit(1).get();
 
@@ -61,22 +51,18 @@ export async function POST(request: Request) {
     const userData = userDoc.data();
     const userId = userDoc.id;
 
-    // Sanitize Metrics
     const currBalance = parseFloat(String(payload.balance)) || 0;
     const currEquity = parseFloat(String(payload.equity)) || 0;
     const currMargin = parseFloat(String(payload.margin)) || 0;
     const currProfit = parseFloat(String(payload.profit)) || 0;
 
-    // Skip if already breached
     if (userData.accountStatus === 'breached') {
       return new Response(JSON.stringify({ status: "OK", note: "Account already breached" }), { status: 200 });
     }
 
-    // 2. Risk Engine Logic
     const startingBalance = parseFloat(String(userData.accountBalance)) || currBalance || 100000;
     const planType = String(userData.accountPlan || '1-step-pro').toLowerCase();
     const phase = String(userData.currentPhase || 'evaluation');
-
     const dailyDrawdownPct = startingBalance !== 0 ? ((startingBalance - currEquity) / startingBalance) * 100 : 0;
     const maxDrawdownPct = dailyDrawdownPct;
 
@@ -101,12 +87,8 @@ export async function POST(request: Request) {
     };
 
     const breachMsg = checkBreach();
-    if (breachMsg) {
-      newStatus = 'breached';
-      breachReason = breachMsg;
-    }
+    if (breachMsg) { newStatus = 'breached'; breachReason = breachMsg; }
 
-    // 3. Update Account Document
     const updates: any = {
       balance: currBalance,
       equity: currEquity,
@@ -121,33 +103,21 @@ export async function POST(request: Request) {
       updates.accountActive = false;
       updates.breachReason = breachReason;
       updates.breachedAt = FieldValue.serverTimestamp();
-
       await db.collection('breaches').add({
-        userId,
-        userEmail: userData.email,
-        userName: userData.name,
-        plan: userData.accountPlan,
-        phase,
-        breachType: 'hard',
-        breachReason,
-        breachedAt: FieldValue.serverTimestamp()
+        userId, userEmail: userData.email, userName: userData.name,
+        plan: userData.accountPlan, phase, breachType: 'hard',
+        breachReason, breachedAt: FieldValue.serverTimestamp()
       });
-
       await usersRef.doc(userId).collection('notifications').add({
         title: "🚨 Account Terminated",
         message: `Breach detected: ${breachReason}`,
-        type: 'hard_breach',
-        isRead: false,
+        type: 'hard_breach', isRead: false,
         createdAt: FieldValue.serverTimestamp()
       });
     }
 
     await userDoc.ref.update(updates);
-
-    return new Response(JSON.stringify({ status: "OK" }), { 
-      status: 200, 
-      headers: { 'Content-Type': 'application/json' } 
-    });
+    return new Response(JSON.stringify({ status: "OK" }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 
   } catch (error: any) {
     console.error('[MT5-API] Global Error:', error.message);
