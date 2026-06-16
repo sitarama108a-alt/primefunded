@@ -18,6 +18,17 @@ function getAdminDb() {
   return getFirestore();
 }
 
+function getTradingDayKey(date: Date): string {
+  // Trading day: 7:30 AM IST to 7:30 AM IST next day
+  const ist = new Date(date.getTime() + (5.5 * 60 * 60 * 1000));
+  const hours = ist.getUTCHours();
+  const minutes = ist.getUTCMinutes();
+  if (hours < 7 || (hours === 7 && minutes < 30)) {
+    ist.setUTCDate(ist.getUTCDate() - 1);
+  }
+  return ist.toISOString().split('T')[0];
+}
+
 export async function POST(request: Request) {
   try {
     const db = getAdminDb();
@@ -39,7 +50,6 @@ export async function POST(request: Request) {
       return new Response(JSON.stringify({ status: "ERROR", message: "Missing login" }), { status: 400 });
     }
 
-    // Search in mt5_accounts by login field
     const accountsRef = db.collection('mt5_accounts');
     const querySnapshot = await accountsRef.where('login', '==', login).limit(1).get();
 
@@ -87,7 +97,6 @@ export async function POST(request: Request) {
     const breachMsg = checkBreach();
     if (breachMsg) { newStatus = 'breached'; breachReason = breachMsg; }
 
-    // Update mt5_accounts
     const updates: any = {
       balance: currBalance,
       equity: currEquity,
@@ -117,13 +126,38 @@ export async function POST(request: Request) {
 
     await userDoc.ref.update(updates);
 
-    // Also update users collection for dashboard
+    // Update users collection
     if (userId) {
-      await db.collection('users').doc(userId).update({
+      const userRef = db.collection('users').doc(userId);
+      const userSnap = await userRef.get();
+      const userDataFull = userSnap.data() || {};
+
+      const todayKey = getTradingDayKey(new Date());
+      const storedDayKey = userDataFull.dailyStartBalanceDate || '';
+
+      const userUpdates: any = {
         liveBalance: currBalance,
         liveEquity: currEquity,
         lastMT5Update: FieldValue.serverTimestamp(),
-      });
+      };
+
+      // Reset daily start balance at start of new trading day (7:30 AM IST)
+      if (storedDayKey !== todayKey) {
+        userUpdates.dailyStartBalance = currBalance;
+        userUpdates.dailyStartBalanceDate = todayKey;
+      }
+
+      await userRef.update(userUpdates);
+
+      // Save performance snapshot
+      const perfRef = userRef.collection('performance').doc(todayKey);
+      await perfRef.set({
+        date: todayKey,
+        balance: currBalance,
+        equity: currEquity,
+        profit: currProfit,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
     }
 
     return new Response(JSON.stringify({ status: "OK" }), { status: 200, headers: { 'Content-Type': 'application/json' } });
