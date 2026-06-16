@@ -18,18 +18,29 @@ export async function POST(request: Request) {
   try {
     const db = getAdminDb();
     const payload = await request.json();
-    const login = String(payload.login || '');
+    const loginStr = String(payload.login || '');
     const trades = payload.trades || [];
 
-    if (!login) return new Response(JSON.stringify({ status: "ERROR", message: "Missing login" }), { status: 400 });
+    if (!loginStr) return new Response(JSON.stringify({ status: "ERROR", message: "Missing login" }), { status: 400 });
+    const loginNum = Number(loginStr);
 
-    const snapshot = await db.collection('mt5_accounts').where('login', '==', login).limit(1).get();
+    const accountsRef = db.collection('mt5_accounts');
+    let snapshot = await accountsRef.where('login', '==', loginStr).limit(1).get();
+    let matchType = 'string';
+
+    if (snapshot.empty && !isNaN(loginNum)) {
+      snapshot = await accountsRef.where('login', '==', loginNum).limit(1).get();
+      matchType = 'number';
+    }
+
     if (snapshot.empty) {
-      console.warn(`[MT5-Trades] No user found with login: ${login}`);
+      console.warn(`[MT5-Trades] No user found with login: ${loginStr} (tried string and number)`);
       return new Response(JSON.stringify({ status: "OK", note: "User not found" }), { status: 200 });
     }
 
     const userDoc = snapshot.docs[0];
+    console.log(`[MT5-Trades] Matched login ${loginStr} as ${matchType}. Doc ID: ${userDoc.id}`);
+    
     const userData = userDoc.data();
     const userId = userData.userId;
 

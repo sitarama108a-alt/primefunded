@@ -34,21 +34,30 @@ export async function POST(request: Request) {
       return new Response(JSON.stringify({ status: "ERROR", message: "Payload Error" }), { status: 400 });
     }
 
-    const login = String(payload.login || payload.accountId || '');
-    if (!login || login === 'undefined') {
+    const loginStr = String(payload.login || payload.accountId || '');
+    if (!loginStr || loginStr === 'undefined') {
       return new Response(JSON.stringify({ status: "ERROR", message: "Missing login" }), { status: 400 });
     }
+    const loginNum = Number(loginStr);
 
-    // Search in mt5_accounts by login field
+    // Search in mt5_accounts by login field (type-agnostic)
     const accountsRef = db.collection('mt5_accounts');
-    const querySnapshot = await accountsRef.where('login', '==', login).limit(1).get();
+    let querySnapshot = await accountsRef.where('login', '==', loginStr).limit(1).get();
+    let matchType = 'string';
+
+    if (querySnapshot.empty && !isNaN(loginNum)) {
+      querySnapshot = await accountsRef.where('login', '==', loginNum).limit(1).get();
+      matchType = 'number';
+    }
 
     if (querySnapshot.empty) {
-      console.warn(`[MT5-Sync] No user found with login: ${login}`);
+      console.warn(`[MT5-Sync] No user found with login: ${loginStr} (tried string and number)`);
       return new Response(JSON.stringify({ status: "OK", note: "User not found" }), { status: 200 });
     }
 
     const userDoc = querySnapshot.docs[0];
+    console.log(`[MT5-Sync] Matched login ${loginStr} as ${matchType}. Doc ID: ${userDoc.id}`);
+    
     const userData = userDoc.data();
     const userId = userData.userId;
 
