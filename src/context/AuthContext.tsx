@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
@@ -53,7 +52,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const userRef = doc(db, 'users', user.uid);
       unsubscribeDoc = onSnapshot(userRef, (snapshot) => {
         if (snapshot.exists()) {
-          setUserData(snapshot.data());
+          const data = snapshot.data();
+          // DEBUG: Monitor live synchronization state
+          if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === 'true') {
+            console.log(`[AuthContext] Snapshot fired for ${user.uid}:`, data);
+          }
+          setUserData(data);
         }
         setLoading(false);
       }, (err) => {

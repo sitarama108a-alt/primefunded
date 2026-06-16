@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, memo } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { useAuth } from '@/context/AuthContext';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { 
   Wallet, 
   Activity, 
@@ -51,8 +51,6 @@ import {
   ReferenceLine
 } from 'recharts';
 import { format, subDays, subMonths, differenceInSeconds, isValid, startOfDay, differenceInDays } from 'date-fns';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
 
 /**
  * @fileOverview Trader Dashboard Terminal
@@ -125,6 +123,8 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   const { user, userData, loading: authLoading } = useAuth();
   const db = useFirestore();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isDebug = searchParams.get('debug') === 'true';
   
   const effectiveUid = adminViewMode && targetUid ? targetUid : user?.uid;
   const [chartPeriod, setChartPeriod] = useState('7D');
@@ -148,24 +148,6 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     };
   }, [userData]);
 
-  // Sync Daily Start Balance logic with 7:30 AM IST boundary
-  useEffect(() => {
-    if (user && userData && userData.accountStatus === 'active' && !adminViewMode && db) {
-      const todayKey = getTradingDayKey(new Date());
-      if (userData.dailyStartBalanceDate !== todayKey) {
-        console.log(`[Dashboard] Daily session reset detected. Setting baseline for: ${todayKey}`);
-        const userRef = doc(db, 'users', user.uid);
-        updateDoc(userRef, {
-          dailyStartBalance: metrics.balance || userData.accountBalance || 0,
-          dailyStartBalanceDate: todayKey,
-          updatedAt: serverTimestamp()
-        }).catch(async (err) => {
-          console.error('[Dashboard] Baseline sync failed:', err);
-        });
-      }
-    }
-  }, [user, userData?.dailyStartBalanceDate, metrics.balance, db, adminViewMode]);
-
   // Determine EA Connectivity Status
   const connectivityStatus = useMemo(() => {
     if (isBreached) return 'terminated';
@@ -179,12 +161,6 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
       if (!isValid(lastUpdate)) return 'offline';
 
       const diffSeconds = Math.abs(Date.now() - lastUpdate.getTime()) / 1000;
-      
-      // Debug log for connectivity
-      if (diffSeconds < 300) {
-         console.log(`[Dashboard] Heartbeat lag: ${diffSeconds.toFixed(1)}s`);
-      }
-
       return diffSeconds < 65 ? 'live' : 'offline';
     } catch (e) {
       return 'offline';
@@ -435,6 +411,23 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
       {!adminViewMode && <Navigation />}
       
       <main className="flex-1 p-8 overflow-y-auto custom-scrollbar">
+        {/* Debug Panel */}
+        {isDebug && (
+          <div className="mb-8 p-4 rounded-xl bg-black border border-primary/50 font-mono text-[10px] text-primary space-y-1 shadow-2xl">
+            <p className="font-bold border-b border-primary/20 pb-1 mb-2 uppercase flex items-center justify-between">
+              Terminal Debug Protocol <span>[ACTIVE]</span>
+            </p>
+            <p>UID: {effectiveUid}</p>
+            <p>Live Balance: {metrics.balance}</p>
+            <p>Live Equity: {metrics.equity}</p>
+            <p>Daily Start: {userData?.dailyStartBalance || 'N/A'}</p>
+            <p>Daily Date: {userData?.dailyStartBalanceDate || 'N/A'}</p>
+            <p>Calculated Key: {getTradingDayKey(new Date())}</p>
+            <p>Last Sync: {userData?.lastMT5Update?.seconds ? new Date(userData.lastMT5Update.seconds * 1000).toLocaleString() : 'N/A'}</p>
+            <p>Performance Logs: {performanceData?.length || 0}</p>
+          </div>
+        )}
+
         {isBreached && (
           <div className="mb-8 p-6 rounded-2xl bg-destructive/20 border border-destructive/40 flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-4">

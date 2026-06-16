@@ -90,8 +90,9 @@ export async function POST(request: Request) {
       updatedAt: FieldValue.serverTimestamp(),
     };
 
+    // Robust Session Reset: If date is missing or changed, set new baseline
     if (userData.dailyStartBalanceDate !== sessionKey) {
-      console.log(`[MT5-Sync] Session transition to ${sessionKey} for ${userId}`);
+      console.log(`[MT5-Sync] Session transition to ${sessionKey} for ${userId}. Resetting baseline to $${currBalance}`);
       dailyStartBalance = currBalance;
       updates.dailyStartBalance = currBalance;
       updates.dailyStartBalanceDate = sessionKey;
