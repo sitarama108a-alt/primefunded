@@ -24,7 +24,8 @@ import {
   Trophy,
   Zap,
   ArrowRight,
-  Clock
+  Clock,
+  Loader2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,7 +33,7 @@ import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useFirestore, useCollection } from '@/firebase';
-import { where, doc, limit, orderBy, onSnapshot, collection, query } from 'firebase/firestore';
+import { where, doc, limit, orderBy, onSnapshot, collection, query, updateDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -43,10 +44,15 @@ import {
   XAxis, 
   YAxis, 
   CartesianGrid, 
-  ChartTooltip, 
-  ResponsiveContainer 
+  Tooltip as ChartTooltip, 
+  ResponsiveContainer,
+  Area,
+  AreaChart,
+  ReferenceLine
 } from 'recharts';
-import { format, subDays, subMonths, differenceInSeconds, isValid } from 'date-fns';
+import { format, subDays, subMonths, differenceInSeconds, isValid, startOfDay } from 'date-fns';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 interface DashboardPageProps {
   adminViewMode?: boolean;
@@ -77,6 +83,7 @@ const MetricCard = memo(function MetricCard({ title, value, icon, footer, disabl
 
 export default function DashboardPage({ adminViewMode = false, targetUid }: DashboardPageProps) {
   const { user, userData, loading: authLoading } = useAuth();
+  const db = useFirestore();
   const router = useRouter();
   
   const effectiveUid = adminViewMode && targetUid ? targetUid : user?.uid;
@@ -84,6 +91,44 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   const { toast } = useToast();
 
   const isBreached = userData?.accountStatus === 'breached';
+
+  const metrics = useMemo(() => {
+    const parseSize = (sizeStr: string) => {
+      if (!sizeStr) return 0;
+      return parseFloat(sizeStr.replace(/[$,]/g, '').replace(/k/i, '000')) || 0;
+    };
+
+    const staticBalance = userData?.accountBalance || parseSize(userData?.accountSize);
+    const liveBalance = userData?.liveBalance !== undefined ? userData.liveBalance : staticBalance;
+    const liveEquity = userData?.liveEquity !== undefined ? userData.liveEquity : liveBalance;
+    
+    return {
+      balance: liveBalance,
+      equity: liveEquity,
+    };
+  }, [userData]);
+
+  // Sync Daily Start Balance if missing
+  useEffect(() => {
+    if (user && userData && userData.accountStatus === 'active' && !adminViewMode) {
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      if (userData.dailyStartBalanceDate !== todayStr) {
+        const userRef = doc(db, 'users', user.uid);
+        updateDoc(userRef, {
+          dailyStartBalance: metrics.balance || 0,
+          dailyStartBalanceDate: todayStr
+        }).catch(async (err) => {
+          if (err.code === 'permission-denied') {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
+              path: userRef.path,
+              operation: 'update',
+              requestResourceData: { dailyStartBalance: metrics.balance, dailyStartBalanceDate: todayStr }
+            }));
+          }
+        });
+      }
+    }
+  }, [user, userData, metrics.balance, db, adminViewMode]);
 
   // Determine EA Connectivity Status
   const connectivityStatus = useMemo(() => {
@@ -104,10 +149,36 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     }
   }, [userData?.lastMT5Update, isBreached]);
 
+  // Fetch performance snapshots
+  const performanceConstraints = useMemo(() => [
+    orderBy('date', 'asc'),
+    limit(31)
+  ], []);
+
+  const { data: performanceData, loading: perfLoading } = useCollection<any>(
+    effectiveUid ? `users/${effectiveUid}/performance` : null,
+    performanceConstraints
+  );
+
+  const filteredPerfData = useMemo(() => {
+    if (!performanceData || performanceData.length === 0) return [];
+    const now = new Date();
+    let daysToKeep = 7;
+    if (chartPeriod === '14D') daysToKeep = 14;
+    if (chartPeriod === '1M') daysToKeep = 30;
+
+    const cutoff = subDays(startOfDay(now), daysToKeep);
+    return performanceData.filter(d => new Date(d.date) >= cutoff).map(d => ({
+      ...d,
+      displayDate: format(new Date(d.date), 'MMM d'),
+      amount: d.cumulativePnL || d.pnl || 0
+    }));
+  }, [performanceData, chartPeriod]);
+
   // Fetch recent trades
   const tradeConstraints = useMemo(() => [
     orderBy('date', 'desc'),
-    limit(40) // Fetch more to allow pairing entry/exit
+    limit(40)
   ], []);
 
   const { data: recentTrades, loading: tradesLoading } = useCollection<any>(
@@ -157,7 +228,6 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     }
   };
 
-  // Merge BUY/SELL deals into single positions
   const enrichedTrades = useMemo(() => {
     if (!recentTrades) return [];
     
@@ -175,7 +245,6 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
       
       const profit = trade.pnl || trade.profit || 0;
       if (profit !== 0) {
-        // This is likely a closing deal. Find its opening partner.
         const closeDate = getTradeDate(trade.time || trade.date);
         
         const partner = sorted.find(t => 
@@ -191,7 +260,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
             ...trade,
             openTime: partner.time || partner.date,
             closeTime: trade.time || trade.date,
-            type: partner.type, // Use entry type (BUY or SELL)
+            type: partner.type,
             lots: trade.lots || trade.volume,
             pnl: profit,
             duration: calculateHoldingTime(partner.time || partner.date, trade.time || trade.date)
@@ -199,7 +268,6 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
           processedTickets.add(trade.id);
           processedTickets.add(partner.id);
         } else {
-          // Orphaned closing trade
           merged.push({
             ...trade,
             openTime: null,
@@ -213,7 +281,6 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
       }
     }
 
-    // Capture remaining unmatched (usually open positions or missing entry data)
     for (const trade of sorted) {
       if (!processedTickets.has(trade.id)) {
         merged.push({
@@ -228,7 +295,6 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
       }
     }
     
-    // Sort merged list by closeTime (or openTime if active) desc
     return merged.sort((a, b) => {
       const dateA = getTradeDate(a.closeTime || a.openTime);
       const dateB = getTradeDate(b.closeTime || b.openTime);
@@ -236,26 +302,10 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     }).slice(0, 10);
   }, [recentTrades]);
 
-  const metrics = useMemo(() => {
-    const parseSize = (sizeStr: string) => {
-      if (!sizeStr) return 0;
-      return parseFloat(sizeStr.replace(/[$,]/g, '').replace(/k/i, '000')) || 0;
-    };
-
-    const staticBalance = userData?.accountBalance || parseSize(userData?.accountSize);
-    const liveBalance = userData?.liveBalance !== undefined ? userData.liveBalance : staticBalance;
-    const liveEquity = userData?.liveEquity !== undefined ? userData.liveEquity : liveBalance;
-    
-    return {
-      balance: liveBalance,
-      equity: liveEquity,
-    };
-  }, [userData]);
-
   const dailyRiskMetrics = useMemo(() => {
     const dailyStart = userData?.dailyStartBalance || metrics.balance;
     const currentEquity = metrics.equity;
-    const pnl = currentEquity - dailyStart;
+    const pnl = metrics.balance - dailyStart;
     const pnlPct = dailyStart > 0 ? (pnl / dailyStart) * 100 : 0;
     
     const getLimit = () => {
@@ -268,7 +318,8 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     };
 
     const limit = getLimit();
-    const drawdownPct = pnl < 0 ? Math.abs(pnlPct) : 0;
+    const drawdownAmount = dailyStart > currentEquity ? dailyStart - currentEquity : 0;
+    const drawdownPct = dailyStart > 0 ? (drawdownAmount / dailyStart) * 100 : 0;
     const usage = Math.min((drawdownPct / limit) * 100, 100);
 
     return { pnl, pnlPct, usage, limit, drawdownPct, isPositive: pnl >= 0 };
@@ -385,8 +436,55 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                   </TabsList>
                 </Tabs>
               </CardHeader>
-              <CardContent className="h-[300px] flex items-center justify-center text-muted-foreground italic text-sm">
-                {isBreached ? "No performance data visible for liquidated accounts." : "No performance data captured for this period."}
+              <CardContent className="h-[300px] w-full pt-4">
+                {isBreached ? (
+                  <div className="h-full flex items-center justify-center text-muted-foreground italic text-sm">No performance data visible for liquidated accounts.</div>
+                ) : perfLoading ? (
+                  <div className="h-full flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+                ) : filteredPerfData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={filteredPerfData}>
+                      <defs>
+                        <linearGradient id="colorPnL" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#11b3f5" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#11b3f5" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
+                      <XAxis 
+                        dataKey="displayDate" 
+                        stroke="#ffffff40" 
+                        fontSize={10} 
+                        tickLine={false} 
+                        axisLine={false} 
+                      />
+                      <YAxis 
+                        stroke="#ffffff40" 
+                        fontSize={10} 
+                        tickLine={false} 
+                        axisLine={false} 
+                        tickFormatter={(value) => `$${value}`}
+                      />
+                      <ChartTooltip 
+                        contentStyle={{ backgroundColor: '#0a0f1e', border: '1px solid #11b3f520', borderRadius: '12px' }}
+                        itemStyle={{ color: '#11b3f5', fontSize: '12px', fontWeight: 'bold' }}
+                        labelStyle={{ color: '#fff', fontSize: '10px', marginBottom: '4px' }}
+                      />
+                      <ReferenceLine y={0} stroke="#ffffff10" />
+                      <Area 
+                        type="monotone" 
+                        dataKey="amount" 
+                        stroke="#11b3f5" 
+                        strokeWidth={3}
+                        fillOpacity={1} 
+                        fill="url(#colorPnL)" 
+                        animationDuration={1500}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-muted-foreground italic text-sm">No performance data captured for this period.</div>
+                )}
               </CardContent>
             </Card>
           </div>

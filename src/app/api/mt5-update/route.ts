@@ -43,7 +43,6 @@ export async function POST(request: Request) {
       return new Response(JSON.stringify({ status: "ERROR", message: "Missing login" }), { status: 400 });
     }
 
-    // Search users collection for the trader with this MT5 Login
     const usersRef = db.collection('users');
     const querySnapshot = await usersRef.where('mt5Login', '==', login).limit(1).get();
 
@@ -65,13 +64,29 @@ export async function POST(request: Request) {
       return new Response(JSON.stringify({ status: "OK", note: "Account already breached" }), { status: 200 });
     }
 
-    // Risk Calculation Data
+    // Daily Reset Logic
+    const todayStr = new Date().toISOString().split('T')[0];
+    let dailyStartBalance = userData.dailyStartBalance || currBalance;
+    const updates: any = {
+      liveBalance: currBalance,
+      liveEquity: currEquity,
+      liveMargin: currMargin,
+      liveProfit: currProfit,
+      lastMT5Update: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+
+    if (userData.dailyStartBalanceDate !== todayStr) {
+      dailyStartBalance = currBalance;
+      updates.dailyStartBalance = currBalance;
+      updates.dailyStartBalanceDate = todayStr;
+    }
+
+    // Risk Calculation
     const startingBalance = parseFloat(String(userData.accountBalance)) || currBalance || 100000;
     const planType = String(userData.accountPlan || '1-Step Pro').toLowerCase();
     const phase = String(userData.currentPhase || 'evaluation');
     
-    // Determine Daily Drawdown relative to account opening balance or daily start
-    const dailyStartBalance = userData.dailyStartBalance || startingBalance;
     const dailyDrawdownPct = dailyStartBalance !== 0 ? ((dailyStartBalance - currEquity) / dailyStartBalance) * 100 : 0;
     const maxDrawdownPct = startingBalance !== 0 ? ((startingBalance - currEquity) / startingBalance) * 100 : 0;
 
@@ -101,15 +116,6 @@ export async function POST(request: Request) {
       breachReason = breachMsg; 
     }
 
-    const updates: any = {
-      liveBalance: currBalance,
-      liveEquity: currEquity,
-      liveMargin: currMargin,
-      liveProfit: currProfit,
-      lastMT5Update: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    };
-
     if (newStatus === 'breached') {
       updates.accountStatus = 'breached';
       updates.accountActive = false;
@@ -135,6 +141,17 @@ export async function POST(request: Request) {
         createdAt: FieldValue.serverTimestamp()
       });
     }
+
+    // Update Daily Snapshot
+    const dailyPnL = currBalance - dailyStartBalance;
+    await userDoc.ref.collection('performance').doc(todayStr).set({
+      date: todayStr,
+      balance: currBalance,
+      equity: currEquity,
+      pnl: dailyPnL,
+      cumulativePnL: currBalance - startingBalance,
+      timestamp: FieldValue.serverTimestamp()
+    }, { merge: true });
 
     await userDoc.ref.update(updates);
 
