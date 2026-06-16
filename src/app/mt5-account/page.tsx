@@ -24,7 +24,9 @@ import {
   Clock,
   Loader2,
   RefreshCw,
-  Skull
+  Skull,
+  Wallet,
+  Activity
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { motion } from 'framer-motion';
@@ -58,9 +60,16 @@ export default function MT5AccountPage() {
     if (plan.includes('1-step')) return { daily: '3.0%', max: '6.0%' };
     if (plan.includes('2-step')) return { daily: '5.0%', max: '10.0%' };
     if (plan.includes('3-step')) return { daily: '4.0%', max: '8.0%' };
-    if (plan.includes('instant')) return { daily: '3.0%', max: '4.0%' }; // UPDATED: 2.0% -> 3.0%
-    return { daily: '3.0%', max: '6.0%' }; // Default fallback
+    if (plan.includes('instant')) return { daily: '3.0%', max: '4.0%' };
+    return { daily: '3.0%', max: '6.0%' };
   }, [accountPlan]);
+
+  const liveMetrics = useMemo(() => {
+    return {
+      balance: userData?.liveBalance || parseFloat(accountSize.replace(/[$,]/g, '')) || 0,
+      equity: userData?.liveEquity || parseFloat(accountSize.replace(/[$,]/g, '')) || 0,
+    };
+  }, [userData, accountSize]);
 
   const copyToClipboard = (label: string, text: string | null) => {
     if (!text) {
@@ -82,19 +91,7 @@ export default function MT5AccountPage() {
     );
   }
 
-  if (!user) {
-    return (
-      <div className="flex min-h-screen bg-background items-center justify-center p-6 text-center">
-        <Card className="max-w-md border-destructive/20 bg-destructive/5">
-          <CardContent className="pt-6 space-y-4">
-            <AlertTriangle className="w-12 h-12 text-destructive mx-auto" />
-            <h3 className="text-xl font-bold">Authentication Lost</h3>
-            <Button className="w-full font-bold" onClick={() => window.location.href = '/login'}>Return to Login</Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  if (!user) return null;
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -181,6 +178,18 @@ export default function MT5AccountPage() {
                       <CredentialField icon={<Terminal className="w-4 h-4" />} label="Platform" value="MetaTrader 5 (MT5)" />
                     </div>
                   </div>
+
+                  <div className="grid grid-cols-2 gap-4 p-6 bg-secondary/20 rounded-xl border border-border">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-primary/10 rounded-lg"><Wallet className="w-4 h-4 text-primary" /></div>
+                      <div><p className="text-[10px] font-bold text-muted-foreground uppercase">Live Balance</p><p className="font-bold text-white text-lg">${liveMetrics.balance.toLocaleString()}</p></div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-accent/10 rounded-lg"><Activity className="w-4 h-4 text-accent" /></div>
+                      <div><p className="text-[10px] font-bold text-muted-foreground uppercase">Live Equity</p><p className="font-bold text-white text-lg">${liveMetrics.equity.toLocaleString()}</p></div>
+                    </div>
+                  </div>
+
                   <div className="space-y-4">
                     <h3 className="text-lg font-bold text-white flex items-center gap-2"><Download className="w-5 h-5 text-primary" /> Get MT5 Platform</h3>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

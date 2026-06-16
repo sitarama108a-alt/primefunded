@@ -77,34 +77,28 @@ const MetricCard = memo(function MetricCard({ title, value, icon, footer, disabl
 });
 
 export default function DashboardPage({ adminViewMode = false, targetUid }: DashboardPageProps) {
-  const { user, userData: loggedInUserData, loading: authLoading } = useAuth();
+  const { user, userData, loading: authLoading } = useAuth();
   const router = useRouter();
   
   const effectiveUid = adminViewMode && targetUid ? targetUid : user?.uid;
-  const userData = adminViewMode ? loggedInUserData : loggedInUserData; 
-
-  const [mt5Data, setMt5Data] = useState<any>(null);
-  const [mt5DocExists, setMt5DocExists] = useState(false);
   const [chartPeriod, setChartPeriod] = useState('7D');
   const { toast } = useToast();
-  const db = useFirestore();
 
   const isBreached = userData?.accountStatus === 'breached';
 
-  useEffect(() => {
-    if (!effectiveUid || !db || !userData?.mt5Login) return;
-
-    const login = userData.mt5Login.toString();
-    const unsubscribeMt5 = onSnapshot(doc(db, 'mt5_accounts', login), (snapshot) => {
-      if (snapshot.exists()) {
-        setMt5Data(snapshot.data());
-        setMt5DocExists(true);
-      } else {
-        setMt5DocExists(false);
-      }
-    });
-    return () => unsubscribeMt5();
-  }, [effectiveUid, db, userData?.mt5Login]);
+  // Determine EA Connectivity Status
+  const connectivityStatus = useMemo(() => {
+    if (isBreached) return 'terminated';
+    if (!userData?.lastMT5Update) return 'awaiting';
+    
+    // Check if updated in last 60 seconds
+    const lastUpdate = userData.lastMT5Update?.seconds 
+      ? new Date(userData.lastMT5Update.seconds * 1000) 
+      : new Date();
+    const diffSeconds = differenceInSeconds(new Date(), lastUpdate);
+    
+    return diffSeconds < 60 ? 'live' : 'offline';
+  }, [userData?.lastMT5Update, isBreached]);
 
   // Fetch recent trades
   const tradeConstraints = useMemo(() => [
@@ -124,14 +118,14 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     };
 
     const staticBalance = userData?.accountBalance || parseSize(userData?.accountSize);
-    const liveBalance = mt5Data?.balance !== undefined ? mt5Data.balance : staticBalance;
-    const liveEquity = mt5Data?.equity !== undefined ? mt5Data.equity : liveBalance;
+    const liveBalance = userData?.liveBalance !== undefined ? userData.liveBalance : staticBalance;
+    const liveEquity = userData?.liveEquity !== undefined ? userData.liveEquity : liveBalance;
     
     return {
       balance: liveBalance,
       equity: liveEquity,
     };
-  }, [userData?.accountBalance, userData?.accountSize, mt5Data]);
+  }, [userData]);
 
   const dailyRiskMetrics = useMemo(() => {
     const dailyStart = userData?.dailyStartBalance || metrics.balance;
@@ -166,14 +160,18 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
 
   const calculateHoldingTime = (open: string, close: string) => {
     if (!open || !close) return 'N/A';
-    const seconds = differenceInSeconds(new Date(close), new Date(open));
-    if (seconds < 60) return `${seconds}s`;
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    if (minutes < 60) return `${minutes}m ${remainingSeconds}s`;
-    const hours = Math.floor(minutes / 60);
-    const remainingMinutes = minutes % 60;
-    return `${hours}h ${remainingMinutes}m`;
+    try {
+      const seconds = differenceInSeconds(new Date(close), new Date(open));
+      if (seconds < 60) return `${seconds}s`;
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = seconds % 60;
+      if (minutes < 60) return `${minutes}m ${remainingSeconds}s`;
+      const hours = Math.floor(minutes / 60);
+      const remainingMinutes = minutes % 60;
+      return `${hours}h ${remainingMinutes}m`;
+    } catch (e) {
+      return 'N/A';
+    }
   };
 
   if (authLoading) return null;
@@ -209,13 +207,18 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
             {!adminViewMode && <NotificationBell />}
             <Badge variant="outline" className={cn(
               "h-9 px-4 uppercase font-bold tracking-widest border-white/10",
-              isBreached && "border-destructive/30 text-destructive"
+              connectivityStatus === 'terminated' && "border-destructive/30 text-destructive",
+              connectivityStatus === 'offline' && "border-destructive/30 text-destructive",
+              connectivityStatus === 'live' && "border-accent/30 text-accent"
             )}>
               <div className={cn(
                 "w-2 h-2 rounded-full mr-2", 
-                isBreached ? 'bg-destructive' : (mt5DocExists ? 'bg-accent live-indicator' : 'bg-muted')
+                connectivityStatus === 'live' ? 'bg-accent live-indicator' : 
+                connectivityStatus === 'offline' || connectivityStatus === 'terminated' ? 'bg-destructive' : 'bg-muted'
               )} />
-              {isBreached ? 'Terminated' : (mt5DocExists ? 'Live Sync' : 'Offline')}
+              {connectivityStatus === 'live' ? 'Live Sync' : 
+               connectivityStatus === 'offline' ? 'EA Offline' : 
+               connectivityStatus === 'terminated' ? 'Terminated' : 'Awaiting Sync'}
             </Badge>
           </div>
         </header>
