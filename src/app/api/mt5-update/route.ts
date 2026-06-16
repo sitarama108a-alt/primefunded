@@ -7,7 +7,10 @@ export const runtime = 'nodejs';
 function getAdminDb() {
   if (!getApps().length) {
     const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-    if (!serviceAccountKey) throw new Error('Missing FIREBASE_SERVICE_ACCOUNT_KEY');
+    if (!serviceAccountKey) {
+      console.error('[Admin-SDK] Missing FIREBASE_SERVICE_ACCOUNT_KEY');
+      throw new Error('Missing FIREBASE_SERVICE_ACCOUNT_KEY');
+    }
     try {
       const serviceAccount = JSON.parse(serviceAccountKey);
       initializeApp({ credential: cert(serviceAccount) });
@@ -23,6 +26,7 @@ export async function POST(request: Request) {
     const db = getAdminDb();
     let payload: any = {};
     const contentType = request.headers.get('content-type') || '';
+    
     try {
       if (contentType.includes('application/json')) {
         payload = await request.json();
@@ -39,11 +43,12 @@ export async function POST(request: Request) {
       return new Response(JSON.stringify({ status: "ERROR", message: "Missing login" }), { status: 400 });
     }
 
-    const usersRef = db.collection('mt5_accounts');
-    const querySnapshot = await usersRef.where('login', '==', login).limit(1).get();
+    // Search users collection for the trader with this MT5 Login
+    const usersRef = db.collection('users');
+    const querySnapshot = await usersRef.where('mt5Login', '==', login).limit(1).get();
 
     if (querySnapshot.empty) {
-      console.warn(`[MT5-Update] No user found with login: ${login}`);
+      console.warn(`[MT5-Sync] No user found with login: ${login}`);
       return new Response(JSON.stringify({ status: "OK", note: "User not found" }), { status: 200 });
     }
 
@@ -60,11 +65,15 @@ export async function POST(request: Request) {
       return new Response(JSON.stringify({ status: "OK", note: "Account already breached" }), { status: 200 });
     }
 
+    // Risk Calculation Data
     const startingBalance = parseFloat(String(userData.accountBalance)) || currBalance || 100000;
-    const planType = String(userData.accountPlan || '1-step-pro').toLowerCase();
+    const planType = String(userData.accountPlan || '1-Step Pro').toLowerCase();
     const phase = String(userData.currentPhase || 'evaluation');
-    const dailyDrawdownPct = startingBalance !== 0 ? ((startingBalance - currEquity) / startingBalance) * 100 : 0;
-    const maxDrawdownPct = dailyDrawdownPct;
+    
+    // Determine Daily Drawdown relative to account opening balance or daily start
+    const dailyStartBalance = userData.dailyStartBalance || startingBalance;
+    const dailyDrawdownPct = dailyStartBalance !== 0 ? ((dailyStartBalance - currEquity) / dailyStartBalance) * 100 : 0;
+    const maxDrawdownPct = startingBalance !== 0 ? ((startingBalance - currEquity) / startingBalance) * 100 : 0;
 
     let newStatus = userData.accountStatus || 'active';
     let breachReason = '';
@@ -87,13 +96,16 @@ export async function POST(request: Request) {
     };
 
     const breachMsg = checkBreach();
-    if (breachMsg) { newStatus = 'breached'; breachReason = breachMsg; }
+    if (breachMsg) { 
+      newStatus = 'breached'; 
+      breachReason = breachMsg; 
+    }
 
     const updates: any = {
-      balance: currBalance,
-      equity: currEquity,
-      margin: currMargin,
-      profit: currProfit,
+      liveBalance: currBalance,
+      liveEquity: currEquity,
+      liveMargin: currMargin,
+      liveProfit: currProfit,
       lastMT5Update: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     };
@@ -103,42 +115,43 @@ export async function POST(request: Request) {
       updates.accountActive = false;
       updates.breachReason = breachReason;
       updates.breachedAt = FieldValue.serverTimestamp();
+      
       await db.collection('breaches').add({
-        userId, userEmail: userData.email, userName: userData.name,
-        plan: userData.accountPlan, phase, breachType: 'hard',
-        breachReason, breachedAt: FieldValue.serverTimestamp()
+        userId,
+        userEmail: userData.email,
+        userName: userData.name,
+        plan: userData.accountPlan,
+        phase,
+        breachType: 'hard',
+        breachReason,
+        breachedAt: FieldValue.serverTimestamp()
       });
-      await usersRef.doc(userId).collection('notifications').add({
+
+      await userDoc.ref.collection('notifications').add({
         title: "🚨 Account Terminated",
-        message: `Breach detected: ${breachReason}`,
-        type: 'hard_breach', isRead: false,
+        message: `Institutional risk violation: ${breachReason}. Your credentials have been revoked.`,
+        type: 'challenge_failed',
+        isRead: false,
         createdAt: FieldValue.serverTimestamp()
       });
     }
 
     await userDoc.ref.update(updates);
 
-    // Also update users collection for dashboard
-    if (userData.userId) {
-      await db.collection("users").doc(userData.userId).update({
-        liveBalance: currBalance,
-        liveEquity: currEquity,
-        lastMT5Update: FieldValue.serverTimestamp(),
-      });
-    }
+    // Sync to mt5_accounts collection for redundancy/credential reference
+    await db.collection('mt5_accounts').doc(login).set({
+      userId,
+      login,
+      balance: currBalance,
+      equity: currEquity,
+      status: newStatus,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
 
-    // Also update users collection for dashboard
-    if (userData.userId) {
-      await db.collection("users").doc(userData.userId).update({
-        liveBalance: currBalance,
-        liveEquity: currEquity,
-        lastMT5Update: FieldValue.serverTimestamp(),
-      });
-    }
     return new Response(JSON.stringify({ status: "OK" }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 
   } catch (error: any) {
-    console.error('[MT5-API] Global Error:', error.message);
+    console.error('[MT5-Sync] Server Error:', error.message);
     return new Response(JSON.stringify({ status: "ERROR", message: error.message }), { status: 500 });
   }
 }

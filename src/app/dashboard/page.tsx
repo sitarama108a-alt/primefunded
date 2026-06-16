@@ -47,7 +47,7 @@ import {
   ChartTooltip, 
   ResponsiveContainer 
 } from 'recharts';
-import { format, subDays, subMonths, differenceInSeconds } from 'date-fns';
+import { format, subDays, subMonths, differenceInSeconds, isValid } from 'date-fns';
 
 interface DashboardPageProps {
   adminViewMode?: boolean;
@@ -91,15 +91,18 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     if (isBreached) return 'terminated';
     if (!userData?.lastMT5Update) return 'awaiting';
     
-    // Check if updated in last 60 seconds
-    // Handle both Firestore Timestamp and JS Date
-    const lastUpdate = userData.lastMT5Update?.seconds 
-      ? new Date(userData.lastMT5Update.seconds * 1000) 
-      : userData.lastMT5Update?.toDate?.() || new Date(userData.lastMT5Update);
+    try {
+      const lastUpdate = userData.lastMT5Update?.seconds 
+        ? new Date(userData.lastMT5Update.seconds * 1000) 
+        : userData.lastMT5Update?.toDate?.() || new Date(userData.lastMT5Update);
 
-    const diffSeconds = differenceInSeconds(new Date(), lastUpdate);
-    
-    return diffSeconds < 60 ? 'live' : 'offline';
+      if (!isValid(lastUpdate)) return 'offline';
+
+      const diffSeconds = Math.abs(differenceInSeconds(new Date(), lastUpdate));
+      return diffSeconds < 60 ? 'live' : 'offline';
+    } catch (e) {
+      return 'offline';
+    }
   }, [userData?.lastMT5Update, isBreached]);
 
   // Fetch recent trades
