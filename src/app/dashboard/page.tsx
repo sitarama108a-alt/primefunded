@@ -50,7 +50,7 @@ import {
   AreaChart,
   ReferenceLine
 } from 'recharts';
-import { format, subDays, subMonths, differenceInSeconds, isValid, startOfDay } from 'date-fns';
+import { format, subDays, subMonths, differenceInSeconds, isValid, startOfDay, differenceInDays } from 'date-fns';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
@@ -59,7 +59,23 @@ interface DashboardPageProps {
   targetUid?: string;
 }
 
-const MetricCard = memo(function MetricCard({ title, value, icon, footer, disabled }: { title: string, value: string, icon: React.ReactNode, footer?: string, disabled?: boolean }) {
+const MetricCard = memo(function MetricCard({ 
+  title, 
+  value, 
+  icon, 
+  footer, 
+  disabled, 
+  progress, 
+  progressLabel 
+}: { 
+  title: string, 
+  value: string, 
+  icon: React.ReactNode, 
+  footer?: string, 
+  disabled?: boolean,
+  progress?: number,
+  progressLabel?: string
+}) {
   return (
     <Card className={cn(
       "border-border/50 bg-card/40 transition-all duration-300 group",
@@ -75,6 +91,14 @@ const MetricCard = memo(function MetricCard({ title, value, icon, footer, disabl
         <div className="flex items-end gap-2 mb-4">
           <span className="text-3xl font-bold font-headline tabular-nums leading-none text-white">{value}</span>
         </div>
+        
+        {progress !== undefined && (
+          <div className="space-y-1.5 mb-4">
+            <Progress value={progress} className="h-1" />
+            <p className="text-[8px] font-black uppercase tracking-wider text-primary">{progressLabel}</p>
+          </div>
+        )}
+
         {footer && <p className="text-[10px] text-muted-foreground flex items-center gap-1.5 font-bold uppercase tracking-wider"><Server className="w-3 h-3" /> {footer}</p>}
       </CardContent>
     </Card>
@@ -175,10 +199,10 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     }));
   }, [performanceData, chartPeriod]);
 
-  // Fetch recent trades
+  // Fetch recent trades (Limit increased for day counting accuracy)
   const tradeConstraints = useMemo(() => [
     orderBy('date', 'desc'),
-    limit(40)
+    limit(100)
   ], []);
 
   const { data: recentTrades, loading: tradesLoading } = useCollection<any>(
@@ -206,6 +230,59 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
       return 'N/A';
     }
   };
+
+  // Calculate unique trading days
+  const tradingDaysData = useMemo(() => {
+    if (!recentTrades) return { count: 0, required: 5, progress: 0 };
+    
+    const days = new Set<string>();
+    recentTrades.forEach(trade => {
+      const date = getTradeDate(trade.time || trade.date);
+      if (date && isValid(date)) {
+        days.add(format(date, 'yyyy-MM-dd'));
+      }
+    });
+
+    const count = days.size;
+    
+    // Rule lookup
+    const plan = userData?.accountPlan?.toLowerCase() || '';
+    const phase = userData?.currentPhase || 'evaluation';
+    
+    let required = 5;
+    if (plan.includes('3-step')) {
+      if (phase === 'phase1') required = 7;
+      else if (phase === 'phase2') required = 6;
+      else required = 5;
+    } else if (plan.includes('instant')) {
+      required = 1;
+    }
+
+    return {
+      count,
+      required,
+      progress: Math.min((count / required) * 100, 100)
+    };
+  }, [recentTrades, userData]);
+
+  // Calculate account age
+  const accountAgeData = useMemo(() => {
+    const start = userData?.activatedAt?.toDate?.() || 
+                  userData?.activatedAt || 
+                  userData?.giftedAt || 
+                  userData?.createdAt?.toDate?.() || 
+                  userData?.createdAt;
+    
+    if (!start) return { days: 0, date: 'N/A' };
+    const startDate = new Date(start);
+    if (!isValid(startDate)) return { days: 0, date: 'N/A' };
+    
+    const diffDays = Math.max(0, differenceInDays(new Date(), startDate));
+    return { 
+      days: diffDays, 
+      date: format(startDate, 'MMM d, yyyy') 
+    };
+  }, [userData]);
 
   const calculateHoldingTime = (open: any, close: any) => {
     const openDate = getTradeDate(open);
@@ -384,10 +461,31 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
         </header>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-          <MetricCard title="Account Balance" value={`$${metrics.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={<Wallet className="text-primary" />} disabled={isBreached} />
-          <MetricCard title="Equity" value={`$${metrics.equity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={<Activity className="text-accent" />} disabled={isBreached} />
-          <MetricCard title="Total Referrals" value={(userData?.referralCount || 0).toString()} icon={<Users className="text-emerald-500" />} />
-          <MetricCard title="Referral Earnings" value={`$${(userData?.referralEarnings || 0).toFixed(2)}`} icon={<DollarSign className="text-amber-500" />} />
+          <MetricCard 
+            title="Account Balance" 
+            value={`$${metrics.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
+            icon={<Wallet className="text-primary" />} 
+            disabled={isBreached} 
+          />
+          <MetricCard 
+            title="Equity" 
+            value={`$${metrics.equity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
+            icon={<Activity className="text-accent" />} 
+            disabled={isBreached} 
+          />
+          <MetricCard 
+            title="Minimum Trading Days" 
+            value={`${tradingDaysData.count} / ${tradingDaysData.required} days`} 
+            icon={<Calendar className="text-emerald-500" />} 
+            progress={tradingDaysData.progress}
+            progressLabel={`${tradingDaysData.progress.toFixed(0)}% Completed`}
+          />
+          <MetricCard 
+            title="Account Age" 
+            value={`${accountAgeData.days} Days`} 
+            icon={<Clock className="text-amber-500" />} 
+            footer={`Trading since ${accountAgeData.date}`}
+          />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
