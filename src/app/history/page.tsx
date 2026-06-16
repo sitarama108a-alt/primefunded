@@ -109,14 +109,85 @@ export default function HistoryPage() {
     }
   };
 
-  const filteredTrades = useMemo(() => {
+  const enrichedTrades = useMemo(() => {
     if (!trades) return [];
     
-    return trades.filter(trade => {
+    const sorted = [...trades].sort((a, b) => {
+      const dateA = getTradeDate(a.time || a.date);
+      const dateB = getTradeDate(b.time || b.date);
+      return (dateB?.getTime() || 0) - (dateA?.getTime() || 0);
+    });
+
+    const merged = [];
+    const processedTickets = new Set();
+
+    for (const trade of sorted) {
+      if (processedTickets.has(trade.id)) continue;
+      
+      const profit = trade.pnl || trade.profit || 0;
+      if (profit !== 0) {
+        const closeDate = getTradeDate(trade.time || trade.date);
+        const partner = sorted.find(t => 
+          !processedTickets.has(t.id) &&
+          t.symbol === trade.symbol &&
+          (parseFloat(String(t.lots || t.volume)).toFixed(2) === parseFloat(String(trade.lots || trade.volume)).toFixed(2)) &&
+          (t.pnl || t.profit || 0) === 0 &&
+          (getTradeDate(t.time || t.date)?.getTime() || 0) < (closeDate?.getTime() || 0)
+        );
+
+        if (partner) {
+          merged.push({
+            ...trade,
+            openTime: partner.time || partner.date,
+            closeTime: trade.time || trade.date,
+            type: partner.type, // Use entry direction
+            lots: trade.lots || trade.volume,
+            pnl: profit,
+            duration: calculateHoldingTime(partner.time || partner.date, trade.time || trade.date)
+          });
+          processedTickets.add(trade.id);
+          processedTickets.add(partner.id);
+        } else {
+          merged.push({
+            ...trade,
+            openTime: null,
+            closeTime: trade.time || trade.date,
+            lots: trade.lots || trade.volume,
+            pnl: profit,
+            duration: '—'
+          });
+          processedTickets.add(trade.id);
+        }
+      }
+    }
+
+    for (const trade of sorted) {
+      if (!processedTickets.has(trade.id)) {
+        merged.push({
+          ...trade,
+          openTime: trade.time || trade.date,
+          closeTime: null,
+          lots: trade.lots || trade.volume,
+          pnl: trade.pnl || trade.profit || 0,
+          duration: '—'
+        });
+        processedTickets.add(trade.id);
+      }
+    }
+    
+    return merged.sort((a, b) => {
+      const dateA = getTradeDate(a.closeTime || a.openTime);
+      const dateB = getTradeDate(b.closeTime || b.openTime);
+      return (dateB?.getTime() || 0) - (dateA?.getTime() || 0);
+    });
+  }, [trades]);
+
+  const filteredTrades = useMemo(() => {
+    return enrichedTrades.filter(trade => {
       const matchesSymbol = trade.symbol?.toLowerCase().includes(searchTerm.toLowerCase());
       
       let matchesDate = true;
-      const tradeDate = getTradeDate(trade.time || trade.date);
+      const tradeDate = getTradeDate(trade.closeTime || trade.openTime);
       if (dateRange.start && dateRange.end && tradeDate) {
         try {
           matchesDate = isWithinInterval(tradeDate, {
@@ -130,55 +201,27 @@ export default function HistoryPage() {
 
       return matchesSymbol && matchesDate;
     });
-  }, [trades, searchTerm, dateRange]);
-
-  const enrichedTrades = useMemo(() => {
-    if (!filteredTrades) return [];
-    
-    return filteredTrades.map((trade: any, index: number, array: any[]) => {
-      const currentPnL = trade.pnl || trade.profit || 0;
-      
-      // Find duration if it's a closing deal
-      if (currentPnL !== 0) {
-        const matchingEntry = array.find(t => 
-          (t.positionId && trade.positionId && t.positionId === trade.positionId && (t.pnl || t.profit || 0) === 0) ||
-          (t.symbol === trade.symbol && (t.lots || t.volume) === (trade.lots || trade.volume) && (t.pnl || t.profit || 0) === 0 && getTradeDate(t.time || t.date) < getTradeDate(trade.time || trade.date))
-        );
-        
-        return {
-          ...trade,
-          duration: matchingEntry ? calculateHoldingTime(matchingEntry.time || matchingEntry.date, trade.time || trade.date) : 'N/A'
-        };
-      }
-      
-      return {
-        ...trade,
-        duration: '—'
-      };
-    });
-  }, [filteredTrades]);
+  }, [enrichedTrades, searchTerm, dateRange]);
 
   const paginatedTrades = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
-    return enrichedTrades.slice(startIndex, startIndex + itemsPerPage);
-  }, [enrichedTrades, currentPage]);
+    return filteredTrades.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredTrades, currentPage]);
 
-  const totalPages = Math.ceil(enrichedTrades.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredTrades.length / itemsPerPage);
 
   const exportToCSV = () => {
-    if (!enrichedTrades.length) return;
+    if (!filteredTrades.length) return;
     
-    const headers = ['Date', 'Symbol', 'Type', 'Lots', 'OpenPrice', 'ClosePrice', 'PnL', 'HoldingTime'];
-    const rows = enrichedTrades.map(t => {
-      const d = getTradeDate(t.time || t.date);
+    const headers = ['Symbol', 'Type', 'OpenTime', 'CloseTime', 'Lots', 'PnL', 'Duration'];
+    const rows = filteredTrades.map(t => {
       return [
-        d ? d.toISOString() : 'N/A', 
         t.symbol || 'N/A', 
         t.type || 'N/A', 
-        t.lots || t.volume || '0', 
-        t.openPrice || t.price || '0', 
-        t.closePrice || '0', 
-        t.pnl || t.profit || '0',
+        formatTradeDate(t.openTime),
+        formatTradeDate(t.closeTime),
+        t.lots || '0', 
+        t.pnl || '0',
         t.duration
       ];
     });
@@ -188,7 +231,7 @@ export default function HistoryPage() {
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `primefunded_trades_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    link.setAttribute("download", `primefunded_positions_${format(new Date(), 'yyyy-MM-dd')}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -208,12 +251,12 @@ export default function HistoryPage() {
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10">
           <div>
             <h1 className="text-3xl font-headline font-bold mb-1 text-white">Institutional Journal</h1>
-            <p className="text-muted-foreground text-sm">Comprehensive history of your funding journey and executions.</p>
+            <p className="text-muted-foreground text-sm">Comprehensive history of your funding journey and positions.</p>
           </div>
           <Button 
             variant="outline" 
             onClick={exportToCSV}
-            disabled={!enrichedTrades.length}
+            disabled={!filteredTrades.length}
             className="w-full md:w-auto font-bold border-border/50 rounded-xl hover:bg-secondary cursor-pointer"
           >
             <Download className="w-4 h-4 mr-2" /> Export CSV
@@ -299,7 +342,7 @@ export default function HistoryPage() {
         <Card className="border-border/50 bg-card/40 backdrop-blur-sm overflow-hidden">
           <CardHeader className="border-b border-white/5 pb-4">
             <CardTitle className="text-lg flex items-center gap-2 text-white">
-              <History className="w-5 h-5 text-primary" /> Execution Journal
+              <History className="w-5 h-5 text-primary" /> Position Journal
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -337,21 +380,21 @@ export default function HistoryPage() {
                              </Badge>
                           </td>
                           <td className="py-4 px-4 text-muted-foreground font-mono text-xs">
-                            {formatTradeDate(trade.time || trade.date)}
+                            {formatTradeDate(trade.openTime || trade.time)}
                           </td>
                           <td className="py-4 px-4 text-muted-foreground font-mono text-xs">
-                            {formatTradeDate(trade.closeDate || trade.updatedAt)}
+                            {formatTradeDate(trade.closeTime)}
                           </td>
                           <td className="py-4 px-4 text-muted-foreground text-xs flex items-center gap-1.5 pt-5">
                             <Clock className="w-3 h-3" />
                             {trade.duration}
                           </td>
-                          <td className="py-4 px-2 text-right text-white font-mono">{trade.lots || trade.volume || '0.00'}</td>
+                          <td className="py-4 px-2 text-right text-white font-mono">{trade.lots || '0.00'}</td>
                           <td className={cn(
                             "py-4 px-6 text-right font-bold tabular-nums",
-                            (trade.pnl || trade.profit || 0) >= 0 ? 'text-emerald-500' : 'text-destructive'
+                            (trade.pnl || 0) >= 0 ? 'text-emerald-500' : 'text-destructive'
                           )}>
-                            {(trade.pnl || trade.profit || 0) >= 0 ? '+' : ''}${(trade.pnl || trade.profit || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            {(trade.pnl || 0) >= 0 ? '+' : ''}${(trade.pnl || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                           </td>
                         </tr>
                       );
@@ -364,9 +407,9 @@ export default function HistoryPage() {
                             <SearchX className="w-10 h-10 text-muted-foreground opacity-20" />
                           </div>
                           <div>
-                            <h3 className="text-xl font-bold text-white mb-2">No executions found</h3>
+                            <h3 className="text-xl font-bold text-white mb-2">No positions found</h3>
                             <p className="text-muted-foreground text-sm leading-relaxed">
-                              No historical trade data matches your current filters. Live executions from MT5 will appear here instantly.
+                              No historical position data matches your current filters. Live executions from MT5 will appear here instantly.
                             </p>
                           </div>
                         </div>
@@ -380,7 +423,7 @@ export default function HistoryPage() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between p-6 border-t border-white/5 bg-secondary/10">
                 <p className="text-xs text-muted-foreground font-medium">
-                  Showing <span className="text-white">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-white">{Math.min(currentPage * itemsPerPage, enrichedTrades.length)}</span> of <span className="text-white">{enrichedTrades.length}</span> executions
+                  Showing <span className="text-white">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-white">{Math.min(currentPage * itemsPerPage, filteredTrades.length)}</span> of <span className="text-white">{filteredTrades.length}</span> positions
                 </p>
                 <div className="flex gap-2">
                   <Button 

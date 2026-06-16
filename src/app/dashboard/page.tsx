@@ -107,7 +107,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   // Fetch recent trades
   const tradeConstraints = useMemo(() => [
     orderBy('date', 'desc'),
-    limit(10)
+    limit(40) // Fetch more to allow pairing entry/exit
   ], []);
 
   const { data: recentTrades, loading: tradesLoading } = useCollection<any>(
@@ -157,32 +157,83 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     }
   };
 
-  // Enriched trades with paired Entry/Exit logic
+  // Merge BUY/SELL deals into single positions
   const enrichedTrades = useMemo(() => {
     if (!recentTrades) return [];
     
-    return recentTrades.map((trade: any, index: number, array: any[]) => {
-      const currentPnL = trade.pnl || trade.profit || 0;
-      
-      // If it's a closing deal (non-zero profit), try to find the opening deal
-      if (currentPnL !== 0) {
-        const matchingEntry = array.find(t => 
-          (t.positionId && trade.positionId && t.positionId === trade.positionId && (t.pnl || t.profit || 0) === 0) ||
-          (t.symbol === trade.symbol && (t.lots || t.volume) === (trade.lots || trade.volume) && (t.pnl || t.profit || 0) === 0 && getTradeDate(t.time || t.date) < getTradeDate(trade.time || trade.date))
-        );
-        
-        return {
-          ...trade,
-          duration: matchingEntry ? calculateHoldingTime(matchingEntry.time || matchingEntry.date, trade.time || trade.date) : 'N/A'
-        };
-      }
-      
-      // It's an opening deal
-      return {
-        ...trade,
-        duration: '—'
-      };
+    const sorted = [...recentTrades].sort((a, b) => {
+      const dateA = getTradeDate(a.time || a.date);
+      const dateB = getTradeDate(b.time || b.date);
+      return (dateB?.getTime() || 0) - (dateA?.getTime() || 0);
     });
+
+    const merged = [];
+    const processedTickets = new Set();
+
+    for (const trade of sorted) {
+      if (processedTickets.has(trade.id)) continue;
+      
+      const profit = trade.pnl || trade.profit || 0;
+      if (profit !== 0) {
+        // This is likely a closing deal. Find its opening partner.
+        const closeDate = getTradeDate(trade.time || trade.date);
+        
+        const partner = sorted.find(t => 
+          !processedTickets.has(t.id) &&
+          t.symbol === trade.symbol &&
+          (parseFloat(String(t.lots || t.volume)).toFixed(2) === parseFloat(String(trade.lots || trade.volume)).toFixed(2)) &&
+          (t.pnl || t.profit || 0) === 0 &&
+          (getTradeDate(t.time || t.date)?.getTime() || 0) < (closeDate?.getTime() || 0)
+        );
+
+        if (partner) {
+          merged.push({
+            ...trade,
+            openTime: partner.time || partner.date,
+            closeTime: trade.time || trade.date,
+            type: partner.type, // Use entry type (BUY or SELL)
+            lots: trade.lots || trade.volume,
+            pnl: profit,
+            duration: calculateHoldingTime(partner.time || partner.date, trade.time || trade.date)
+          });
+          processedTickets.add(trade.id);
+          processedTickets.add(partner.id);
+        } else {
+          // Orphaned closing trade
+          merged.push({
+            ...trade,
+            openTime: null,
+            closeTime: trade.time || trade.date,
+            lots: trade.lots || trade.volume,
+            pnl: profit,
+            duration: '—'
+          });
+          processedTickets.add(trade.id);
+        }
+      }
+    }
+
+    // Capture remaining unmatched (usually open positions or missing entry data)
+    for (const trade of sorted) {
+      if (!processedTickets.has(trade.id)) {
+        merged.push({
+          ...trade,
+          openTime: trade.time || trade.date,
+          closeTime: null,
+          pnl: trade.pnl || trade.profit || 0,
+          lots: trade.lots || trade.volume,
+          duration: '—'
+        });
+        processedTickets.add(trade.id);
+      }
+    }
+    
+    // Sort merged list by closeTime (or openTime if active) desc
+    return merged.sort((a, b) => {
+      const dateA = getTradeDate(a.closeTime || a.openTime);
+      const dateB = getTradeDate(b.closeTime || b.openTime);
+      return (dateB?.getTime() || 0) - (dateA?.getTime() || 0);
+    }).slice(0, 10);
   }, [recentTrades]);
 
   const metrics = useMemo(() => {
@@ -383,7 +434,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                   <tr>
                     <th className="py-4 px-6">Symbol</th>
                     <th className="py-4 px-4">Type</th>
-                    <th className="py-4 px-4">Time</th>
+                    <th className="py-4 px-4">Open Time</th>
                     <th className="py-4 px-4">Duration</th>
                     <th className="py-4 px-4 text-right">Lots</th>
                     <th className="py-4 px-6 text-right">P&L</th>
@@ -408,7 +459,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                             </Badge>
                           </td>
                           <td className="py-4 px-4 text-xs text-muted-foreground font-mono">
-                            {formatTradeDate(trade.time || trade.date)}
+                            {formatTradeDate(trade.openTime || trade.time || trade.date)}
                           </td>
                           <td className="py-4 px-4 text-xs text-muted-foreground flex items-center gap-1.5">
                             <Clock className="w-3 h-3" />
