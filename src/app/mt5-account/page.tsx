@@ -30,7 +30,7 @@ import { motion } from 'framer-motion';
 
 /**
  * @fileOverview Institutional MT5 Credentials Terminal.
- * Optimized to use AuthContext data stream to prevent duplicate Firestore listeners.
+ * Synchronized with AuthContext to show exact plan rules and credentials.
  */
 
 export default function MT5AccountPage() {
@@ -40,13 +40,23 @@ export default function MT5AccountPage() {
 
   const mt5Login = userData?.mt5Login || null;
   const mt5Password = userData?.mt5Password || null;
-  const mt5Server = userData?.mt5Server || 'PrimeFunded-Live';
+  const mt5Server = userData?.mt5Server || 'MetaQuotes-Demo';
   const accountSize = userData?.accountSize || 'Standard';
   const accountPlan = userData?.accountPlan || 'Challenge';
   const accountStatus = userData?.accountStatus || 'none';
 
   const isActive = useMemo(() => mt5Login && mt5Login !== "" && accountStatus === 'active', [mt5Login, accountStatus]);
   const isBreached = accountStatus === 'breached';
+
+  // Helper to get exact plan rules
+  const planRules = useMemo(() => {
+    const plan = accountPlan?.toLowerCase() || '';
+    if (plan.includes('1-step')) return { daily: '3.0%', max: '6.0%' };
+    if (plan.includes('2-step')) return { daily: '5.0%', max: '10.0%' };
+    if (plan.includes('3-step')) return { daily: '4.0%', max: '8.0%' };
+    if (plan.includes('instant')) return { daily: '2.0%', max: '4.0%' };
+    return { daily: '3.0%', max: '6.0%' }; // Default fallback
+  }, [accountPlan]);
 
   const copyToClipboard = (label: string, text: string | null) => {
     if (!text) {
@@ -157,8 +167,8 @@ export default function MT5AccountPage() {
               <Card className="border-amber-500/30 bg-amber-500/5 h-fit">
                 <CardHeader><CardTitle className="text-amber-500 flex items-center gap-2 text-lg"><ShieldCheck className="w-5 h-5" /> Active Guard</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
-                  <RuleItem label="Daily Drawdown" value="3.0% - 5.0%" />
-                  <RuleItem label="Max Drawdown" value="6.0% - 10.0%" />
+                  <RuleItem label="Daily Drawdown" value={planRules.daily} />
+                  <RuleItem label="Max Drawdown" value={planRules.max} />
                   <div className="pt-4 border-t border-white/5 text-xs text-muted-foreground italic">Institutional risk monitoring is active on this account.</div>
                 </CardContent>
               </Card>
