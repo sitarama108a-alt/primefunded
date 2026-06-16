@@ -143,7 +143,7 @@ export async function POST(request: Request) {
 
       // Reset daily start balance at start of new trading day (7:30 AM IST)
       if (storedDayKey !== todayKey) {
-        userUpdates.dailyStartBalance = currBalance;
+        userUpdates.dailyStartBalance = userDataFull.dailyStartBalance || userDataFull.accountBalance || currBalance;
         userUpdates.dailyStartBalanceDate = todayKey;
       }
 
