@@ -13,12 +13,12 @@ import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { 
-  Eye, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, Award, Search, Loader2, Image as ImageIcon, Settings, Save, Megaphone, DollarSign, ChevronLeft, Gift, ExternalLink, Send, Wrench
+  Eye, Users, ShoppingCart, Wallet, Activity, Fingerprint, TrendingUp, Award, Search, Loader2, Image as ImageIcon, Settings, Save, Megaphone, DollarSign, ChevronLeft, Gift, ExternalLink, Send, Wrench, Skull, AlertTriangle, CheckCircle2, Trash2
 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import DashboardPage from '@/app/dashboard/page';
 import Image from 'next/image';
-import { doc, setDoc, collection, onSnapshot, query, orderBy, limit, updateDoc, writeBatch, serverTimestamp, addDoc, getDocs } from 'firebase/firestore';
+import { doc, setDoc, collection, onSnapshot, query, orderBy, limit, updateDoc, writeBatch, serverTimestamp, addDoc, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useBrandSettings } from '@/hooks/use-brand-settings';
 import { useAuth } from '@/context/AuthContext';
@@ -53,7 +53,7 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('overview');
   const [searchTerm, setSearchTerm] = useState('');
   const [previewUserId, setPreviewUserId] = useState<string | null>(null);
-  const [adminData, setAdminData] = useState<any>({ users: [], orders: [], payouts: [], referrals: [], broadcasts: [] });
+  const [adminData, setAdminData] = useState<any>({ users: [], orders: [], payouts: [], referrals: [], broadcasts: [], breaches: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const { toast } = useToast();
@@ -67,8 +67,10 @@ export default function AdminPage() {
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [isKycReviewOpen, setIsKycReviewOpen] = useState(false);
   const [isGiftModalOpen, setIsGiftModalOpen] = useState(false);
+  const [isBreachModalOpen, setIsBreachModalOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [giftForm, setGiftForm] = useState({ plan: '1-Step Pro', size: '$100,000', login: '', password: '', server: 'MetaQuotes-Demo', note: '' });
+  const [breachForm, setBreachForm] = useState({ reason: 'Daily Drawdown Exceeded', note: '' });
 
   const [brandingForm, setBrandingForm] = useState({ siteName: '', logoUrl: '', supportEmail: '' });
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -121,6 +123,7 @@ export default function AdminPage() {
     setupListener('payouts', 'payouts', 'date');
     setupListener('referrals', 'referrals', 'createdAt');
     setupListener('broadcasts', 'broadcasts', 'sentAt');
+    setupListener('breaches', 'breaches', 'breachedAt');
     return () => unsubscribers.forEach(unsub => unsub());
   }, [isAuthenticated]);
 
@@ -129,7 +132,11 @@ export default function AdminPage() {
     const verifiedOrders = adminData.orders.filter((o: any) => o.status === 'verified');
     const totalRevenue = verifiedOrders.reduce((acc: number, o: any) => acc + (parseFloat(o.amountPaid) || 0), 0);
     const totalTraders = adminData.users.length;
-    const verifiedCount = verifiedOrders.length;
+    
+    // Count verified orders + gifted accounts (deduplicating by userId if needed, though typically gifted don't have orders)
+    const giftedCount = adminData.users.filter((u: any) => u.isGifted === true).length;
+    const verifiedCount = verifiedOrders.length + giftedCount;
+    
     const pendingOrders = adminData.orders.filter((o: any) => o.status === 'pending').length;
     return { totalRevenue, totalTraders, verifiedCount, pendingOrders };
   }, [adminData]);
@@ -258,6 +265,96 @@ export default function AdminPage() {
     }
   };
 
+  const handleManualBreach = async () => {
+    if (!selectedUser) return;
+    setActionLoading(true);
+    try {
+      const userRef = doc(db, 'users', selectedUser.id);
+      await updateDoc(userRef, {
+        accountStatus: 'breached',
+        accountActive: false,
+        breachType: 'hard',
+        breachReason: breachForm.reason,
+        breachedAt: serverTimestamp()
+      });
+
+      await addDoc(collection(db, 'breaches'), {
+        userId: selectedUser.id,
+        userEmail: selectedUser.email,
+        userName: selectedUser.name,
+        plan: selectedUser.accountPlan || 'Unknown',
+        breachType: 'hard',
+        breachReason: `${breachForm.reason}: ${breachForm.note}`,
+        breachedAt: serverTimestamp()
+      });
+
+      await addDoc(collection(db, 'users', selectedUser.id, 'notifications'), {
+        title: "🚨 Account Terminated",
+        message: `Your account has been breached: ${breachForm.reason}. ${breachForm.note}`,
+        type: 'hard_breach',
+        isRead: false,
+        createdAt: serverTimestamp()
+      });
+
+      toast({ title: "Account Terminated", description: "Breach logged successfully." });
+      setIsBreachModalOpen(false);
+    } catch (err) {
+      toast({ variant: "destructive", title: "Breach Failed" });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRestoreAccount = async (breach: any) => {
+    setActionLoading(true);
+    try {
+      await updateDoc(doc(db, 'users', breach.userId), {
+        accountStatus: 'active',
+        accountActive: true,
+        breachType: null,
+        breachReason: null,
+        breachedAt: null
+      });
+      await deleteDoc(doc(db, 'breaches', breach.id));
+      toast({ title: "Account Restored", description: "Trader can now continue evaluations." });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Restoration Failed" });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDismissBreach = async (breachId: string) => {
+    setActionLoading(true);
+    try {
+      await deleteDoc(doc(db, 'breaches', breachId));
+      toast({ title: "Warning Dismissed" });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Action Failed" });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleConvertToHardBreach = async (breach: any) => {
+    setActionLoading(true);
+    try {
+      await updateDoc(doc(db, 'users', breach.userId), {
+        accountStatus: 'breached',
+        accountActive: false,
+        breachType: 'hard',
+        breachReason: breach.breachReason,
+        breachedAt: serverTimestamp()
+      });
+      await updateDoc(doc(db, 'breaches', breach.id), { breachType: 'hard' });
+      toast({ title: "Escalated to Hard Breach" });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Escalation Failed" });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   if (previewUserId) {
     return (
       <div className="min-h-screen bg-background relative">
@@ -269,6 +366,9 @@ export default function AdminPage() {
       </div>
     );
   }
+
+  const hardBreaches = adminData.breaches.filter((b: any) => b.breachType === 'hard');
+  const softBreaches = adminData.breaches.filter((b: any) => b.breachType === 'soft');
 
   return (
     <div className="flex min-h-screen bg-background overflow-hidden relative">
@@ -291,6 +391,7 @@ export default function AdminPage() {
               <TabsTrigger value="user_directory" className="font-bold">User Directory</TabsTrigger>
               <TabsTrigger value="order_journal" className="font-bold">Order Journal</TabsTrigger>
               <TabsTrigger value="kyc" className="font-bold">KYC Hub</TabsTrigger>
+              <TabsTrigger value="breaches" className="font-bold">Breaches</TabsTrigger>
               <TabsTrigger value="referrals" className="font-bold">Referrals</TabsTrigger>
               <TabsTrigger value="payouts" className="font-bold">Payouts</TabsTrigger>
               <TabsTrigger value="broadcast" className="font-bold">Broadcast</TabsTrigger>
@@ -364,7 +465,8 @@ export default function AdminPage() {
                             <td className="py-4 px-6"><div className="text-white">{u.email}</div><div className="text-xs text-muted-foreground">{u.phone || 'N/A'}</div></td>
                             <td className="py-4 px-6"><Badge variant="outline" className="border-primary/30 text-primary uppercase font-mono">{u.referralCode || 'NONE'}</Badge></td>
                             <td className="py-4 px-6 text-right space-x-2">
-                              <Button variant="ghost" size="sm" className="hover:bg-amber-500/10" onClick={() => { setSelectedUser(u); setIsGiftModalOpen(true); }}><Gift className="w-4 h-4 text-amber-500" /></Button>
+                              <Button variant="ghost" size="sm" className="hover:bg-destructive/10" onClick={() => { setSelectedUser(u); setIsBreachModalOpen(true); }} title="Breach Account"><Skull className="w-4 h-4 text-destructive" /></Button>
+                              <Button variant="ghost" size="sm" className="hover:bg-amber-500/10" onClick={() => { setSelectedUser(u); setIsGiftModalOpen(true); }} title="Gift Account"><Gift className="w-4 h-4 text-amber-500" /></Button>
                               <Button variant="ghost" size="sm" onClick={() => setPreviewUserId(u.id)}><Eye className="w-4 h-4" /></Button>
                             </td>
                           </tr>
@@ -374,6 +476,79 @@ export default function AdminPage() {
                   </div>
                 </CardContent>
               </Card>
+            </div>
+          )}
+
+          {activeTab === 'breaches' && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* HARD BREACH SECTION */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 p-4 bg-destructive/10 border border-destructive/20 rounded-xl">
+                  <Skull className="text-destructive w-6 h-6" />
+                  <h2 className="font-headline font-bold text-white uppercase tracking-tighter">🔴 HARD BREACH - Account Terminated</h2>
+                </div>
+                <Card className="bg-card/30 border-border/50 min-h-[400px]">
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs text-left">
+                        <thead className="bg-secondary/30 text-muted-foreground uppercase text-[9px] font-black">
+                          <tr><th className="py-4 px-4">Trader</th><th className="py-4 px-2">Plan</th><th className="py-4 px-4">Reason</th><th className="py-4 px-4 text-right">Actions</th></tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/30">
+                          {hardBreaches.length === 0 ? (
+                            <tr><td colSpan={4} className="py-20 text-center text-muted-foreground italic">No hard breaches logged.</td></tr>
+                          ) : hardBreaches.map((b: any) => (
+                            <tr key={b.id} className="hover:bg-destructive/5 transition-colors">
+                              <td className="py-4 px-4 font-bold text-white">{b.userName}</td>
+                              <td className="py-4 px-2 text-muted-foreground">{b.plan}</td>
+                              <td className="py-4 px-4 max-w-[150px] truncate text-destructive font-medium">{b.breachReason}</td>
+                              <td className="py-4 px-4 text-right flex justify-end gap-2">
+                                <Button size="sm" variant="ghost" className="hover:bg-primary/10" onClick={() => setPreviewUserId(b.userId)}><Eye className="w-4 h-4" /></Button>
+                                <Button size="sm" className="bg-amber-600 hover:bg-amber-700 font-bold" onClick={() => handleRestoreAccount(b)}>Restore</Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* SOFT BREACH SECTION */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                  <AlertTriangle className="text-amber-500 w-6 h-6" />
+                  <h2 className="font-headline font-bold text-white uppercase tracking-tighter">🟡 SOFT BREACH - Warning / Challenge Fail</h2>
+                </div>
+                <Card className="bg-card/30 border-border/50 min-h-[400px]">
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs text-left">
+                        <thead className="bg-secondary/30 text-muted-foreground uppercase text-[9px] font-black">
+                          <tr><th className="py-4 px-4">Trader</th><th className="py-4 px-2">Plan</th><th className="py-4 px-4">Reason</th><th className="py-4 px-4 text-right">Actions</th></tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/30">
+                          {softBreaches.length === 0 ? (
+                            <tr><td colSpan={4} className="py-20 text-center text-muted-foreground italic">No soft breaches logged.</td></tr>
+                          ) : softBreaches.map((b: any) => (
+                            <tr key={b.id} className="hover:bg-amber-500/5 transition-colors">
+                              <td className="py-4 px-4 font-bold text-white">{b.userName}</td>
+                              <td className="py-4 px-2 text-muted-foreground">{b.plan}</td>
+                              <td className="py-4 px-4 max-w-[150px] truncate text-amber-500 font-medium">{b.breachReason}</td>
+                              <td className="py-4 px-4 text-right flex justify-end gap-2">
+                                <Button size="sm" variant="ghost" onClick={() => setPreviewUserId(b.userId)}><Eye className="w-4 h-4" /></Button>
+                                <Button size="sm" variant="destructive" className="font-bold" onClick={() => handleConvertToHardBreach(b)}>Terminate</Button>
+                                <Button size="sm" variant="ghost" className="hover:bg-emerald-500/10 text-emerald-500" onClick={() => handleDismissBreach(b.id)}><CheckCircle2 className="w-4 h-4" /></Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           )}
 
@@ -407,6 +582,45 @@ export default function AdminPage() {
           )}
         </div>
       </main>
+
+      {/* Manual Breach Modal */}
+      <Dialog open={isBreachModalOpen} onOpenChange={setIsBreachModalOpen}>
+        <DialogContent className="bg-card border-destructive/20">
+          <DialogHeader>
+            <DialogTitle className="text-destructive flex items-center gap-2">
+              <Skull className="w-5 h-5" /> Manually breach {selectedUser?.name}'s account?
+            </DialogTitle>
+            <DialogDescription>This will immediately terminate the account and revoke MT5 credentials.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label>Primary Reason</Label>
+              <Select value={breachForm.reason} onValueChange={v => setBreachForm({...breachForm, reason: v})}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Daily Drawdown Exceeded">Daily Drawdown Exceeded</SelectItem>
+                  <SelectItem value="Max Drawdown Exceeded">Max Drawdown Exceeded</SelectItem>
+                  <SelectItem value="Martingale Detected">Martingale Detected</SelectItem>
+                  <SelectItem value="Rule Violation">Rule Violation</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Custom Note / Evidence</Label>
+              <Textarea 
+                placeholder="Details of the violation..." 
+                value={breachForm.note} 
+                onChange={e => setBreachForm({...breachForm, note: e.target.value})}
+              />
+            </div>
+          </div>
+          <DialogFooter className="mt-6">
+            <Button variant="ghost" onClick={() => setIsBreachModalOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleManualBreach} disabled={actionLoading}>Confirm Hard Breach</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Verification Modal */}
       <Dialog open={isVerifyModalOpen} onOpenChange={setIsVerifyModalOpen}>
