@@ -1,15 +1,17 @@
-
 'use client';
 
-import { initializeFirebase } from '@/firebase';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
+import { firebaseConfig } from '@/firebase/config';
 
 /**
  * Initializes and exports Firebase services for use in client components.
- * This uses the idempotent initialization logic from the main firebase module.
- * We use type casting as a fallback to allow the server to compile even if 
- * config is missing (errors will be caught in the initialization log).
+ * This pattern ensures that Firebase is only initialized once, even with Next.js HMR.
  */
-const { auth, firestore: db, firebaseApp: app } = initializeFirebase();
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+const auth = getAuth(app);
+const db = getFirestore(app);
 
 export { auth, db, app };
 export default app;

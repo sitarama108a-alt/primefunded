@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { useAuth } from '@/context/AuthContext';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { 
@@ -27,42 +27,17 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { motion } from 'framer-motion';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 
 /**
  * @fileOverview Institutional MT5 Credentials Terminal.
- * Provides a real-time, high-availability interface for account activation.
+ * Optimized to use AuthContext data stream to prevent duplicate Firestore listeners.
  */
 
 export default function MT5AccountPage() {
-  const { user, userData: initialUserData, loading: authLoading } = useAuth();
+  const { user, userData, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
-  const [liveData, setLiveData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
 
-  // Real-time listener for the specific user document
-  useEffect(() => {
-    if (!user?.uid) return;
-
-    console.log(`[MT5-Terminal] Attaching real-time listener for UID: ${user.uid}`);
-    const unsub = onSnapshot(doc(db, 'users', user.uid), (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        console.log(`[MT5-Terminal] Live Sync Received: Login=${data.mt5Login || 'PENDING'}`);
-        setLiveData(data);
-      }
-      setLoading(false);
-    }, (error) => {
-      console.error('[MT5-Terminal] Sync Error:', error);
-      setLoading(false);
-    });
-
-    return () => unsub();
-  }, [user?.uid]);
-
-  const userData = liveData || initialUserData;
   const mt5Login = userData?.mt5Login || null;
   const mt5Password = userData?.mt5Password || null;
   const mt5Server = userData?.mt5Server || 'PrimeFunded-Live';
@@ -70,7 +45,7 @@ export default function MT5AccountPage() {
   const accountPlan = userData?.accountPlan || 'Challenge';
   const accountStatus = userData?.accountStatus || 'none';
 
-  const isActive = mt5Login && mt5Login !== "" && accountStatus === 'active';
+  const isActive = useMemo(() => mt5Login && mt5Login !== "" && accountStatus === 'active', [mt5Login, accountStatus]);
   const isBreached = accountStatus === 'breached';
 
   const copyToClipboard = (label: string, text: string | null) => {
@@ -82,7 +57,7 @@ export default function MT5AccountPage() {
     toast({ title: "Copied", description: `${label} copied to clipboard.` });
   };
 
-  if (authLoading || loading) {
+  if (authLoading) {
     return (
       <div className="flex min-h-screen bg-background items-center justify-center">
         <div className="flex flex-col items-center gap-4">

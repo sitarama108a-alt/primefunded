@@ -1,43 +1,28 @@
+'use client';
 
-"use client";
-
-import { useEffect, useState, useMemo, Suspense, memo, useRef } from 'react';
+import { useEffect, useState, useMemo, memo } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { 
-  TrendingUp, 
-  TrendingDown, 
   Wallet, 
   Activity, 
-  RefreshCw,
-  Server,
-  ShieldCheck,
-  CheckCircle2,
-  Clock,
-  BarChart3,
-  User,
-  Copy,
-  Check,
-  ShieldAlert,
-  AlertTriangle,
-  ExternalLink,
-  Users,
-  DollarSign,
-  Skull,
-  Flame,
-  Info
+  Server, 
+  ShieldCheck, 
+  CheckCircle2, 
+  Clock, 
+  Copy, 
+  Check, 
+  AlertTriangle, 
+  ExternalLink, 
+  Users, 
+  DollarSign, 
+  Skull 
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { aiComplianceMonitorAlerts } from '@/ai/flows/ai-compliance-monitor-alerts';
 import { useFirestore, useCollection, useDoc } from '@/firebase';
-import { where, doc, updateDoc, setDoc, serverTimestamp, limit, orderBy, onSnapshot, collection, query } from 'firebase/firestore';
+import { where, doc, limit, orderBy, onSnapshot, collection, query } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -71,37 +56,45 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   const router = useRouter();
   
   const effectiveUid = adminViewMode && targetUid ? targetUid : user?.uid;
+  
+  // Only use useDoc for admin mode (viewing other users). 
+  // Otherwise, use the userData provided by AuthContext to avoid redundant listeners.
   const { data: targetUserData, loading: targetUserLoading } = useDoc<any>(
-    effectiveUid ? `users/${effectiveUid}` : null
+    adminViewMode && effectiveUid ? `users/${effectiveUid}` : null
   );
   
   const userData = adminViewMode ? targetUserData : loggedInUserData;
   
   const [isConnected, setIsConnected] = useState(true);
-  const [compliance, setCompliance] = useState<any>(null);
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const { toast } = useToast();
   const db = useFirestore();
 
-  // Breach Alert State
   const [softBreachWarning, setSoftBreachWarning] = useState<string | null>(null);
 
   useEffect(() => {
     if (!effectiveUid || !db) return;
 
     // Listen for MT5 metric updates to trigger breach check
+    // This is account-specific and separate from UserProfile doc
     const unsubscribeMt5 = onSnapshot(doc(db, 'mt5_accounts', effectiveUid), (snapshot) => {
       if (snapshot.exists() && !adminViewMode) {
         fetch('/api/breach-check', {
           method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: effectiveUid, mt5Data: snapshot.data() })
-        });
+        }).catch(err => console.error('Breach check failed:', err));
       }
     });
 
     // Listen for soft breach notifications
-    const q = query(collection(db, 'users', effectiveUid, 'notifications'), where('type', '==', 'soft_breach_warning'), where('isRead', '==', false), limit(1));
+    const q = query(
+      collection(db, 'users', effectiveUid, 'notifications'), 
+      where('type', '==', 'soft_breach_warning'), 
+      where('isRead', '==', false), 
+      limit(1)
+    );
     const unsubscribeNotif = onSnapshot(q, (snapshot) => {
       if (!snapshot.empty) {
         setSoftBreachWarning(snapshot.docs[0].data().message);
@@ -131,7 +124,6 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     };
   }, [referrals]);
 
-  // Auth Guard
   useEffect(() => {
     if (!authLoading && !user && !adminViewMode) {
       router.push('/login?redirect=/dashboard');
@@ -152,17 +144,12 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
 
   const metrics = useMemo(() => {
     if (!activeAccount) {
-      return { balance: 0, equity: 0, dailyPnL: 0, winRate: 0, tradesToday: 0, profitTarget: 0, currentProfitPercent: 0 };
+      return { balance: 0, winRate: 0, tradesToday: 0 };
     }
-    const balance = activeAccount?.balance || 0;
     return {
-      balance,
-      equity: balance, 
-      dailyPnL: 0,
+      balance: activeAccount?.balance || 0,
       winRate: 0,
-      tradesToday: 0,
-      profitTarget: activeAccount?.plan?.includes('1-Step') ? 10 : activeAccount?.plan?.includes('2-Step') ? 8 : 0,
-      currentProfitPercent: 0
+      tradesToday: 0
     };
   }, [activeAccount]);
 
@@ -177,14 +164,15 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   };
 
   const copyReferralLink = () => {
-    const link = `${window.location.origin}/signup?ref=${userData?.referralCode}`;
+    if (!userData?.referralCode) return;
+    const link = `${window.location.origin}/signup?ref=${userData.referralCode}`;
     navigator.clipboard.writeText(link);
     setLinkCopied(true);
     setTimeout(() => setLinkCopied(false), 2000);
     toast({ title: "Link Copied!", description: "Referral link is ready to share." });
   };
 
-  if (authLoading || accountsLoading || targetUserLoading) {
+  if (authLoading || accountsLoading || (adminViewMode && targetUserLoading)) {
     return (
       <div className="flex min-h-screen bg-background items-center justify-center">
         <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
@@ -199,7 +187,6 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
       {!adminViewMode && <Navigation />}
       
       <main className="flex-1 p-8 overflow-y-auto custom-scrollbar">
-        {/* HARD BREACH BANNER */}
         {userData?.accountStatus === 'breached' && (
           <div className="mb-6 p-6 rounded-2xl bg-destructive/20 border border-destructive/40 flex items-center justify-between shadow-2xl animate-pulse">
             <div className="flex items-center gap-4">
@@ -217,7 +204,6 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
           </div>
         )}
 
-        {/* SOFT BREACH WARNING */}
         {softBreachWarning && (
           <div className="mb-6 p-4 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center gap-4">
             <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-500">
@@ -316,7 +302,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                  <p className="text-[10px] font-black uppercase text-muted-foreground tracking-[0.2em] mb-3">Your Referral Link:</p>
                  <div className="flex items-center gap-2">
                    <div className="flex-1 font-mono text-sm font-bold p-3 bg-background/50 rounded-xl border border-border text-white truncate">
-                     {window.location.origin}/signup?ref={userData?.referralCode}
+                     {window.location.origin}/signup?ref={userData?.referralCode || 'CODE'}
                    </div>
                    <Button onClick={copyReferralLink} className="h-12 w-12 rounded-xl cyan-box-glow cursor-pointer" size="icon">
                      {linkCopied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
