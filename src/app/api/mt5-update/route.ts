@@ -1,4 +1,3 @@
-
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
@@ -49,9 +48,9 @@ export async function POST(request: Request) {
       return new Response(JSON.stringify({ status: "ERROR", message: "Missing login" }), { status: 400 });
     }
 
-    // 1. Search for user by mt5Login
-    const usersRef = db.collection('users');
-    const querySnapshot = await usersRef.where('mt5Login', '==', login).limit(1).get();
+    // 1. Search for account by login in mt5_accounts collection
+    const usersRef = db.collection('mt5_accounts');
+    const querySnapshot = await usersRef.where('login', '==', login).limit(1).get();
 
     if (querySnapshot.empty) {
       console.warn(`[MT5-Update] No user found with login: ${login}`);
@@ -79,12 +78,11 @@ export async function POST(request: Request) {
     const phase = String(userData.currentPhase || 'evaluation');
 
     const dailyDrawdownPct = startingBalance !== 0 ? ((startingBalance - currEquity) / startingBalance) * 100 : 0;
-    const maxDrawdownPct = dailyDrawdownPct; // Simplified for MVP
+    const maxDrawdownPct = dailyDrawdownPct;
 
     let newStatus = userData.accountStatus || 'active';
     let breachReason = '';
 
-    // Simplified Breach Check (Syncing with Dashboard Rules)
     const checkBreach = () => {
       if (planType.includes('1-step')) {
         if (dailyDrawdownPct > 3) return "1-Step: 3% Daily Drawdown Exceeded";
@@ -108,12 +106,12 @@ export async function POST(request: Request) {
       breachReason = breachMsg;
     }
 
-    // 3. Update User Document
+    // 3. Update Account Document
     const updates: any = {
-      liveBalance: currBalance,
-      liveEquity: currEquity,
-      liveMargin: currMargin,
-      liveProfit: currProfit,
+      balance: currBalance,
+      equity: currEquity,
+      margin: currMargin,
+      profit: currProfit,
       lastMT5Update: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     };
@@ -124,7 +122,6 @@ export async function POST(request: Request) {
       updates.breachReason = breachReason;
       updates.breachedAt = FieldValue.serverTimestamp();
 
-      // Log to global breaches collection
       await db.collection('breaches').add({
         userId,
         userEmail: userData.email,
@@ -136,7 +133,6 @@ export async function POST(request: Request) {
         breachedAt: FieldValue.serverTimestamp()
       });
 
-      // Add Notification
       await usersRef.doc(userId).collection('notifications').add({
         title: "🚨 Account Terminated",
         message: `Breach detected: ${breachReason}`,
