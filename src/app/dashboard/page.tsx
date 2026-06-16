@@ -33,7 +33,7 @@ import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useFirestore, useCollection } from '@/firebase';
-import { where, doc, limit, orderBy, onSnapshot, collection, query, updateDoc } from 'firebase/firestore';
+import { where, doc, limit, orderBy, onSnapshot, collection, query, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -53,6 +53,22 @@ import {
 import { format, subDays, subMonths, differenceInSeconds, isValid, startOfDay, differenceInDays } from 'date-fns';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+
+/**
+ * @fileOverview Trader Dashboard Terminal
+ * Boundary Rule: Trading Day Resets at 7:30 AM IST (2:00 AM UTC)
+ */
+
+const getTradingDayKey = (date: Date) => {
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const istTime = new Date(date.getTime() + istOffset);
+  const hours = istTime.getUTCHours();
+  const minutes = istTime.getUTCMinutes();
+  if (hours < 7 || (hours === 7 && minutes < 30)) {
+    istTime.setUTCDate(istTime.getUTCDate() - 1);
+  }
+  return istTime.toISOString().split('T')[0];
+};
 
 interface DashboardPageProps {
   adminViewMode?: boolean;
@@ -132,27 +148,23 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     };
   }, [userData]);
 
-  // Sync Daily Start Balance if missing
+  // Sync Daily Start Balance logic with 7:30 AM IST boundary
   useEffect(() => {
-    if (user && userData && userData.accountStatus === 'active' && !adminViewMode) {
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
-      if (userData.dailyStartBalanceDate !== todayStr) {
+    if (user && userData && userData.accountStatus === 'active' && !adminViewMode && db) {
+      const todayKey = getTradingDayKey(new Date());
+      if (userData.dailyStartBalanceDate !== todayKey) {
+        console.log(`[Dashboard] Daily session reset detected. Setting baseline for: ${todayKey}`);
         const userRef = doc(db, 'users', user.uid);
         updateDoc(userRef, {
-          dailyStartBalance: metrics.balance || 0,
-          dailyStartBalanceDate: todayStr
+          dailyStartBalance: metrics.balance || userData.accountBalance || 0,
+          dailyStartBalanceDate: todayKey,
+          updatedAt: serverTimestamp()
         }).catch(async (err) => {
-          if (err.code === 'permission-denied') {
-            errorEmitter.emit('permission-error', new FirestorePermissionError({
-              path: userRef.path,
-              operation: 'update',
-              requestResourceData: { dailyStartBalance: metrics.balance, dailyStartBalanceDate: todayStr }
-            }));
-          }
+          console.error('[Dashboard] Baseline sync failed:', err);
         });
       }
     }
-  }, [user, userData, metrics.balance, db, adminViewMode]);
+  }, [user, userData?.dailyStartBalanceDate, metrics.balance, db, adminViewMode]);
 
   // Determine EA Connectivity Status
   const connectivityStatus = useMemo(() => {
@@ -166,8 +178,14 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
 
       if (!isValid(lastUpdate)) return 'offline';
 
-      const diffSeconds = Math.abs(differenceInSeconds(new Date(), lastUpdate));
-      return diffSeconds < 60 ? 'live' : 'offline';
+      const diffSeconds = Math.abs(Date.now() - lastUpdate.getTime()) / 1000;
+      
+      // Debug log for connectivity
+      if (diffSeconds < 300) {
+         console.log(`[Dashboard] Heartbeat lag: ${diffSeconds.toFixed(1)}s`);
+      }
+
+      return diffSeconds < 65 ? 'live' : 'offline';
     } catch (e) {
       return 'offline';
     }
@@ -191,18 +209,18 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     if (chartPeriod === '14D') daysToKeep = 14;
     if (chartPeriod === '1M') daysToKeep = 30;
 
-    const cutoff = subDays(startOfDay(now), daysToKeep);
-    return performanceData.filter(d => new Date(d.date) >= cutoff).map(d => ({
+    const cutoffKey = getTradingDayKey(subDays(now, daysToKeep));
+    return performanceData.filter(d => d.date >= cutoffKey).map(d => ({
       ...d,
       displayDate: format(new Date(d.date), 'MMM d'),
       amount: d.cumulativePnL || d.pnl || 0
     }));
   }, [performanceData, chartPeriod]);
 
-  // Fetch recent trades (Limit increased for day counting accuracy)
+  // Fetch recent trades
   const tradeConstraints = useMemo(() => [
     orderBy('date', 'desc'),
-    limit(100)
+    limit(200)
   ], []);
 
   const { data: recentTrades, loading: tradesLoading } = useCollection<any>(
@@ -231,7 +249,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     }
   };
 
-  // Calculate unique trading days
+  // Calculate unique trading days using 7:30 AM IST boundary
   const tradingDaysData = useMemo(() => {
     if (!recentTrades) return { count: 0, required: 5, progress: 0 };
     
@@ -239,13 +257,12 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     recentTrades.forEach(trade => {
       const date = getTradeDate(trade.time || trade.date);
       if (date && isValid(date)) {
-        days.add(format(date, 'yyyy-MM-dd'));
+        days.add(getTradingDayKey(date));
       }
     });
 
     const count = days.size;
     
-    // Rule lookup
     const plan = userData?.accountPlan?.toLowerCase() || '';
     const phase = userData?.currentPhase || 'evaluation';
     
@@ -380,7 +397,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   }, [recentTrades]);
 
   const dailyRiskMetrics = useMemo(() => {
-    const dailyStart = userData?.dailyStartBalance || metrics.balance;
+    const dailyStart = userData?.dailyStartBalance || userData?.accountBalance || metrics.balance;
     const currentEquity = metrics.equity;
     const pnl = metrics.balance - dailyStart;
     const pnlPct = dailyStart > 0 ? (pnl / dailyStart) * 100 : 0;
@@ -498,7 +515,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
               <p className={cn("text-3xl font-bold font-headline", dailyRiskMetrics.isPositive ? 'text-emerald-500' : 'text-destructive')}>
                 {dailyRiskMetrics.isPositive ? '+' : ''}${dailyRiskMetrics.pnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase mt-1">{dailyRiskMetrics.pnlPct.toFixed(2)}% of start balance</p>
+              <p className="text-[10px] font-bold text-muted-foreground uppercase mt-1">{dailyRiskMetrics.pnlPct.toFixed(2)}% of session start</p>
             </CardContent>
           </Card>
 
@@ -581,7 +598,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                     </AreaChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="h-full flex items-center justify-center text-muted-foreground italic text-sm">No performance data captured for this period.</div>
+                  <div className="h-full flex items-center justify-center text-muted-foreground italic text-sm">No performance data captured for this session.</div>
                 )}
               </CardContent>
             </Card>

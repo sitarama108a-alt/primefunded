@@ -4,6 +4,20 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+/**
+ * Institutional temporal helper: Boundary at 7:30 AM IST (2:00 AM UTC)
+ */
+const getTradingDayKey = (date: Date) => {
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const istTime = new Date(date.getTime() + istOffset);
+  const hours = istTime.getUTCHours();
+  const minutes = istTime.getUTCMinutes();
+  if (hours < 7 || (hours === 7 && minutes < 30)) {
+    istTime.setUTCDate(istTime.getUTCDate() - 1);
+  }
+  return istTime.toISOString().split('T')[0];
+};
+
 function getAdminDb() {
   if (!getApps().length) {
     const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
@@ -64,8 +78,8 @@ export async function POST(request: Request) {
       return new Response(JSON.stringify({ status: "OK", note: "Account already breached" }), { status: 200 });
     }
 
-    // Daily Reset Logic
-    const todayStr = new Date().toISOString().split('T')[0];
+    // Trading Session Logic (7:30 AM IST Boundary)
+    const sessionKey = getTradingDayKey(new Date());
     let dailyStartBalance = userData.dailyStartBalance || currBalance;
     const updates: any = {
       liveBalance: currBalance,
@@ -76,10 +90,11 @@ export async function POST(request: Request) {
       updatedAt: FieldValue.serverTimestamp(),
     };
 
-    if (userData.dailyStartBalanceDate !== todayStr) {
+    if (userData.dailyStartBalanceDate !== sessionKey) {
+      console.log(`[MT5-Sync] Session transition to ${sessionKey} for ${userId}`);
       dailyStartBalance = currBalance;
       updates.dailyStartBalance = currBalance;
-      updates.dailyStartBalanceDate = todayStr;
+      updates.dailyStartBalanceDate = sessionKey;
     }
 
     // Risk Calculation
@@ -142,10 +157,10 @@ export async function POST(request: Request) {
       });
     }
 
-    // Update Daily Snapshot
+    // Update Daily Session Snapshot
     const dailyPnL = currBalance - dailyStartBalance;
-    await userDoc.ref.collection('performance').doc(todayStr).set({
-      date: todayStr,
+    await userDoc.ref.collection('performance').doc(sessionKey).set({
+      date: sessionKey,
       balance: currBalance,
       equity: currEquity,
       pnl: dailyPnL,
@@ -155,7 +170,7 @@ export async function POST(request: Request) {
 
     await userDoc.ref.update(updates);
 
-    return new Response(JSON.stringify({ status: "OK" }), { 
+    return new Response(JSON.stringify({ status: "OK", session: sessionKey }), { 
       status: 200, 
       headers: { 'Content-Type': 'application/json' } 
     });
