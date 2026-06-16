@@ -65,11 +65,17 @@ export default function MT5AccountPage() {
   }, [accountPlan]);
 
   const liveMetrics = useMemo(() => {
-    return {
-      balance: userData?.liveBalance || parseFloat(accountSize.replace(/[$,]/g, '')) || 0,
-      equity: userData?.liveEquity || parseFloat(accountSize.replace(/[$,]/g, '')) || 0,
+    const parseSize = (sizeStr: string) => {
+      if (!sizeStr) return 0;
+      return parseFloat(sizeStr.replace(/[$,]/g, '').replace(/k/i, '000')) || 0;
     };
-  }, [userData, accountSize]);
+
+    const staticBalance = userData?.accountBalance || parseSize(userData?.accountSize);
+    const balance = userData?.liveBalance !== undefined ? userData.liveBalance : staticBalance;
+    const equity = userData?.liveEquity !== undefined ? userData.liveEquity : balance;
+    
+    return { balance, equity };
+  }, [userData]);
 
   const copyToClipboard = (label: string, text: string | null) => {
     if (!text) {
@@ -182,11 +188,11 @@ export default function MT5AccountPage() {
                   <div className="grid grid-cols-2 gap-4 p-6 bg-secondary/20 rounded-xl border border-border">
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-primary/10 rounded-lg"><Wallet className="w-4 h-4 text-primary" /></div>
-                      <div><p className="text-[10px] font-bold text-muted-foreground uppercase">Live Balance</p><p className="font-bold text-white text-lg">${liveMetrics.balance.toLocaleString()}</p></div>
+                      <div><p className="text-[10px] font-bold text-muted-foreground uppercase">Live Balance</p><p className="font-bold text-white text-lg">${liveMetrics.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></div>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-accent/10 rounded-lg"><Activity className="w-4 h-4 text-accent" /></div>
-                      <div><p className="text-[10px] font-bold text-muted-foreground uppercase">Live Equity</p><p className="font-bold text-white text-lg">${liveMetrics.equity.toLocaleString()}</p></div>
+                      <div><p className="text-[10px] font-bold text-muted-foreground uppercase">Live Equity</p><p className="font-bold text-white text-lg">${liveMetrics.equity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></div>
                     </div>
                   </div>
 

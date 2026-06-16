@@ -78,7 +78,6 @@ export async function POST(request: Request) {
     const planType = String(userData.accountPlan || '1-step-pro').toLowerCase();
     const phase = String(userData.currentPhase || 'evaluation');
 
-    const profitPct = startingBalance !== 0 ? ((currEquity - startingBalance) / startingBalance) * 100 : 0;
     const dailyDrawdownPct = startingBalance !== 0 ? ((startingBalance - currEquity) / startingBalance) * 100 : 0;
     const maxDrawdownPct = dailyDrawdownPct; // Simplified for MVP
 
@@ -148,14 +147,6 @@ export async function POST(request: Request) {
     }
 
     await userDoc.ref.update(updates);
-
-    // Also update redundant mt5_accounts collection for backward compatibility if needed
-    await db.collection('mt5_accounts').doc(login).set({
-      ...updates,
-      userId,
-      login,
-      status: newStatus
-    }, { merge: true });
 
     return new Response(JSON.stringify({ status: "OK" }), { 
       status: 200, 

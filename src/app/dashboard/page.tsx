@@ -92,9 +92,11 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     if (!userData?.lastMT5Update) return 'awaiting';
     
     // Check if updated in last 60 seconds
+    // Handle both Firestore Timestamp and JS Date
     const lastUpdate = userData.lastMT5Update?.seconds 
       ? new Date(userData.lastMT5Update.seconds * 1000) 
-      : new Date();
+      : userData.lastMT5Update?.toDate?.() || new Date(userData.lastMT5Update);
+
     const diffSeconds = differenceInSeconds(new Date(), lastUpdate);
     
     return diffSeconds < 60 ? 'live' : 'offline';
@@ -224,8 +226,8 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
         </header>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-          <MetricCard title="Account Balance" value={`$${metrics.balance.toLocaleString()}`} icon={<Wallet className="text-primary" />} disabled={isBreached} />
-          <MetricCard title="Equity" value={`$${metrics.equity.toLocaleString()}`} icon={<Activity className="text-accent" />} disabled={isBreached} />
+          <MetricCard title="Account Balance" value={`$${metrics.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={<Wallet className="text-primary" />} disabled={isBreached} />
+          <MetricCard title="Equity" value={`$${metrics.equity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={<Activity className="text-accent" />} disabled={isBreached} />
           <MetricCard title="Total Referrals" value={(userData?.referralCount || 0).toString()} icon={<Users className="text-emerald-500" />} />
           <MetricCard title="Referral Earnings" value={`$${(userData?.referralEarnings || 0).toFixed(2)}`} icon={<DollarSign className="text-amber-500" />} />
         </div>
@@ -238,7 +240,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                 {dailyRiskMetrics.isPositive ? <TrendingUp className="text-emerald-500 w-4 h-4" /> : <TrendingDown className="text-destructive w-4 h-4" />}
               </div>
               <p className={cn("text-3xl font-bold font-headline", dailyRiskMetrics.isPositive ? 'text-emerald-500' : 'text-destructive')}>
-                {dailyRiskMetrics.isPositive ? '+' : ''}${dailyRiskMetrics.pnl.toLocaleString()}
+                {dailyRiskMetrics.isPositive ? '+' : ''}${dailyRiskMetrics.pnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
               <p className="text-[10px] font-bold text-muted-foreground uppercase mt-1">{dailyRiskMetrics.pnlPct.toFixed(2)}% of start balance</p>
             </CardContent>
