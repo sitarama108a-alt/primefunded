@@ -17,10 +17,13 @@ import {
   ExternalLink, 
   Users, 
   DollarSign, 
-  Skull 
+  Skull,
+  TrendingUp,
+  TrendingDown
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import { useFirestore, useCollection, useDoc } from '@/firebase';
 import { where, doc, limit, orderBy, onSnapshot, collection, query } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
@@ -117,12 +120,15 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     return () => unsubscribeNotif();
   }, [effectiveUid, db]);
 
-  const referralConstraints = useMemo(() => [
-    where('referrerId', '==', effectiveUid || 'none'),
-    orderBy('createdAt', 'desc')
-  ], [effectiveUid]);
+  const referralConstraints = useMemo(() => {
+    if (!effectiveUid) return [];
+    return [
+      where('referrerId', '==', effectiveUid),
+      orderBy('createdAt', 'desc')
+    ];
+  }, [effectiveUid]);
 
-  const { data: referrals } = useCollection<any>('referrals', referralConstraints);
+  const { data: referrals } = useCollection<any>(effectiveUid ? 'referrals' : null, referralConstraints);
 
   const refStats = useMemo(() => {
     const data = referrals || [];
@@ -167,6 +173,34 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
       tradesToday: mt5Data?.tradesToday || 0
     };
   }, [userData?.accountBalance, userData?.accountSize, mt5Data]);
+
+  const dailyRiskMetrics = useMemo(() => {
+    const dailyStart = userData?.dailyStartBalance || metrics.balance;
+    const currentEquity = metrics.equity;
+    const pnl = currentEquity - dailyStart;
+    const pnlPct = dailyStart > 0 ? (pnl / dailyStart) * 100 : 0;
+    
+    const dailyLimit = (() => {
+      const plan = userData?.accountPlan?.toLowerCase() || '';
+      if (plan.includes('1-step')) return 3;
+      if (plan.includes('2-step')) return 5;
+      if (plan.includes('3-step')) return 4;
+      if (plan.includes('instant')) return 2;
+      return 3;
+    })();
+
+    const drawdownPct = pnl < 0 ? Math.abs(pnlPct) : 0;
+    const usage = Math.min((drawdownPct / dailyLimit) * 100, 100);
+
+    return {
+      pnl,
+      pnlPct,
+      drawdownPct,
+      dailyLimit,
+      usage,
+      isPositive: pnl >= 0
+    };
+  }, [userData?.dailyStartBalance, userData?.accountPlan, metrics.balance, metrics.equity]);
 
   const copyTraderId = () => {
     const idToCopy = userData?.uid || userData?.traderId;
@@ -270,7 +304,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
           </div>
         </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
           <MetricCard 
             title="Account Balance" 
             value={`$${metrics.balance.toLocaleString('en-US')}`} 
@@ -297,6 +331,69 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
           />
         </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <Card className="border-border/50 bg-card/40 hover:border-primary/30 transition-all duration-300">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Daily P&L</span>
+                <div className={cn(
+                  "p-2 rounded-lg border",
+                  dailyRiskMetrics.isPositive ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500" : "bg-destructive/10 border-destructive/20 text-destructive"
+                )}>
+                  {dailyRiskMetrics.isPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className={cn(
+                  "text-3xl font-bold font-headline tabular-nums",
+                  dailyRiskMetrics.isPositive ? "text-emerald-500" : "text-destructive"
+                )}>
+                  {dailyRiskMetrics.isPositive ? '+' : ''}${dailyRiskMetrics.pnl.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  {dailyRiskMetrics.pnlPct.toFixed(2)}% of starting equity
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/50 bg-card/40 hover:border-primary/30 transition-all duration-300">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Drawdown Level</span>
+                <div className="p-2 bg-secondary rounded-lg border border-border">
+                  <Activity className="w-4 h-4 text-primary" />
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div className="flex justify-between items-end">
+                  <span className="text-3xl font-bold font-headline tabular-nums text-white">
+                    {dailyRiskMetrics.drawdownPct.toFixed(2)}%
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                    Limit: {dailyRiskMetrics.dailyLimit}%
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  <Progress 
+                    value={dailyRiskMetrics.usage} 
+                    className="h-2"
+                  />
+                  <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest">
+                    <span className={cn(
+                      dailyRiskMetrics.usage > 80 ? "text-destructive" : 
+                      dailyRiskMetrics.usage > 50 ? "text-amber-500" : "text-emerald-500"
+                    )}>
+                      {dailyRiskMetrics.usage.toFixed(1)}% of daily limit used
+                    </span>
+                    {dailyRiskMetrics.usage > 80 && <span className="text-destructive flex items-center gap-1 animate-pulse"><AlertTriangle className="w-3 h-3" /> Critical</span>}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
           <Card className="lg:col-span-2 border-border/50 shadow-xl shadow-primary/5 bg-card/40 backdrop-blur-sm">
             <CardHeader className="flex flex-row items-center justify-between">
@@ -310,7 +407,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                  <p className="text-[10px] font-black uppercase text-muted-foreground tracking-[0.2em] mb-3">Your Referral Link:</p>
                  <div className="flex items-center gap-2">
                    <div className="flex-1 font-mono text-sm font-bold p-3 bg-background/50 rounded-xl border border-border text-white truncate">
-                     {window.location.origin}/signup?ref={userData?.referralCode || 'CODE'}
+                     {typeof window !== 'undefined' ? window.location.origin : ''}/signup?ref={userData?.referralCode || 'CODE'}
                    </div>
                    <Button onClick={copyReferralLink} className="h-12 w-12 rounded-xl cyan-box-glow cursor-pointer" size="icon">
                      {linkCopied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
