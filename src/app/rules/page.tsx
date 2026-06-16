@@ -229,8 +229,8 @@ export default function RulesPage() {
 
           <TabsContent value="instant" className="space-y-12">
             <div className="grid md:grid-cols-2 gap-8">
-              <RuleCard title="Live Trading Rules" items={PLAN_RULES['instant'].active} active={true} />
-              <RuleCard title="Risk Protocols" items={PLAN_RULES['instant'].prohibited} variant="destructive" active={true} />
+              <RuleCard title="Live Trading Rules" items={PLAN_RULES['instant'].active} active={userData?.currentPhase !== 'breached'} />
+              <RuleCard title="Risk Protocols" items={PLAN_RULES['instant'].prohibited} variant="destructive" active={userData?.currentPhase !== 'breached'} />
             </div>
           </TabsContent>
         </Tabs>
@@ -283,14 +283,23 @@ export default function RulesPage() {
 
 function RuleCard({ title, items, variant = 'primary', active }: { title: string, items: any[], variant?: 'primary' | 'destructive', active?: boolean }) {
   const isDestructive = variant === 'destructive';
+  
   return (
     <Card className={cn(
-      "h-full transition-all duration-500 relative",
-      active ? "border-primary ring-2 ring-primary/30 scale-[1.03] shadow-2xl shadow-primary/20 bg-slate-900/80" : "border-white/10 opacity-70 grayscale-[0.3] bg-slate-900/40",
-      isDestructive && active ? "border-destructive ring-destructive/40 shadow-destructive/20 bg-destructive/5" : ""
+      "h-full transition-all duration-500 relative bg-slate-900/60",
+      active 
+        ? isDestructive 
+          ? "border-destructive ring-2 ring-destructive/40 scale-[1.03] shadow-[0_0_40px_rgba(239,68,68,0.25)]" 
+          : "border-primary ring-2 ring-primary/40 scale-[1.03] shadow-[0_0_40px_rgba(17,179,245,0.25)]"
+        : "border-white/10 opacity-70 grayscale-[0.2]"
     )}>
       {active && (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-black px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest z-10 shadow-[0_0_15px_rgba(17,179,245,0.6)]">
+        <div className={cn(
+          "absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest z-10",
+          isDestructive 
+            ? "bg-destructive text-white shadow-[0_0_15px_rgba(239,68,68,0.6)]" 
+            : "bg-primary text-black shadow-[0_0_15px_rgba(17,179,245,0.6)]"
+        )}>
           Your Current Stage
         </div>
       )}
