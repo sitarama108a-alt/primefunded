@@ -34,37 +34,61 @@ export async function POST(request: Request) {
 
     const plan = userData.accountPlan || '1-Step Pro';
     const phase = userData.currentPhase || 'evaluation';
-    const { dailyDrawdown, maxDrawdown, floatingLoss, lastLotSize, prevLotSize } = mt5Data;
+    
+    // Metrics provided by MT5 EA
+    const { 
+      dailyDrawdown, 
+      maxDrawdown, 
+      floatingLoss, 
+      lastLotSize, 
+      prevLotSize,
+      lastTradeDuration, // Seconds held
+      lastTradeInterval, // Seconds since previous trade
+      lastTradeLossPct   // Percentage of balance lost on single trade
+    } = mt5Data;
 
     let breachType: 'hard' | 'soft' | null = null;
     let breachReason = '';
 
-    // RULE EVALUATION LOGIC
-    if (plan === '1-Step Pro') {
+    // UNIFIED RULES (Duration and Frequency)
+    if (phase === 'funded' || plan === 'Instant Funding') {
+       if (lastTradeDuration !== undefined && lastTradeDuration < 120) {
+          breachType = 'hard';
+          breachReason = 'No closing trades within 2 minutes allowed (Funded Stage)';
+       } else if (lastTradeInterval !== undefined && lastTradeInterval < 180) {
+          breachType = 'hard';
+          breachReason = 'Execution frequency violation: 1 trade per 3 mins maximum';
+       }
+    }
+
+    // PLAN-SPECIFIC LOGIC
+    if (plan === '1-Step Pro' && !breachType) {
       if (dailyDrawdown > 3) { breachType = 'hard'; breachReason = 'Daily drawdown exceeded 3%'; }
       else if (maxDrawdown > 6) { breachType = 'hard'; breachReason = 'Maximum drawdown exceeded 6%'; }
       else if (floatingLoss > 1) { breachType = 'hard'; breachReason = 'Floating loss exceeded 1% threshold'; }
       else if (lastLotSize > prevLotSize * 1.5 && phase === 'evaluation') { breachType = 'soft'; breachReason = 'Martingale pattern detected in evaluation'; }
     } 
-    else if (plan === '2-Step Classic') {
-      const limit = (phase === 'funded') ? 5 : 5;
-      const maxLimit = (phase === 'funded') ? 10 : 10;
+    else if (plan === '2-Step Classic' && !breachType) {
+      const dailyLimit = 5;
+      const maxLimit = 10;
       
-      if (dailyDrawdown > limit) { breachType = 'hard'; breachReason = `Daily drawdown exceeded ${limit}%`; }
+      if (dailyDrawdown > dailyLimit) { breachType = 'hard'; breachReason = `Daily drawdown exceeded ${dailyLimit}%`; }
       else if (maxDrawdown > maxLimit) { breachType = 'hard'; breachReason = `Max drawdown exceeded ${maxLimit}%`; }
-      else if (floatingLoss > 1) { breachType = 'hard'; breachReason = 'Floating loss exceeded 1% threshold'; }
+      else if (lastTradeLossPct !== undefined && lastTradeLossPct > 3) { breachType = 'hard'; breachReason = 'Single trade loss exceeded 3% threshold'; }
+      else if (floatingLoss > 1 && phase === 'funded') { breachType = 'hard'; breachReason = 'Floating loss exceeded 1% threshold (Funded)'; }
     }
-    else if (plan === '3-Step Classic') {
+    else if (plan === '3-Step Classic' && !breachType) {
       const dailyLimit = 4;
       const maxLimit = 8;
       if (dailyDrawdown > dailyLimit) { breachType = 'hard'; breachReason = `Daily drawdown exceeded ${dailyLimit}%`; }
       else if (maxDrawdown > maxLimit) { breachType = 'hard'; breachReason = `Max drawdown exceeded ${maxLimit}%`; }
+      else if (lastTradeLossPct !== undefined && lastTradeLossPct > 3) { breachType = 'hard'; breachReason = 'Single trade loss exceeded 3% threshold'; }
     }
-    else if (plan === 'Instant Funding') {
-      // UPDATED: Daily drawdown limit changed from 2% to 3%
+    else if (plan === 'Instant Funding' && !breachType) {
       if (dailyDrawdown > 3) { breachType = 'hard'; breachReason = 'Instant Account: 3% Daily Drawdown hit'; }
       else if (maxDrawdown > 4) { breachType = 'hard'; breachReason = 'Instant Account: 4% Max Drawdown hit'; }
       else if (floatingLoss > 1) { breachType = 'hard'; breachReason = 'Instant Account: 1% Floating Loss hit'; }
+      else if (lastTradeLossPct !== undefined && lastTradeLossPct > 3) { breachType = 'hard'; breachReason = 'Instant Account: 3% Single Trade Loss hit'; }
     }
 
     if (breachType === 'hard') {
@@ -90,7 +114,7 @@ export async function POST(request: Request) {
 
       await userRef.collection('notifications').add({
         title: "🚫 Account Terminated",
-        message: `Your account has been breached: ${breachReason}. Please contact support for appeal options.`,
+        message: `Your account has been breached: ${breachReason}. Institutional capital access revoked.`,
         type: 'hard_breach',
         isRead: false,
         createdAt: FieldValue.serverTimestamp()
@@ -111,7 +135,7 @@ export async function POST(request: Request) {
 
       await userRef.collection('notifications').add({
         title: "⚠️ Strategy Warning",
-        message: `Violation detected: ${breachReason}. Your account is still active, but further violations may lead to termination.`,
+        message: `Violation detected: ${breachReason}. Evaluation reset or warning issued.`,
         type: 'soft_breach_warning',
         isRead: false,
         createdAt: FieldValue.serverTimestamp()
