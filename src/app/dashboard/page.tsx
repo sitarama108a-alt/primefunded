@@ -53,10 +53,8 @@ import {
 import { format, subDays, subMonths, differenceInSeconds, isValid, startOfDay, differenceInDays } from 'date-fns';
 
 /**
- * @fileOverview Trader Dashboard Terminal
- * Boundary Rule: Trading Day Resets at 7:30 AM IST (2:00 AM UTC)
+ * Institutional temporal helper: Boundary at 7:30 AM IST (2:00 AM UTC)
  */
-
 const getTradingDayKey = (date: Date) => {
   const istOffset = 5.5 * 60 * 60 * 1000;
   const istTime = new Date(date.getTime() + istOffset);
@@ -373,6 +371,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   }, [recentTrades]);
 
   const dailyRiskMetrics = useMemo(() => {
+    // Priority Fallback Chain for Baseline: Persistent Baseline > Account Starting Capital > Current Live Balance
     const dailyStart = userData?.dailyStartBalance || userData?.accountBalance || metrics.balance;
     const currentEquity = metrics.equity;
     const pnl = metrics.balance - dailyStart;
@@ -420,9 +419,10 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
             <p>UID: {effectiveUid}</p>
             <p>Live Balance: {metrics.balance}</p>
             <p>Live Equity: {metrics.equity}</p>
-            <p>Daily Start: {userData?.dailyStartBalance || 'N/A'}</p>
-            <p>Daily Date: {userData?.dailyStartBalanceDate || 'N/A'}</p>
-            <p>Calculated Key: {getTradingDayKey(new Date())}</p>
+            <p>Daily Start (Baseline): {userData?.dailyStartBalance || 'N/A'}</p>
+            <p>Daily Date (Stored): {userData?.dailyStartBalanceDate || 'N/A'}</p>
+            <p>Current Day Key: {getTradingDayKey(new Date())}</p>
+            <p>Baseline Match: {String(userData?.dailyStartBalanceDate === getTradingDayKey(new Date()))}</p>
             <p>Last Sync: {userData?.lastMT5Update?.seconds ? new Date(userData.lastMT5Update.seconds * 1000).toLocaleString() : 'N/A'}</p>
             <p>Performance Logs: {performanceData?.length || 0}</p>
           </div>

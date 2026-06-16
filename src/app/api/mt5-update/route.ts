@@ -80,7 +80,6 @@ export async function POST(request: Request) {
 
     // Trading Session Logic (7:30 AM IST Boundary)
     const sessionKey = getTradingDayKey(new Date());
-    let dailyStartBalance = userData.dailyStartBalance || currBalance;
     const updates: any = {
       liveBalance: currBalance,
       liveEquity: currEquity,
@@ -90,21 +89,34 @@ export async function POST(request: Request) {
       updatedAt: FieldValue.serverTimestamp(),
     };
 
-    // Robust Session Reset: If date is missing or changed, set new baseline
-    if (userData.dailyStartBalanceDate !== sessionKey) {
-      console.log(`[MT5-Sync] Session transition to ${sessionKey} for ${userId}. Resetting baseline to $${currBalance}`);
-      dailyStartBalance = currBalance;
-      updates.dailyStartBalance = currBalance;
+    /**
+     * CRITICAL SESSION RESET LOGIC
+     * Only update dailyStartBalance if the session key has changed.
+     * This ensures the baseline stays frozen for the entire trading day.
+     */
+    const existingDate = userData.dailyStartBalanceDate;
+    
+    if (existingDate !== sessionKey) {
+      console.log(`[MT5-Sync] SESSION TRANSITION detected for ${userId}. Previous: ${existingDate}, Current: ${sessionKey}`);
+      
+      // If this is the VERY first time we initialize session data (e.g. new account)
+      // we use accountBalance as baseline to capture day-one growth.
+      // Otherwise, we use current balance as the baseline for the NEW day.
+      if (!existingDate) {
+        updates.dailyStartBalance = userData.accountBalance || currBalance;
+      } else {
+        updates.dailyStartBalance = currBalance;
+      }
       updates.dailyStartBalanceDate = sessionKey;
     }
 
-    // Risk Calculation
-    const startingBalance = parseFloat(String(userData.accountBalance)) || currBalance || 100000;
+    // Risk Calculation (Using the latest baseline)
+    const activeStartBalance = updates.dailyStartBalance || userData.dailyStartBalance || userData.accountBalance || currBalance;
+    const startingCapital = parseFloat(String(userData.accountBalance)) || currBalance || 100000;
     const planType = String(userData.accountPlan || '1-Step Pro').toLowerCase();
-    const phase = String(userData.currentPhase || 'evaluation');
     
-    const dailyDrawdownPct = dailyStartBalance !== 0 ? ((dailyStartBalance - currEquity) / dailyStartBalance) * 100 : 0;
-    const maxDrawdownPct = startingBalance !== 0 ? ((startingBalance - currEquity) / startingBalance) * 100 : 0;
+    const dailyDrawdownPct = activeStartBalance !== 0 ? ((activeStartBalance - currEquity) / activeStartBalance) * 100 : 0;
+    const maxDrawdownPct = startingCapital !== 0 ? ((startingCapital - currEquity) / startingCapital) * 100 : 0;
 
     let newStatus = userData.accountStatus || 'active';
     let breachReason = '';
@@ -143,7 +155,7 @@ export async function POST(request: Request) {
         userEmail: userData.email,
         userName: userData.name,
         plan: userData.accountPlan,
-        phase,
+        phase: userData.currentPhase || 'evaluation',
         breachType: 'hard',
         breachReason,
         breachedAt: FieldValue.serverTimestamp()
@@ -158,20 +170,21 @@ export async function POST(request: Request) {
       });
     }
 
-    // Update Daily Session Snapshot
-    const dailyPnL = currBalance - dailyStartBalance;
+    // Update Daily Performance Snapshot
+    const dailyPnL = currBalance - activeStartBalance;
     await userDoc.ref.collection('performance').doc(sessionKey).set({
       date: sessionKey,
       balance: currBalance,
       equity: currEquity,
       pnl: dailyPnL,
-      cumulativePnL: currBalance - startingBalance,
+      cumulativePnL: currBalance - startingCapital,
       timestamp: FieldValue.serverTimestamp()
     }, { merge: true });
 
+    // Commit all updates
     await userDoc.ref.update(updates);
 
-    return new Response(JSON.stringify({ status: "OK", session: sessionKey }), { 
+    return new Response(JSON.stringify({ status: "OK", session: sessionKey, baseline: activeStartBalance }), { 
       status: 200, 
       headers: { 'Content-Type': 'application/json' } 
     });
