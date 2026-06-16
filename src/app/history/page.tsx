@@ -3,7 +3,22 @@
 import { useState, useMemo } from 'react';
 import { Navigation } from '@/components/Navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Search, Download, Filter, History, SearchX, ChevronLeft, ChevronRight, ArrowUpDown, Calendar } from 'lucide-react';
+import { 
+  Search, 
+  Download, 
+  Filter, 
+  History, 
+  SearchX, 
+  ChevronLeft, 
+  ChevronRight, 
+  ArrowUpDown, 
+  Calendar,
+  Trophy,
+  Zap,
+  ShieldCheck,
+  XCircle,
+  Clock
+} from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -24,9 +39,14 @@ export default function HistoryPage() {
     end: ''
   });
 
-  const { data: trades, loading } = useCollection<any>(
+  const { data: trades, loading: tradesLoading } = useCollection<any>(
     user ? `users/${user.uid}/trades` : null,
     [orderBy('date', 'desc'), limit(500)]
+  );
+
+  const { data: phaseHistory, loading: phasesLoading } = useCollection<any>(
+    user ? `users/${user.uid}/phaseHistory` : null,
+    [orderBy('advancedAt', 'desc')]
   );
 
   const filteredTrades = useMemo(() => {
@@ -75,14 +95,20 @@ export default function HistoryPage() {
     document.body.removeChild(link);
   };
 
+  const maskLogin = (login: string) => {
+    if (!login) return 'N/A';
+    const s = String(login);
+    return s.slice(-4).padStart(s.length, '•');
+  };
+
   return (
     <div className="flex min-h-screen bg-background">
       <Navigation />
       <main className="flex-1 p-4 md:p-8 overflow-y-auto custom-scrollbar">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10">
           <div>
-            <h1 className="text-3xl font-headline font-bold mb-1 text-white">Trading History</h1>
-            <p className="text-muted-foreground text-sm">Comprehensive log of every institutional execution.</p>
+            <h1 className="text-3xl font-headline font-bold mb-1 text-white">Institutional Journal</h1>
+            <p className="text-muted-foreground text-sm">Comprehensive history of your funding journey and executions.</p>
           </div>
           <Button 
             variant="outline" 
@@ -93,6 +119,45 @@ export default function HistoryPage() {
             <Download className="w-4 h-4 mr-2" /> Export CSV
           </Button>
         </header>
+
+        {/* Phase Progression Section */}
+        <section className="mb-12">
+          <div className="flex items-center gap-2 mb-6">
+            <Trophy className="w-5 h-5 text-primary" />
+            <h2 className="text-xl font-headline font-bold text-white uppercase tracking-tight">Phase Progression</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {phasesLoading ? (
+               [1, 2].map(i => <div key={i} className="h-32 bg-secondary/20 rounded-2xl animate-pulse border border-border/30" />)
+            ) : phaseHistory.length > 0 ? (
+               phaseHistory.map((phase: any) => (
+                  <Card key={phase.id} className="bg-card/40 border-border/50 hover:border-primary/20 transition-all">
+                     <CardContent className="p-5 space-y-3">
+                        <div className="flex justify-between items-start">
+                           <Badge className="bg-primary/20 text-primary uppercase text-[9px] font-black border-none px-2">{phase.phase}</Badge>
+                           <span className="text-[10px] text-muted-foreground font-medium">{phase.advancedAt?.seconds ? format(phase.advancedAt.seconds * 1000, 'MMM d, yyyy') : 'N/A'}</span>
+                        </div>
+                        <div>
+                           <p className="text-xs font-bold text-white">{phase.accountSize || 'Standard'} Account</p>
+                           <p className="text-[10px] text-muted-foreground font-mono">MT5: {maskLogin(phase.mt5Login)}</p>
+                        </div>
+                        <div className="flex items-center gap-1.5 pt-1">
+                           <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                           <span className="text-[9px] font-black uppercase text-emerald-500 tracking-widest">Active Status</span>
+                        </div>
+                     </CardContent>
+                  </Card>
+               ))
+            ) : (
+               <Card className="col-span-full bg-secondary/5 border-dashed border-border/50 py-10">
+                  <CardContent className="flex flex-col items-center justify-center text-center opacity-50">
+                     <Clock className="w-8 h-8 mb-2" />
+                     <p className="text-sm font-bold">No phase advancements recorded yet.</p>
+                  </CardContent>
+               </Card>
+            )}
+          </div>
+        </section>
 
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
           <div className="relative md:col-span-2">
@@ -151,7 +216,7 @@ export default function HistoryPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/50">
-                  {loading ? (
+                  {tradesLoading ? (
                     [...Array(5)].map((_, i) => (
                       <tr key={i} className="animate-pulse">
                         <td colSpan={7} className="py-6 px-6"><div className="h-4 bg-secondary/50 rounded w-full" /></td>

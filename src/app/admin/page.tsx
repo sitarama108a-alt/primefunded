@@ -75,7 +75,7 @@ export default function AdminPage() {
   const [breachForm, setBreachForm] = useState({ reason: 'Daily Drawdown Exceeded', note: '' });
   const [phaseForm, setPhaseForm] = useState({ 
     newPhase: 'evaluation', 
-    assignNewAccount: false,
+    assignNewAccount: true,
     login: '',
     password: '',
     server: 'MetaQuotes-Demo'
@@ -285,6 +285,18 @@ export default function AdminPage() {
       };
 
       if (phaseForm.assignNewAccount) {
+        // Archive current credentials if they exist
+        if (selectedUser.mt5Login) {
+          await addDoc(collection(db, 'users', selectedUser.id, 'previousAccounts'), {
+            login: selectedUser.mt5Login,
+            password: selectedUser.mt5Password,
+            server: selectedUser.mt5Server,
+            phase: selectedUser.currentPhase || 'evaluation',
+            retiredAt: serverTimestamp(),
+            status: 'retired'
+          });
+        }
+
         updates.mt5Login = phaseForm.login;
         updates.mt5Password = phaseForm.password;
         updates.mt5Server = phaseForm.server;
@@ -295,13 +307,19 @@ export default function AdminPage() {
 
       await addDoc(collection(db, 'users', selectedUser.id, 'phaseHistory'), {
         phase: phaseForm.newPhase,
+        accountSize: selectedUser.accountSize,
+        mt5Login: phaseForm.assignNewAccount ? phaseForm.login : (selectedUser.mt5Login || 'N/A'),
         advancedAt: serverTimestamp(),
         advancedBy: "admin"
       });
 
+      const message = phaseForm.assignNewAccount 
+        ? `🎉 You advanced to the ${phaseForm.newPhase} stage! New MT5 credentials have been issued. Your previous account is now inactive.`
+        : `🎉 Congratulations! You have been moved to the ${phaseForm.newPhase} phase. Check your dashboard for updates.`;
+
       await addDoc(collection(db, 'users', selectedUser.id, 'notifications'), {
         title: "🎉 Stage Advanced!",
-        message: `Congratulations! You have been moved to the ${phaseForm.newPhase} phase. Check your dashboard for updates.`,
+        message,
         type: 'challenge_passed',
         isRead: false,
         createdAt: serverTimestamp()
@@ -375,7 +393,45 @@ export default function AdminPage() {
                 <StatCard title="Verified Challenges" value={stats.verifiedCount} icon={<Landmark />} color="green" />
                 <StatCard title="Pending Payments" value={stats.pendingOrders} icon={<ShoppingCart />} color="amber" />
               </div>
-              {/* Additional Overview Content... */}
+              
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                 <Card className="bg-card/30 border-border/50">
+                    <CardHeader><CardTitle className="text-lg font-bold text-white flex items-center gap-2"><Users className="w-5 h-5 text-primary" /> Newest Traders</CardTitle></CardHeader>
+                    <CardContent className="p-0">
+                       <div className="divide-y divide-border/30">
+                          {adminData.users.slice(0, 4).map((u: any) => (
+                             <div key={u.id} className="p-4 flex items-center justify-between hover:bg-white/5 transition-colors">
+                                <div className="flex items-center gap-3">
+                                   <Avatar className="h-10 w-10 border border-white/10"><AvatarFallback>{u.name?.slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
+                                   <div><p className="font-bold text-white text-sm">{u.name}</p><p className="text-[10px] text-muted-foreground uppercase">{u.country || 'International'}</p></div>
+                                </div>
+                                <div className="text-right">
+                                   <p className="text-[10px] font-black text-primary uppercase tracking-widest">{u.tier || 'BRONZE'} TIER</p>
+                                   <p className="text-[10px] text-muted-foreground">{u.createdAt?.seconds ? new Date(u.createdAt.seconds * 1000).toLocaleDateString() : 'Today'}</p>
+                                </div>
+                             </div>
+                          ))}
+                       </div>
+                    </CardContent>
+                 </Card>
+
+                 <Card className="bg-card/30 border-border/50">
+                    <CardHeader><CardTitle className="text-lg font-bold text-white flex items-center gap-2"><ShoppingCart className="w-5 h-5 text-primary" /> Latest Orders</CardTitle></CardHeader>
+                    <CardContent className="p-0">
+                       <div className="divide-y divide-border/30">
+                          {adminData.orders.slice(0, 4).map((o: any) => (
+                             <div key={o.id} className="p-4 flex items-center justify-between hover:bg-white/5 transition-colors">
+                                <div><p className="font-bold text-white text-sm">{o.accountSize} {o.plan}</p><p className="text-[10px] text-muted-foreground">{o.userName || o.email}</p></div>
+                                <div className="text-right">
+                                   <Badge variant={o.status === 'verified' ? 'default' : 'secondary'} className="text-[9px] font-black uppercase mb-1">{o.status}</Badge>
+                                   <p className="text-[10px] font-mono text-muted-foreground">${o.amountPaid || '0.00'}</p>
+                                </div>
+                             </div>
+                          ))}
+                       </div>
+                    </CardContent>
+                 </Card>
+              </div>
             </div>
           )}
 
@@ -414,7 +470,52 @@ export default function AdminPage() {
               </Card>
             </div>
           )}
-          {/* Other Tabs... */}
+
+          {activeTab === 'breaches' && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+               <Card className="bg-destructive/5 border-destructive/20 h-fit">
+                  <CardHeader><CardTitle className="text-destructive flex items-center gap-2">🔴 HARD BREACH - Account Terminated</CardTitle></CardHeader>
+                  <CardContent className="p-0">
+                     <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                           <thead className="bg-destructive/10 text-destructive uppercase text-[10px] font-black"><tr><th className="py-3 px-4">Trader</th><th className="py-3 px-4">Reason</th><th className="py-3 px-4 text-right">Date</th></tr></thead>
+                           <tbody className="divide-y divide-white/5">
+                              {adminData.breaches.filter((b: any) => b.breachType === 'hard').map((b: any) => (
+                                 <tr key={b.id} className="hover:bg-destructive/5">
+                                    <td className="py-3 px-4 font-bold text-white">{b.userName || b.userEmail}</td>
+                                    <td className="py-3 px-4 text-xs text-muted-foreground">{b.breachReason}</td>
+                                    <td className="py-3 px-4 text-right text-[10px] text-muted-foreground">{b.breachedAt?.seconds ? new Date(b.breachedAt.seconds * 1000).toLocaleDateString() : 'N/A'}</td>
+                                 </tr>
+                              ))}
+                           </tbody>
+                        </table>
+                        {adminData.breaches.filter((b: any) => b.breachType === 'hard').length === 0 && <div className="p-10 text-center text-muted-foreground italic text-xs">No hard breaches logged.</div>}
+                     </div>
+                  </CardContent>
+               </Card>
+
+               <Card className="bg-amber-500/5 border-amber-500/20 h-fit">
+                  <CardHeader><CardTitle className="text-amber-500 flex items-center gap-2">🟡 SOFT BREACH - Performance Warning</CardTitle></CardHeader>
+                  <CardContent className="p-0">
+                     <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                           <thead className="bg-amber-500/10 text-amber-500 uppercase text-[10px] font-black"><tr><th className="py-3 px-4">Trader</th><th className="py-3 px-4">Reason</th><th className="py-3 px-4 text-right">Date</th></tr></thead>
+                           <tbody className="divide-y divide-white/5">
+                              {adminData.breaches.filter((b: any) => b.breachType === 'soft').map((b: any) => (
+                                 <tr key={b.id} className="hover:bg-amber-500/5">
+                                    <td className="py-3 px-4 font-bold text-white">{b.userName || b.userEmail}</td>
+                                    <td className="py-3 px-4 text-xs text-muted-foreground">{b.breachReason}</td>
+                                    <td className="py-3 px-4 text-right text-[10px] text-muted-foreground">{b.breachedAt?.seconds ? new Date(b.breachedAt.seconds * 1000).toLocaleDateString() : 'N/A'}</td>
+                                 </tr>
+                              ))}
+                           </tbody>
+                        </table>
+                        {adminData.breaches.filter((b: any) => b.breachType === 'soft').length === 0 && <div className="p-10 text-center text-muted-foreground italic text-xs">No soft warnings issued.</div>}
+                     </div>
+                  </CardContent>
+               </Card>
+            </div>
+          )}
         </div>
       </main>
 
@@ -466,7 +567,7 @@ export default function AdminPage() {
           </div>
           <DialogFooter className="mt-6">
             <Button variant="ghost" onClick={() => setIsPhaseModalOpen(false)}>Cancel</Button>
-            <Button className="bg-blue-600 hover:bg-blue-700" onClick={handleAdvancePhase} disabled={actionLoading}>
+            <Button className="bg-blue-600 hover:bg-blue-700 font-bold" onClick={handleAdvancePhase} disabled={actionLoading}>
               {actionLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               Update Account Phase
             </Button>
@@ -527,7 +628,7 @@ export default function AdminPage() {
           </div>
           <DialogFooter className="mt-6">
             <Button variant="ghost" onClick={() => setIsBreachModalOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleManualBreach} disabled={actionLoading}>Confirm Hard Breach</Button>
+            <Button variant="destructive" className="font-bold" onClick={handleManualBreach} disabled={actionLoading}>Confirm Hard Breach</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

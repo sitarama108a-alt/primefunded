@@ -23,10 +23,12 @@ import {
   Clock,
   XCircle,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Skull
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { motion } from 'framer-motion';
+import Link from 'next/link';
 
 /**
  * @fileOverview Institutional MT5 Credentials Terminal.
@@ -44,6 +46,8 @@ export default function MT5AccountPage() {
   const accountSize = userData?.accountSize || 'Standard';
   const accountPlan = userData?.accountPlan || 'Challenge';
   const accountStatus = userData?.accountStatus || 'none';
+  const breachReason = userData?.breachReason || 'Rule Violation';
+  const breachedAt = userData?.breachedAt;
 
   const isActive = useMemo(() => mt5Login && mt5Login !== "" && accountStatus === 'active', [mt5Login, accountStatus]);
   const isBreached = accountStatus === 'breached';
@@ -97,14 +101,38 @@ export default function MT5AccountPage() {
       <Navigation />
       <main className="flex-1 p-8 overflow-y-auto custom-scrollbar">
         {isBreached ? (
-          <div className="h-full flex flex-col items-center justify-center text-center max-w-2xl mx-auto space-y-8">
-            <div className="w-24 h-24 rounded-full bg-destructive/10 border border-destructive/20 flex items-center justify-center text-destructive"><XCircle className="w-12 h-12" /></div>
-            <div className="space-y-4">
-              <h1 className="text-4xl font-headline font-bold text-white">Terminal Revoked</h1>
-              <p className="text-muted-foreground text-lg">Your account has been terminated due to a hard rule breach.</p>
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }} 
+            animate={{ opacity: 1, scale: 1 }}
+            className="h-full flex flex-col items-center justify-center text-center max-w-2xl mx-auto space-y-8"
+          >
+            <div className="w-24 h-24 rounded-full bg-destructive/10 border border-destructive/20 flex items-center justify-center text-destructive animate-pulse">
+              <Skull className="w-12 h-12" />
             </div>
-            <Button variant="outline" className="font-bold h-12 px-8 rounded-xl" asChild><a href="/support">Appeal Decision</a></Button>
-          </div>
+            <div className="space-y-4">
+              <Badge variant="destructive" className="px-4 py-1 uppercase tracking-widest font-black text-xs">Terminal Access Revoked</Badge>
+              <h1 className="text-4xl font-headline font-bold text-white">Account Breached</h1>
+              <Card className="bg-destructive/5 border-destructive/20">
+                <CardContent className="p-6">
+                  <p className="text-destructive font-bold uppercase text-[10px] tracking-widest mb-2">Termination Reason</p>
+                  <p className="text-white text-lg font-medium leading-relaxed">{breachReason}</p>
+                  <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>Terminated on: {breachedAt?.seconds ? new Date(breachedAt.seconds * 1000).toLocaleString() : 'Recent'}</span>
+                  </div>
+                </CardContent>
+              </Card>
+              <p className="text-muted-foreground">This account has violated institutional risk protocols and is no longer valid for trading. All credentials have been liquidated.</p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-4 w-full justify-center">
+              <Button size="lg" className="font-bold h-14 px-10 rounded-2xl bg-destructive hover:bg-destructive/90" asChild>
+                <Link href="/support">Contact Compliance Desk</Link>
+              </Button>
+              <Button variant="outline" size="lg" className="font-bold h-14 px-10 rounded-2xl border-white/10" asChild>
+                <Link href="/challenges">Start New Challenge</Link>
+              </Button>
+            </div>
+          </motion.div>
         ) : !isActive ? (
           <div className="h-full flex flex-col items-center justify-center text-center max-w-2xl mx-auto space-y-8">
             <div className="w-24 h-24 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 animate-pulse"><Clock className="w-12 h-12" /></div>

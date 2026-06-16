@@ -22,7 +22,8 @@ import {
   Calendar,
   History,
   Trophy,
-  Zap
+  Zap,
+  ArrowRight
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -41,7 +42,7 @@ import {
   XAxis, 
   YAxis, 
   CartesianGrid, 
-  Tooltip as ChartTooltip, 
+  ChartTooltip, 
   ResponsiveContainer 
 } from 'recharts';
 import { format, subDays, subMonths } from 'date-fns';
@@ -51,9 +52,12 @@ interface DashboardPageProps {
   targetUid?: string;
 }
 
-const MetricCard = memo(function MetricCard({ title, value, icon, footer }: { title: string, value: string, icon: React.ReactNode, footer?: string }) {
+const MetricCard = memo(function MetricCard({ title, value, icon, footer, disabled }: { title: string, value: string, icon: React.ReactNode, footer?: string, disabled?: boolean }) {
   return (
-    <Card className="border-border/50 bg-card/40 hover:border-primary/30 transition-all duration-300 group">
+    <Card className={cn(
+      "border-border/50 bg-card/40 transition-all duration-300 group",
+      disabled ? "opacity-40 grayscale" : "hover:border-primary/30"
+    )}>
       <CardContent className="p-6">
         <div className="flex items-center justify-between mb-4">
           <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground group-hover:text-primary transition-colors">{title}</span>
@@ -75,13 +79,15 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
   const router = useRouter();
   
   const effectiveUid = adminViewMode && targetUid ? targetUid : user?.uid;
-  const userData = adminViewMode ? loggedInUserData : loggedInUserData; // In a real app we'd fetch targetUid but AuthContext handles current user well
+  const userData = adminViewMode ? loggedInUserData : loggedInUserData; 
 
   const [mt5Data, setMt5Data] = useState<any>(null);
   const [mt5DocExists, setMt5DocExists] = useState(false);
   const [chartPeriod, setChartPeriod] = useState('7D');
   const { toast } = useToast();
   const db = useFirestore();
+
+  const isBreached = userData?.accountStatus === 'breached';
 
   useEffect(() => {
     if (!effectiveUid || !db || !userData?.mt5Login) return;
@@ -152,16 +158,20 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
       {!adminViewMode && <Navigation />}
       
       <main className="flex-1 p-8 overflow-y-auto custom-scrollbar">
-        {userData?.accountStatus === 'breached' && (
-          <div className="mb-6 p-6 rounded-2xl bg-destructive/20 border border-destructive/40 flex items-center justify-between animate-pulse">
+        {isBreached && (
+          <div className="mb-8 p-6 rounded-2xl bg-destructive/20 border border-destructive/40 flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-4">
-              <Skull className="w-8 h-8 text-destructive" />
+              <div className="w-12 h-12 rounded-xl bg-destructive flex items-center justify-center text-white shrink-0">
+                <Skull className="w-6 h-6" />
+              </div>
               <div>
-                <h3 className="text-xl font-headline font-bold text-white uppercase">Account Terminated</h3>
-                <p className="text-sm text-destructive-foreground">Reason: {userData.breachReason || 'Rule Violation'}</p>
+                <h3 className="text-xl font-headline font-bold text-white uppercase tracking-tight">Account Liquidated</h3>
+                <p className="text-sm text-destructive-foreground">This account has been terminated due to a hard rule breach: <span className="font-bold text-white">{userData?.breachReason || 'Rule Violation'}</span>.</p>
               </div>
             </div>
-            <Button variant="destructive" asChild><Link href="/support">Appeal Decision</Link></Button>
+            <Button size="lg" className="bg-destructive hover:bg-destructive/90 font-bold whitespace-nowrap px-8 h-12 rounded-xl" asChild>
+              <Link href="/challenges">Start New Challenge <ArrowRight className="ml-2 w-4 h-4" /></Link>
+            </Button>
           </div>
         )}
 
@@ -172,22 +182,28 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
           </div>
           <div className="flex items-center gap-4">
             {!adminViewMode && <NotificationBell />}
-            <Badge variant="outline" className="h-9 px-4 uppercase font-bold tracking-widest border-white/10">
-              <div className={cn("w-2 h-2 rounded-full mr-2", mt5DocExists ? 'bg-accent live-indicator' : 'bg-muted')} />
-              {mt5DocExists ? 'Live Sync' : 'Offline'}
+            <Badge variant="outline" className={cn(
+              "h-9 px-4 uppercase font-bold tracking-widest border-white/10",
+              isBreached && "border-destructive/30 text-destructive"
+            )}>
+              <div className={cn(
+                "w-2 h-2 rounded-full mr-2", 
+                isBreached ? 'bg-destructive' : (mt5DocExists ? 'bg-accent live-indicator' : 'bg-muted')
+              )} />
+              {isBreached ? 'Terminated' : (mt5DocExists ? 'Live Sync' : 'Offline')}
             </Badge>
           </div>
         </header>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-          <MetricCard title="Account Balance" value={`$${metrics.balance.toLocaleString()}`} icon={<Wallet className="text-primary" />} />
-          <MetricCard title="Equity" value={`$${metrics.equity.toLocaleString()}`} icon={<Activity className="text-accent" />} />
+          <MetricCard title="Account Balance" value={`$${metrics.balance.toLocaleString()}`} icon={<Wallet className="text-primary" />} disabled={isBreached} />
+          <MetricCard title="Equity" value={`$${metrics.equity.toLocaleString()}`} icon={<Activity className="text-accent" />} disabled={isBreached} />
           <MetricCard title="Total Referrals" value={(userData?.referralCount || 0).toString()} icon={<Users className="text-emerald-500" />} />
           <MetricCard title="Referral Earnings" value={`$${(userData?.referralEarnings || 0).toFixed(2)}`} icon={<DollarSign className="text-amber-500" />} />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <Card className="border-border/50 bg-card/40">
+          <Card className={cn("border-border/50 bg-card/40 transition-opacity", isBreached && "opacity-40 grayscale")}>
             <CardContent className="p-6">
               <div className="flex justify-between mb-4">
                 <span className="text-[10px] font-black uppercase text-muted-foreground">Daily P&L</span>
@@ -200,7 +216,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
             </CardContent>
           </Card>
 
-          <Card className="border-border/50 bg-card/40">
+          <Card className={cn("border-border/50 bg-card/40 transition-opacity", isBreached && "opacity-40 grayscale")}>
             <CardContent className="p-6">
               <div className="flex justify-between mb-4">
                 <span className="text-[10px] font-black uppercase text-muted-foreground">Daily Drawdown</span>
@@ -219,7 +235,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
-            <Card className="border-border/50 bg-card/40">
+            <Card className={cn("border-border/50 bg-card/40", isBreached && "opacity-40 grayscale")}>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-xl font-headline text-white flex items-center gap-2"><BarChart3 className="w-5 h-5 text-primary" /> Performance</CardTitle>
@@ -229,23 +245,26 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                 </Tabs>
               </CardHeader>
               <CardContent className="h-[300px] flex items-center justify-center text-muted-foreground italic text-sm">
-                No performance data captured for this period.
+                {isBreached ? "No performance data visible for liquidated accounts." : "No performance data captured for this period."}
               </CardContent>
             </Card>
           </div>
           
           <div className="space-y-6">
-            <Card className="border-primary/20 bg-primary/5">
+            <Card className={cn("border-primary/20 bg-primary/5", isBreached && "border-destructive/20 bg-destructive/5 grayscale")}>
               <CardHeader className="pb-2">
-                <CardTitle className="text-lg flex items-center gap-2 text-white"><ShieldCheck className="w-5 h-5 text-primary" /> My Account</CardTitle>
+                <CardTitle className="text-lg flex items-center gap-2 text-white">
+                  {isBreached ? <Skull className="w-5 h-5 text-destructive" /> : <ShieldCheck className="w-5 h-5 text-primary" />}
+                  My Account
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between p-3 rounded-xl bg-background/50 border border-white/5">
                    <div className="space-y-1">
                       <p className="text-[9px] font-black text-muted-foreground uppercase">Current Phase</p>
-                      <Badge className={cn("gap-1.5 py-1 px-3", currentPhaseDisplay.className)}>
-                        {currentPhaseDisplay.icon}
-                        {currentPhaseDisplay.label}
+                      <Badge className={cn("gap-1.5 py-1 px-3", isBreached ? "bg-destructive/10 text-destructive border-destructive/20" : currentPhaseDisplay.className)}>
+                        {isBreached ? <Skull className="w-3 h-3" /> : currentPhaseDisplay.icon}
+                        {isBreached ? 'Breached' : currentPhaseDisplay.label}
                       </Badge>
                    </div>
                 </div>
