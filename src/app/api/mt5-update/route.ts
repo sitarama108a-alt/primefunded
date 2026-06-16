@@ -126,6 +126,15 @@ export async function POST(request: Request) {
         lastMT5Update: FieldValue.serverTimestamp(),
       });
     }
+
+    // Also update users collection for dashboard
+    if (userData.userId) {
+      await db.collection("users").doc(userData.userId).update({
+        liveBalance: currBalance,
+        liveEquity: currEquity,
+        lastMT5Update: FieldValue.serverTimestamp(),
+      });
+    }
     return new Response(JSON.stringify({ status: "OK" }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 
   } catch (error: any) {
