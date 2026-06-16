@@ -132,7 +132,7 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
       if (plan.includes('1-step')) return 3;
       if (plan.includes('2-step')) return 5;
       if (plan.includes('3-step')) return 4;
-      if (plan.includes('instant')) return 3; // UPDATED: 2 -> 3
+      if (plan.includes('instant')) return 3;
       return 3;
     };
 
@@ -242,7 +242,11 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                   <CardTitle className="text-xl font-headline text-white flex items-center gap-2"><BarChart3 className="w-5 h-5 text-primary" /> Performance</CardTitle>
                 </div>
                 <Tabs value={chartPeriod} onValueChange={setChartPeriod}>
-                  <TabsList className="bg-secondary/50"><TabsTrigger value="7D" className="text-[10px] font-bold">7D</TabsTrigger><TabsTrigger value="1M" className="text-[10px] font-bold">1M</TabsTrigger></TabsList>
+                  <TabsList className="bg-secondary/50">
+                    <TabsTrigger value="7D" className="text-[10px] font-bold">7D</TabsTrigger>
+                    <TabsTrigger value="14D" className="text-[10px] font-bold">14D</TabsTrigger>
+                    <TabsTrigger value="1M" className="text-[10px] font-bold">1M</TabsTrigger>
+                  </TabsList>
                 </Tabs>
               </CardHeader>
               <CardContent className="h-[300px] flex items-center justify-center text-muted-foreground italic text-sm">

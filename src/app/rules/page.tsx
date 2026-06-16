@@ -117,12 +117,16 @@ const PLAN_RULES = {
     ]
   },
   'instant': {
-    funded: [
+    active: [
       { text: "70% profit split", check: true },
       { text: "Trading Leverage: 1:30", check: true },
       { text: "Instruments: Fx, Commodities, Indices, Stock, Crypto", check: true },
       { text: "Daily payouts available", check: true },
       { text: "First payout after 24 hours", check: true },
+      { text: "Max withdraw 3% per 24hrs", warning: true },
+      { text: "No payout exceeding daily drawdown", warning: true },
+    ],
+    prohibited: [
       { text: "1 execution per 3 mins maximum (Hard Breach)", warning: true },
       { text: "No closing trades within 2 mins (Hard Breach)", warning: true },
       { text: "1% max floating loss (Hard Breach)", warning: true },
@@ -130,8 +134,6 @@ const PLAN_RULES = {
       { text: "4% max drawdown (Hard Breach)", warning: true },
       { text: "3% max loss per single trade (Hard Breach)", warning: true },
       { text: "No Friday overnight holding (Hard Breach)", check: false },
-      { text: "Max withdraw 3% per 24hrs", warning: true },
-      { text: "No payout exceeding daily drawdown", warning: true },
     ]
   }
 };
@@ -226,8 +228,9 @@ export default function RulesPage() {
           </TabsContent>
 
           <TabsContent value="instant" className="space-y-12">
-            <div className="grid md:grid-cols-1 max-w-4xl gap-8">
-              <RuleCard title="Live Account Rules" items={PLAN_RULES['instant'].funded} variant="destructive" active={true} />
+            <div className="grid md:grid-cols-2 gap-8">
+              <RuleCard title="Live Trading Rules" items={PLAN_RULES['instant'].active} active={true} />
+              <RuleCard title="Risk Protocols" items={PLAN_RULES['instant'].prohibited} variant="destructive" active={true} />
             </div>
           </TabsContent>
         </Tabs>
