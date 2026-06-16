@@ -163,10 +163,20 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
     return { label: 'Evaluation Phase', icon: <Zap className="w-3 h-3" />, className: 'bg-primary/10 text-primary border-primary/20' };
   }, [userData?.currentPhase]);
 
-  const calculateHoldingTime = (open: string, close: string) => {
-    if (!open || !close) return 'N/A';
+  const getTradeDate = (time: any) => {
+    if (!time) return null;
+    if (typeof time === 'number') return new Date(time * 1000);
+    if (time.toDate && typeof time.toDate === 'function') return time.toDate();
+    return new Date(time);
+  };
+
+  const calculateHoldingTime = (open: any, close: any) => {
+    const openDate = getTradeDate(open);
+    const closeDate = getTradeDate(close);
+    
+    if (!openDate || !closeDate) return 'N/A';
     try {
-      const seconds = differenceInSeconds(new Date(close), new Date(open));
+      const seconds = differenceInSeconds(closeDate, openDate);
       if (seconds < 60) return `${seconds}s`;
       const minutes = Math.floor(seconds / 60);
       const remainingSeconds = seconds % 60;
@@ -330,8 +340,8 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                   <tr>
                     <th className="py-4 px-6">Symbol</th>
                     <th className="py-4 px-4">Type</th>
-                    <th className="py-4 px-4">Open Time</th>
-                    <th className="py-4 px-4">Holding Time</th>
+                    <th className="py-4 px-4">Time</th>
+                    <th className="py-4 px-4">Duration</th>
                     <th className="py-4 px-4 text-right">Lots</th>
                     <th className="py-4 px-6 text-right">P&L</th>
                   </tr>
@@ -342,33 +352,37 @@ export default function DashboardPage({ adminViewMode = false, targetUid }: Dash
                       <tr key={i} className="animate-pulse"><td colSpan={6} className="py-6 px-6"><div className="h-4 bg-secondary/50 rounded w-full" /></td></tr>
                     ))
                   ) : recentTrades.length > 0 ? (
-                    recentTrades.map((trade: any) => (
-                      <tr key={trade.id} className="hover:bg-primary/5 transition-colors">
-                        <td className="py-4 px-6 font-bold text-white">{trade.symbol}</td>
-                        <td className="py-4 px-4">
-                          <Badge variant="outline" className={cn(
-                            "text-[9px] font-black uppercase px-2",
-                            trade.type?.toLowerCase() === 'buy' ? 'border-emerald-500/30 text-emerald-500 bg-emerald-500/5' : 'border-destructive/30 text-destructive bg-destructive/5'
+                    recentTrades.map((trade: any) => {
+                      const tradeDate = getTradeDate(trade.time || trade.date);
+                      const closeDate = getTradeDate(trade.closeDate || trade.updatedAt);
+                      return (
+                        <tr key={trade.id} className="hover:bg-primary/5 transition-colors">
+                          <td className="py-4 px-6 font-bold text-white">{trade.symbol || 'N/A'}</td>
+                          <td className="py-4 px-4">
+                            <Badge variant="outline" className={cn(
+                              "text-[9px] font-black uppercase px-2",
+                              trade.type?.toLowerCase() === 'buy' ? 'border-emerald-500/30 text-emerald-500 bg-emerald-500/5' : 'border-destructive/30 text-destructive bg-destructive/5'
+                            )}>
+                              {trade.type || 'N/A'}
+                            </Badge>
+                          </td>
+                          <td className="py-4 px-4 text-xs text-muted-foreground font-mono">
+                            {tradeDate ? format(tradeDate, 'MMM d, HH:mm') : 'N/A'}
+                          </td>
+                          <td className="py-4 px-4 text-xs text-muted-foreground flex items-center gap-1.5">
+                            <Clock className="w-3 h-3" />
+                            {calculateHoldingTime(trade.time || trade.date, trade.closeDate || trade.updatedAt)}
+                          </td>
+                          <td className="py-4 px-4 text-right text-white font-mono">{trade.lots || trade.volume || '0.00'}</td>
+                          <td className={cn(
+                            "py-4 px-6 text-right font-bold tabular-nums",
+                            (trade.pnl || trade.profit || 0) >= 0 ? 'text-emerald-500' : 'text-destructive'
                           )}>
-                            {trade.type}
-                          </Badge>
-                        </td>
-                        <td className="py-4 px-4 text-xs text-muted-foreground font-mono">
-                          {trade.date ? format(new Date(trade.date), 'MMM d, HH:mm') : 'N/A'}
-                        </td>
-                        <td className="py-4 px-4 text-xs text-muted-foreground flex items-center gap-1.5">
-                          <Clock className="w-3 h-3" />
-                          {calculateHoldingTime(trade.date, trade.closeDate || trade.updatedAt)}
-                        </td>
-                        <td className="py-4 px-4 text-right text-white font-mono">{trade.lots}</td>
-                        <td className={cn(
-                          "py-4 px-6 text-right font-bold tabular-nums",
-                          (trade.pnl || 0) >= 0 ? 'text-emerald-500' : 'text-destructive'
-                        )}>
-                          {(trade.pnl || 0) >= 0 ? '+' : ''}${trade.pnl?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    ))
+                            {(trade.pnl || trade.profit || 0) >= 0 ? '+' : ''}${(trade.pnl || trade.profit || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      );
+                    })
                   ) : (
                     <tr>
                       <td colSpan={6} className="py-20 text-center text-muted-foreground italic text-sm">

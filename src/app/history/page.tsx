@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect } from 'react';
@@ -67,10 +68,20 @@ export default function HistoryPage() {
     }
   }, [user, userData, phasesLoading, phaseHistory.length, db]);
 
-  const calculateHoldingTime = (open: string, close: string) => {
-    if (!open || !close) return 'N/A';
+  const getTradeDate = (time: any) => {
+    if (!time) return null;
+    if (typeof time === 'number') return new Date(time * 1000);
+    if (time.toDate && typeof time.toDate === 'function') return time.toDate();
+    return new Date(time);
+  };
+
+  const calculateHoldingTime = (open: any, close: any) => {
+    const openDate = getTradeDate(open);
+    const closeDate = getTradeDate(close);
+    
+    if (!openDate || !closeDate) return 'N/A';
     try {
-      const seconds = differenceInSeconds(new Date(close), new Date(open));
+      const seconds = differenceInSeconds(closeDate, openDate);
       if (seconds < 60) return `${seconds}s`;
       const minutes = Math.floor(seconds / 60);
       const remainingSeconds = seconds % 60;
@@ -90,9 +101,9 @@ export default function HistoryPage() {
       const matchesSymbol = trade.symbol?.toLowerCase().includes(searchTerm.toLowerCase());
       
       let matchesDate = true;
-      if (dateRange.start && dateRange.end) {
+      const tradeDate = getTradeDate(trade.time || trade.date);
+      if (dateRange.start && dateRange.end && tradeDate) {
         try {
-          const tradeDate = new Date(trade.date);
           matchesDate = isWithinInterval(tradeDate, {
             start: startOfDay(new Date(dateRange.start)),
             end: endOfDay(new Date(dateRange.end))
@@ -117,16 +128,19 @@ export default function HistoryPage() {
     if (!filteredTrades.length) return;
     
     const headers = ['Date', 'Symbol', 'Type', 'Lots', 'OpenPrice', 'ClosePrice', 'PnL', 'HoldingTime'];
-    const rows = filteredTrades.map(t => [
-      t.date, 
-      t.symbol, 
-      t.type, 
-      t.lots, 
-      t.openPrice, 
-      t.closePrice, 
-      t.pnl,
-      calculateHoldingTime(t.date, t.closeDate || t.updatedAt)
-    ]);
+    const rows = filteredTrades.map(t => {
+      const d = getTradeDate(t.time || t.date);
+      return [
+        d ? d.toISOString() : 'N/A', 
+        t.symbol || 'N/A', 
+        t.type || 'N/A', 
+        t.lots || t.volume || '0', 
+        t.openPrice || t.price || '0', 
+        t.closePrice || '0', 
+        t.pnl || t.profit || '0',
+        calculateHoldingTime(t.time || t.date, t.closeDate || t.updatedAt)
+      ];
+    });
     
     const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -267,36 +281,40 @@ export default function HistoryPage() {
                       </tr>
                     ))
                   ) : paginatedTrades.length > 0 ? (
-                    paginatedTrades.map((trade: any) => (
-                      <tr key={trade.id} className="hover:bg-primary/5 transition-colors group">
-                        <td className="py-4 px-6 font-bold text-white">{trade.symbol}</td>
-                        <td className="py-4 px-2">
-                           <Badge variant="outline" className={cn(
-                             "text-[9px] font-black uppercase px-2 py-0",
-                             trade.type?.toLowerCase() === 'buy' ? 'border-emerald-500/30 text-emerald-500 bg-emerald-500/5' : 'border-destructive/30 text-destructive bg-destructive/5'
-                           )}>
-                             {trade.type}
-                           </Badge>
-                        </td>
-                        <td className="py-4 px-4 text-muted-foreground font-mono text-xs">
-                          {trade.date ? format(new Date(trade.date), 'yyyy-MM-dd HH:mm:ss') : 'N/A'}
-                        </td>
-                        <td className="py-4 px-4 text-muted-foreground font-mono text-xs">
-                          {trade.closeDate ? format(new Date(trade.closeDate), 'yyyy-MM-dd HH:mm:ss') : 'Live'}
-                        </td>
-                        <td className="py-4 px-4 text-muted-foreground text-xs flex items-center gap-1.5 pt-5">
-                          <Clock className="w-3 h-3" />
-                          {calculateHoldingTime(trade.date, trade.closeDate || trade.updatedAt)}
-                        </td>
-                        <td className="py-4 px-2 text-right text-white font-mono">{trade.lots}</td>
-                        <td className={cn(
-                          "py-4 px-6 text-right font-bold tabular-nums",
-                          (trade.pnl || 0) >= 0 ? 'text-emerald-500' : 'text-destructive'
-                        )}>
-                          {(trade.pnl || 0) >= 0 ? '+' : ''}${trade.pnl?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    ))
+                    paginatedTrades.map((trade: any) => {
+                      const tradeDate = getTradeDate(trade.time || trade.date);
+                      const closeDate = getTradeDate(trade.closeDate || trade.updatedAt);
+                      return (
+                        <tr key={trade.id} className="hover:bg-primary/5 transition-colors group">
+                          <td className="py-4 px-6 font-bold text-white">{trade.symbol || 'N/A'}</td>
+                          <td className="py-4 px-2">
+                             <Badge variant="outline" className={cn(
+                               "text-[9px] font-black uppercase px-2 py-0",
+                               trade.type?.toLowerCase() === 'buy' ? 'border-emerald-500/30 text-emerald-500 bg-emerald-500/5' : 'border-destructive/30 text-destructive bg-destructive/5'
+                             )}>
+                               {trade.type || 'N/A'}
+                             </Badge>
+                          </td>
+                          <td className="py-4 px-4 text-muted-foreground font-mono text-xs">
+                            {tradeDate ? format(tradeDate, 'yyyy-MM-dd HH:mm:ss') : 'N/A'}
+                          </td>
+                          <td className="py-4 px-4 text-muted-foreground font-mono text-xs">
+                            {trade.closeDate ? format(new Date(trade.closeDate), 'yyyy-MM-dd HH:mm:ss') : 'Live'}
+                          </td>
+                          <td className="py-4 px-4 text-muted-foreground text-xs flex items-center gap-1.5 pt-5">
+                            <Clock className="w-3 h-3" />
+                            {calculateHoldingTime(trade.time || trade.date, trade.closeDate || trade.updatedAt)}
+                          </td>
+                          <td className="py-4 px-2 text-right text-white font-mono">{trade.lots || trade.volume || '0.00'}</td>
+                          <td className={cn(
+                            "py-4 px-6 text-right font-bold tabular-nums",
+                            (trade.pnl || trade.profit || 0) >= 0 ? 'text-emerald-500' : 'text-destructive'
+                          )}>
+                            {(trade.pnl || trade.profit || 0) >= 0 ? '+' : ''}${(trade.pnl || trade.profit || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      );
+                    })
                   ) : (
                     <tr>
                       <td colSpan={7} className="py-32 text-center">
